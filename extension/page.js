@@ -17,6 +17,7 @@ export async function createPageController({
   let book = indexBook(state.records);
   let adapter;
   let observed;
+  let surface;
   let health = { status: 'waiting' };
   let href = '';
   let stopped = false;
@@ -39,10 +40,18 @@ export async function createPageController({
   const abort = new AbortController();
   const listen = (target, type, callback, options = {}) => target.addEventListener(type, callback, { ...options, signal: abort.signal });
 
+  // Each shadow host needs the surface marked on it. The editor's stylesheet
+  // resets the host with `all: initial`, and in a real page the palette does
+  // not reach past that, so an unmarked host renders in light colours whatever
+  // the website's own surface is.
+  function markSurface(element) {
+    element.toggleAttribute('data-dark', surface === 'dark');
+  }
   function addEditButton(target) {
     const slot = doc.createElement('span');
     slot.setAttribute(UI_ATTRIBUTE, '');
     slot.setAttribute('data-0xlabel-edit', '');
+    markSurface(slot);
     slot.style.cssText = 'display:inline-flex;vertical-align:middle;flex-shrink:0;width:20px;height:20px;margin-inline-start:3px;';
     const root = slot.attachShadow({ mode: 'open' });
     root.adoptedStyleSheets = overlay.shadow.adoptedStyleSheets;
@@ -191,7 +200,11 @@ export async function createPageController({
     if (stopped) return;
     try {
       if (!probe(force)) { dirty.clear(); return; }
-      overlay.theme();
+      const nextSurface = overlay.theme();
+      if (nextSurface !== surface) {
+        surface = nextSurface;
+        for (const target of targets.values()) if (target.editButton) markSurface(target.editButton);
+      }
       const roots = new Set(dirty);
       dirty.clear();
       // Drop branches an ancestor branch already covers. Walking up to a dirty
