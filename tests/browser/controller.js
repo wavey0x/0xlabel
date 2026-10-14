@@ -41,6 +41,9 @@ export async function start(page, { html = wallets, site = 'https://etherscan.io
 }
 
 export const edit = (page, index = 0) => page.getByRole('button', { name: 'Edit wallet labels', exact: true }).nth(index);
+// The glyph belonging to one address display, wherever it had to be put: beside
+// an inline display, inside one that would otherwise push it onto its own line.
+export const tagFor = (page, id) => page.locator(`#${id} + [data-0xlabel-edit], #${id} [data-0xlabel-edit]`).getByRole('button');
 export const input = page => page.getByRole('textbox', { name: 'Label 1', exact: true });
 export const save = page => page.getByRole('button', { name: 'Save', exact: true });
 export const shownAddress = page => page.getByRole('dialog').locator('code');

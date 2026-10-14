@@ -25,26 +25,16 @@ const etherscanAdapter = site({
   id: 'Etherscan',
   matches: url => Boolean(explorerNetwork(url.hostname)),
   watch: ['data-highlight-value'],
+  // The heading of an address page is what the page is about. A name alone
+  // would take away the one thing identifying everything below it.
+  subject: '#mainaddress',
   // Address badges lose their decoration only while a custom label is visible.
-  // Search suggestions keep their native link and a compact trailing action.
   styles: `.badge:is([data-0xlabel-label], :has([data-0xlabel-label])) {
       background: transparent !important;
       border: 0 !important;
       border-radius: 0 !important;
       box-shadow: none !important;
       padding: 0 !important;
-    }
-    .table-responsive td > a.d-flex:has([data-0xlabel-address]) {
-      display: inline-flex !important;
-      vertical-align: middle;
-    }
-    .search-panel-container li:has(> a[data-0xlabel-address] + [data-0xlabel-edit]) {
-      display: flex;
-      align-items: center;
-    }
-    .search-panel-container li > a[data-0xlabel-address] {
-      flex: 1;
-      min-width: 0;
     }`,
   probe({ document, url }) {
     if (document.querySelector('#challenge-running,#challenge-stage,[name="cf-turnstile-response"]') || /^(Just a moment|Attention Required)/i.test(document.title)) return { status: 'waiting' };
@@ -67,7 +57,10 @@ const etherscanAdapter = site({
     identifies: ['data-full-address'],
     anchors: '#mainaddress,[data-highlight-target]',
     named: `.hash-tag,[data-highlight-value],${SEARCH_ROW}`,
-    denied: '.dropdown-item,nav',
+    denied: 'nav',
+    // An owners or holders menu is content, not navigation: its rows name real
+    // wallets, under whatever the explorer already calls them.
+    keeps: '.dropdown-item',
     // The innermost verified address widget owns the annotation.
     skip: element => !element.matches('#mainaddress,[data-highlight-target]') &&
       element.querySelector('[data-highlight-target],.hash-tag'),

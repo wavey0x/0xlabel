@@ -54,8 +54,10 @@ export function addressLink(element, url) {
 //   anchors     selector for elements that likewise identify themselves
 //   named       selector for displays allowed to show a name instead of an address
 //   denied      selector that withholds a name display however good the evidence
+//   keeps       selector for displays whose own name stands: a wallet to know,
+//               never a name to replace
 //   sources     addresses the adapter resolved for this element by other means
-export function identify(element, url, { attributes = [], identifies = [], anchors, named, denied, sources = [] } = {}) {
+export function identify(element, url, { attributes = [], identifies = [], anchors, named, denied, keeps, sources = [] } = {}) {
   if (element.closest(UNSAFE_HOST)) return null;
   const shown = element.textContent.trim().toLowerCase().replace(/\s/g, '');
   const fullShown = parseAddress(shown);
@@ -77,8 +79,13 @@ export function identify(element, url, { attributes = [], identifies = [], ancho
   // canonical source. Navigation cards are never labeled.
   const namedWidget = Boolean(named) && element.matches(named) && (link || sources.length || anchored) &&
     !(denied && element.closest(denied));
-  if (!fullShown && !fragment && !namedWidget && !anchored) return null;
-  return { address, network: link?.network };
+  const showsAddress = Boolean(fullShown || fragment);
+  if (!showsAddress && !namedWidget && !anchored) return null;
+  // Knowing which wallet a display is about is a separate matter from naming
+  // it. Where the site's own name stands, the address is still identified, so
+  // it can still be edited; a display of the address itself has nothing to keep.
+  const naming = showsAddress || !(keeps && element.closest(keeps));
+  return { address, network: link?.network, naming };
 }
 
 // Identify every candidate an adapter's rules select within a changed branch.

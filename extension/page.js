@@ -3,9 +3,13 @@ import { indexBook, parseAddress, query, recordKey, normalizeScope, UI, UI_ATTRI
 import { createEditor } from './editor.js';
 import { createOverlay } from './overlay.js';
 import { LABEL_ICON } from './icons.js';
+import { checksumAddress } from './checksum.js';
 
 const ADDRESS = 'data-0xlabel-address';
 const LABEL = 'data-0xlabel-label';
+// The address kept beside a name on the one display a page is about.
+const SHORT = 'data-0xlabel-short';
+const abbreviate = address => `${address.slice(0, 6)}…${address.slice(-4)}`;
 
 export async function createPageController({
   url = () => new URL(location.href), state: initialState,
@@ -47,6 +51,11 @@ export async function createPageController({
   function markSurface(element) {
     element.toggleAttribute('data-dark', surface === 'dark');
   }
+  function row(parent) {
+    if (!parent) return false;
+    const style = win.getComputedStyle(parent);
+    return style.display.includes('flex') && !style.flexDirection.startsWith('column');
+  }
   function addEditButton(target) {
     const slot = doc.createElement('span');
     slot.setAttribute(UI_ATTRIBUTE, '');
@@ -64,16 +73,21 @@ export async function createPageController({
     button.onpointerdown = event => { event.preventDefault(); event.stopPropagation(); };
     button.onclick = event => { event.preventDefault(); event.stopPropagation(); open(targets.get(target.element)); };
     root.append(button);
-    // Keep edit buttons outside native links. Block displays keep the glyph on
-    // their address line; its SVG contributes no text to native copy sources.
+    // The glyph may follow the display wherever it stays on the same line: in
+    // inline flow, or as the next item on a flex row. Anything else — a block,
+    // a cell, a column or a grid — would give it a line of its own, so there it
+    // goes inside the box that shows the address. Its SVG lives in a shadow
+    // root and so contributes no text to the site's own copy sources.
     const anchor = target.element.closest('a[href]') || target.element;
-    if (anchor.matches('td,p,div')) anchor.append(slot); else anchor.after(slot);
+    const beside = win.getComputedStyle(anchor).display.startsWith('inline') || row(anchor.parentElement);
+    if (beside) anchor.after(slot); else anchor.append(slot);
     target.editButton = slot;
   }
   function remove(element) {
     const target = targets.get(element);
     if (!target) return;
     element.removeAttribute(LABEL);
+    element.removeAttribute(SHORT);
     element.removeAttribute(ADDRESS);
     if (target.description && element.getAttribute('aria-description') === target.description) element.removeAttribute('aria-description');
     targets.delete(element);
@@ -89,11 +103,16 @@ export async function createPageController({
   function paint(target) {
     if (target.element.getAttribute(ADDRESS) !== target.address) target.element.setAttribute(ADDRESS, target.address);
     if (!target.editButton?.isConnected) addEditButton(target);
-    const name = !hiddenLabels.has(recordKey(target.address, target.network)) && recordFor(target)?.labels[0];
+    const name = target.naming !== false && !hiddenLabels.has(recordKey(target.address, target.network)) &&
+      recordFor(target)?.labels[0];
     if (name) {
       // Preserve native nodes and copy sources; CSS substitutes only their
       // visible glyphs with the shared custom-label typography.
       if (target.element.getAttribute(LABEL) !== name) target.element.setAttribute(LABEL, name);
+      const trailer = adapter.subject && target.element.matches(adapter.subject)
+        ? abbreviate(checksumAddress(target.address)) : null;
+      if (trailer) { if (target.element.getAttribute(SHORT) !== trailer) target.element.setAttribute(SHORT, trailer); }
+      else target.element.removeAttribute(SHORT);
       const description = `0xlabel: ${name}`;
       if (!target.element.hasAttribute('aria-description') || target.description === target.element.getAttribute('aria-description')) {
         if (target.element.getAttribute('aria-description') !== description) target.element.setAttribute('aria-description', description);
@@ -101,6 +120,7 @@ export async function createPageController({
       }
     } else {
       target.element.removeAttribute(LABEL);
+      target.element.removeAttribute(SHORT);
       if (target.description && target.element.getAttribute('aria-description') === target.description) target.element.removeAttribute('aria-description');
       target.description = null;
     }
@@ -117,7 +137,7 @@ export async function createPageController({
     if (!element.hasAttribute(LABEL) && nativePrefix && !['none', 'normal', '""'].includes(nativePrefix)) return null;
     const network = item.network || health.network;
     if (network) { normalizeScope(network); if (network === 'global') throw new Error('adapter-network-invalid'); }
-    return { element, address, network };
+    return { element, address, network, naming: item.naming !== false };
   }
   function scan(root) {
     const claims = new Map();
@@ -296,7 +316,7 @@ export async function createPageController({
     const visibility = () => {
       const live = targets.get(editorTarget?.element);
       return {
-        available: Boolean(recordFor(target)), hidden: hiddenLabels.has(key),
+        available: target.naming !== false && Boolean(recordFor(target)), hidden: hiddenLabels.has(key),
         enabled: state.activeBook === book && health.status === 'ready' && href === url().href &&
           live?.element.isConnected && live.address === target.address && live.network === target.network,
       };

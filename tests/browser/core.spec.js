@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { checksumAddress } from '../../extension/checksum.js';
-import { address, other, record, start, edit, input, save, shownAddress, contrast, wallets } from './controller.js';
+import { address, other, record, start, edit, input, save, shownAddress, contrast, tagFor, wallets } from './controller.js';
 
 test('500 addresses retain native text, navigation, selection and copying; disabling removes only our UI', async ({ page }) => {
   const row = `<p><a href="/address/${address}">0xabab…abab</a><button data-copy="${address}">Copy</button></p>`;
@@ -272,7 +272,7 @@ test('editing a search suggestion survives native blur dismissal without selecti
     </script>` });
   const search = page.getByRole('textbox', { name: 'Search explorer' });
   await search.click();
-  const button = page.locator('#suggestion + [data-0xlabel-edit]').getByRole('button');
+  const button = tagFor(page, 'suggestion');
   await button.hover();
   await page.mouse.down();
   await expect(search).toBeFocused();
@@ -331,7 +331,7 @@ test('explorer identities come from complete sources, including search suggestio
   for (const id of ['recent','recent-name','suggested-name','ens','fragment','fee','table']) await expect(page.locator('#'+id)).toHaveAttribute('data-0xlabel-address', address);
   await expect(page.locator('#recent-tag')).toHaveAttribute('data-0xlabel-address', other);
   await expect(page.locator('[data-0xlabel-address]')).toHaveCount(8);
-  await page.locator('#recent + [data-0xlabel-edit]').getByRole('button').click();
+  await tagFor(page, 'recent').click();
   await expect(shownAddress(page)).toHaveText(checksumAddress(address));
   expect(await page.evaluate(() => window.nativeSearchSelection)).toBeUndefined();
   await input(page).press('Escape');
@@ -340,7 +340,7 @@ test('explorer identities come from complete sources, including search suggestio
   await expect(page.locator('#recent')).toHaveText(address);
   for (const [id, identity, text, href] of [['recent-name', address, 'name.eth', '/address/name.eth'], ['recent-tag', other, 'Website organization', '/address/' + other]]) {
     await page.evaluate(() => { delete window.nativeSearchSelection; });
-    await page.locator('#'+id+' + [data-0xlabel-edit]').getByRole('button').click();
+    await tagFor(page, id).click();
     await expect(shownAddress(page)).toHaveText(checksumAddress(identity));
     expect(await page.evaluate(() => window.nativeSearchSelection)).toBeUndefined();
     await input(page).press('Escape');
@@ -351,12 +351,55 @@ test('explorer identities come from complete sources, including search suggestio
   await page.locator('#suggested-name').evaluate(element => { element.querySelector('h6').textContent = 'Updated website name'; });
   await expect(page.locator('#suggested-name')).toHaveAttribute('data-0xlabel-address', address);
   await page.locator('#fee span').evaluate(element => { element.dataset.bsOriginalTitle=element.title; element.removeAttribute('title'); });
-  await page.locator('#fee + [data-0xlabel-edit]').getByRole('button').click();
+  await tagFor(page, 'fee').click();
   await expect(shownAddress(page)).toHaveText(checksumAddress(address));
   await input(page).press('Escape');
-  await page.locator('#table + [data-0xlabel-edit]').getByRole('button').click();
+  await tagFor(page, 'table').click();
   await expect(shownAddress(page)).toHaveText(checksumAddress(address));
   await expect(page.locator('#table')).toHaveText('Preset name');
+});
+
+test("an address page keeps its own address beside the name it is given", async ({ page }) => {
+  await start(page, { site: `https://etherscan.io/address/${address}`, html: `<header>Explorer</header><main>
+    <h1>Contract <span id="mainaddress" data-highlight-target="${address}">${address}</span></h1>
+    <p>Seen again in <a id="elsewhere" href="/address/${address}">${address}</a></p></main>` });
+  await expect(page.locator('#mainaddress')).toHaveAttribute('data-0xlabel-label', 'Treasury');
+  await expect(page.locator('#mainaddress')).toHaveAttribute('data-0xlabel-short', '0xABaB…ABaB');
+  expect(await page.locator('#mainaddress').evaluate(element => getComputedStyle(element, '::after').content))
+    .toContain('0xABaB…ABaB');
+  // Everywhere else on the page the name stands on its own.
+  await expect(page.locator('#elsewhere')).toHaveAttribute('data-0xlabel-label', 'Treasury');
+  await expect(page.locator('#elsewhere')).not.toHaveAttribute('data-0xlabel-short', /./);
+  // Nothing of ours outlives the name it belonged to.
+  await page.evaluate(() => window.controller.updateState({ ...window.state, records: [], stateRevision: 9 }));
+  await expect(page.locator('#mainaddress')).not.toHaveAttribute('data-0xlabel-short', /./);
+  await expect(page.locator('#mainaddress')).toHaveText(address);
+});
+
+test('a menu of owners is content: rows keep the explorer\'s own name and still take a glyph', async ({ page }) => {
+  await start(page, { site: 'https://etherscan.io/', records: [record,
+    { address: other, scope: 'global', labels: ['Second owner'], version: 'two' }],
+    html: `<style>.dropdown-menu{display:flex;flex-direction:column}.dropdown-item{display:block;width:100%}</style>
+    <header>Explorer</header><main><div class="dropdown-menu">
+      <a id="named-owner" class="dropdown-item" href="/address/${address}"><span class="hash-tag">Explorer name tag</span></a>
+      <a id="plain-owner" class="dropdown-item" href="/address/${other}">0xcdcd…cdcd</a>
+    </div><nav><a id="nav-card" class="hash-tag" href="/address/${address}">View address</a></nav></main>` });
+  // The explorer's own name stands; knowing whose wallet it is adds the glyph.
+  await expect(page.locator('#named-owner .hash-tag')).toHaveText('Explorer name tag');
+  await expect(page.locator('#named-owner .hash-tag')).toHaveAttribute('data-0xlabel-address', address);
+  await expect(page.locator('#named-owner [data-0xlabel-label]')).toHaveCount(0);
+  // A row showing the address itself is named like anywhere else on the site.
+  await expect(page.locator('#plain-owner')).toHaveAttribute('data-0xlabel-label', 'Second owner');
+  // Neither glyph is pushed onto a line of its own: a row that would do that
+  // carries it inside the display instead of after it.
+  await expect(page.locator('#named-owner > [data-0xlabel-edit]')).toHaveCount(1);
+  await expect(page.locator('#plain-owner > [data-0xlabel-edit]')).toHaveCount(1);
+  await expect(page.locator('.dropdown-menu > [data-0xlabel-edit]')).toHaveCount(0);
+  // Site navigation is left alone entirely, name and glyph both.
+  await expect(page.locator('#nav-card')).not.toHaveAttribute('data-0xlabel-address', /./);
+  await expect(page.locator('#nav-card [data-0xlabel-edit]')).toHaveCount(0);
+  await tagFor(page, 'named-owner').click();
+  await expect(shownAddress(page)).toHaveText(checksumAddress(address));
 });
 
 test('contradictory address evidence disqualifies only that element; generic detection skips fragments and editable or interactive content', async ({ page }) => {
@@ -406,6 +449,16 @@ test('labels, tag buttons and editor controls stay legible on light and dark web
   await legible(page, 'light');
   await page.evaluate(() => { document.body.style.background = '#101113'; });
   await legible(page, 'dark');
+  // The address kept beside the name on a page's own subject is ours to read too.
+  for (const colour of ['#ffffff', '#101113']) {
+    await start(page, { site: `https://etherscan.io/address/${address}`,
+      html: `<style>body{background:${colour}}</style><header>Explorer</header>
+        <main><h1><span id="mainaddress" data-highlight-target="${address}">${address}</span></h1></main>` });
+    await expect(page.locator('#mainaddress')).toHaveAttribute('data-0xlabel-short', /./);
+    const [trailer, behind] = await page.locator('#mainaddress').evaluate(element =>
+      [getComputedStyle(element, '::after').color, getComputedStyle(document.body).backgroundColor]);
+    expect(contrast(trailer, behind), `${colour}: the address beside the name`).toBeGreaterThanOrEqual(4.5);
+  }
 });
 
 test('a website surface is read from what the browser actually paints', async ({ page }) => {
