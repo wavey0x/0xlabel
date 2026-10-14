@@ -25,7 +25,8 @@
   --0xlabel-shadow: 0 10px 28px color-mix(in srgb, #000000 12.5%, transparent), 0 2px 8px color-mix(in srgb, #000000 4.7%, transparent);
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-0xlabel-surface="light"]) {
+  --0xlabel-accent: #8aa6f0;
   --0xlabel-canvas: #101113;
   --0xlabel-panel: #18191c;
   --0xlabel-ink: #fafafa;
@@ -36,7 +37,19 @@
   --0xlabel-shadow: 0 10px 28px color-mix(in srgb, #000000 31.4%, transparent), 0 2px 8px color-mix(in srgb, #000000 12.5%, transparent);
   }
 }
+:root[data-0xlabel-surface="dark"] {
+  --0xlabel-accent: #8aa6f0;
+  --0xlabel-canvas: #101113;
+  --0xlabel-panel: #18191c;
+  --0xlabel-ink: #fafafa;
+  --0xlabel-muted: #aaaaaa;
+  --0xlabel-glass: color-mix(in srgb, #16171a 60%, transparent);
+  --0xlabel-soft: color-mix(in srgb, #ffffff 3.1%, transparent);
+  --0xlabel-line: color-mix(in srgb, #ffffff 7.8%, transparent);
+  --0xlabel-shadow: 0 10px 28px color-mix(in srgb, #000000 31.4%, transparent), 0 2px 8px color-mix(in srgb, #000000 12.5%, transparent);
+}
 :host([data-dark]) {
+  --0xlabel-accent: #8aa6f0;
   --0xlabel-canvas: #101113;
   --0xlabel-panel: #18191c;
   --0xlabel-ink: #fafafa;

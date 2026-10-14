@@ -22,12 +22,16 @@ export async function createOverlay(doc, win) {
   return {
     box, shadow,
     applyStyles(css) { siteStyles.textContent = css || ''; },
-    // Match the website's own light or dark surface.
+    // Read the website's own surface: annotations sit on its pages, so they
+    // follow its background rather than the operating system. Both consumers
+    // are marked, because the editor's `all: initial` severs inheritance and
+    // its palette has to be declared on the shadow host rather than inherited.
     theme() {
       const style = win.getComputedStyle(doc.body);
       const rgb = style.backgroundColor.match(/[\d.]+/g)?.map(Number);
-      const dark = style.colorScheme.includes('dark') || rgb && rgb[3] !== 0 && (rgb[0] * .2126 + rgb[1] * .7152 + rgb[2] * .0722 < 110);
-      host.toggleAttribute('data-dark', Boolean(dark));
+      const dark = Boolean(style.colorScheme.includes('dark') || rgb && rgb[3] !== 0 && (rgb[0] * .2126 + rgb[1] * .7152 + rgb[2] * .0722 < 110));
+      doc.documentElement.setAttribute('data-0xlabel-surface', dark ? 'dark' : 'light');
+      host.toggleAttribute('data-dark', dark);
     },
     show() {
       box.style.position = 'fixed';
@@ -68,6 +72,7 @@ export async function createOverlay(doc, win) {
     destroy() {
       host.remove();
       siteStyles.remove();
+      doc.documentElement.removeAttribute('data-0xlabel-surface');
     },
   };
 }

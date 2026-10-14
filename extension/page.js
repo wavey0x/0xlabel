@@ -192,6 +192,7 @@ export async function createPageController({
     if (stopped) return;
     try {
       if (!probe(force)) { dirty.clear(); return; }
+      overlay.theme();
       const roots = new Set(dirty);
       dirty.clear();
       // Drop branches an ancestor branch already covers. Walking up to a dirty
