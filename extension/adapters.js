@@ -1,11 +1,6 @@
 import { parseAddress, query } from './shared.js';
+import { explorerNetwork, safeNetwork, scopeOf } from './networks.js';
 
-const explorers = {
-  'etherscan.io': 1, 'sepolia.etherscan.io': 11155111,
-  'basescan.org': 8453, 'arbiscan.io': 42161, 'optimistic.etherscan.io': 10,
-  'bscscan.com': 56, 'polygonscan.com': 137, 'gnosisscan.io': 100,
-};
-const safeChains = { eth: 1, sep: 11155111, base: 8453, arb1: 42161, arb: 42161, oeth: 10, op: 10, gno: 100, matic: 137, polygon: 137, bnb: 56 };
 const ignored = 'input,textarea,select,script,style,[contenteditable]:not([contenteditable="false"]),[data-0xlabel-ui],button[type="submit"]';
 
 function addressLink(element, url) {
@@ -13,7 +8,7 @@ function addressLink(element, url) {
   if (!link) return null;
   const href = new URL(link.getAttribute('href'), url);
   const address = parseAddress(href.pathname.match(/^\/address\/([^/]+)\/?$/)?.[1]);
-  return address ? { address, network: explorers[href.hostname] ? `eip155:${explorers[href.hostname]}` : undefined } : null;
+  return address ? { address, network: scopeOf(explorerNetwork(href.hostname)) } : null;
 }
 
 // Only complete sources establish identity. A fragment is used solely to check it.
@@ -54,13 +49,13 @@ function target(element, url, extra, allowNames) {
 
 const etherscanAdapter = {
   id: 'Etherscan',
-  matches: url => Boolean(explorers[url.hostname]),
+  matches: url => Boolean(explorerNetwork(url.hostname)),
   probe({ document, url }) {
     if (document.querySelector('#challenge-running,#challenge-stage,[name="cf-turnstile-response"]') || /^(Just a moment|Attention Required)/i.test(document.title)) return { status: 'waiting' };
     if (document.readyState === 'loading') return { status: 'waiting' };
     if (!document.querySelector('main') || !document.querySelector('header,nav')) return { status: 'stale', reason: 'explorer-landmarks-missing' };
     if (/^\/address\//.test(url.pathname) && !document.querySelector('#mainaddress')) return { status: 'stale', reason: 'main-address-missing' };
-    return { status: 'ready', network: `eip155:${explorers[url.hostname]}` };
+    return { status: 'ready', network: scopeOf(explorerNetwork(url.hostname)) };
   },
   scan(root, { url }) {
     return query(root, '#mainaddress,[data-highlight-target],a[href*="/address/"],a[href*="/address/"] .hash-tag,[data-full-address]').flatMap(element => {
@@ -80,9 +75,8 @@ const safeAdapter = {
   probe({ document, url }) {
     if (document.readyState === 'loading' || document.querySelector('[role="progressbar"]')) return { status: 'waiting' };
     if (!document.querySelector('main') && !(document.querySelector('header') && document.querySelector('[data-testid="sidebar-container"]'))) return { status: 'stale', reason: 'safe-landmarks-missing' };
-    const safe = url.searchParams.get('safe');
-    const chain = safe?.split(':')[0];
-    return { status: 'ready', ...(safeChains[chain] ? { network: `eip155:${safeChains[chain]}` } : {}) };
+    const network = safeNetwork(url.searchParams.get('safe')?.split(':')[0]);
+    return { status: 'ready', ...(network ? { network: scopeOf(network) } : {}) };
   },
   scan(root, { url }) {
     const candidates = query(root, 'a[href*="/address/"],[data-address],[title],[class*="addressContainer"] span,main span,[data-testid="safe-selector-trigger-name"],[data-testid="safe-selector-trigger-address"]');

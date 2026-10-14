@@ -1,5 +1,6 @@
 import { $, rpc, emptyState, currentSnapshot, syncText, connectionPicker, connectionForm, dismissDialog } from './ui.js';
 import { parseAddress, normalizeScope } from './shared.js';
+import { scopeName } from './networks.js';
 import { checksumAddress } from './checksum.js';
 import { createEditor, editorStyles } from './editor.js';
 import { COPY_ICON, COPIED_ICON } from './icons.js';
@@ -53,7 +54,7 @@ function bookRow(record) {
   row.innerHTML = '<td><button class="record"><strong></strong><small></small></button></td><td><code></code></td><td></td>';
   const open = row.querySelector('.record');
   open.querySelector('strong').textContent = record.labels.join(' · ');
-  open.querySelector('small').textContent = record.scope === 'global' ? 'All networks' : `Chain ${record.scope.slice(7)}`;
+  open.querySelector('small').textContent = scopeName(record.scope);
   open.title = displayAddress; open.setAttribute('aria-label', `Edit tags for ${displayAddress}`);
   open.onclick = () => edit(record.address, record.scope);
   row.querySelector('code').textContent = displayAddress;
