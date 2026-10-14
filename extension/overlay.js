@@ -24,15 +24,30 @@ export async function createOverlay(doc, win) {
     box, shadow,
     applyStyles(css) { siteStyles.textContent = css || ''; },
     // Read the website's own surface: annotations sit on its pages, so they
-    // follow its background rather than the operating system. Both consumers
-    // are marked, because the editor's `all: initial` severs inheritance and
-    // its palette has to be declared on the shadow host rather than inherited.
+    // follow its background rather than the operating system. A page paints its
+    // background on either element and often leaves the other transparent, so
+    // compose body over html over the canvas the browser would otherwise show.
     theme() {
-      const style = win.getComputedStyle(doc.body);
-      const rgb = style.backgroundColor.match(/[\d.]+/g)?.map(Number);
-      const dark = Boolean(style.colorScheme.includes('dark') || rgb && rgb[3] !== 0 && (rgb[0] * .2126 + rgb[1] * .7152 + rgb[2] * .0722 < 110));
+      const scheme = win.getComputedStyle(doc.documentElement).colorScheme;
+      // `light dark` says a page supports both, not that it is dark. A page that
+      // says nothing keeps a light canvas however the system is set.
+      const canvasDark = scheme.includes('dark') &&
+        (scheme.includes('only') || win.matchMedia('(prefers-color-scheme: dark)').matches);
+      const layer = element => {
+        const parts = win.getComputedStyle(element).backgroundColor.match(/[\d.]+/g)?.map(Number);
+        return parts ? { r: parts[0], g: parts[1], b: parts[2], a: parts[3] ?? 1 } : null;
+      };
+      const over = (top, bottom) => !top || !top.a ? bottom : top.a >= 1 ? top : {
+        r: top.r * top.a + bottom.r * (1 - top.a),
+        g: top.g * top.a + bottom.g * (1 - top.a),
+        b: top.b * top.a + bottom.b * (1 - top.a), a: 1,
+      };
+      const canvas = canvasDark ? { r: 18, g: 18, b: 18, a: 1 } : { r: 255, g: 255, b: 255, a: 1 };
+      const backdrop = over(layer(doc.body), over(layer(doc.documentElement), canvas));
+      const dark = backdrop.r * .2126 + backdrop.g * .7152 + backdrop.b * .0722 < 110;
       doc.documentElement.setAttribute('data-0xlabel-surface', dark ? 'dark' : 'light');
       host.toggleAttribute('data-dark', dark);
+      return dark ? 'dark' : 'light';
     },
     show() {
       box.style.position = 'fixed';
