@@ -1,5 +1,5 @@
 import { adapters } from './adapters.js';
-import { indexBook, parseAddress, recordKey, normalizeScope } from './shared.js';
+import { indexBook, parseAddress, recordKey, normalizeScope, UNSAFE_HOST } from './shared.js';
 import { createEditor, editorStyles } from './editor.js';
 import { LABEL_ICON } from './icons.js';
 
@@ -106,8 +106,7 @@ export async function createPageController({
   function validate(item) {
     const element = item.element;
     const address = parseAddress(item.address);
-    if (!address || !(element instanceof win.HTMLElement) || !element.isConnected || element.closest(UI) ||
-        element.closest('input,textarea,select,script,style,button,[role="button"],.sr-only,[aria-hidden="true"],[contenteditable]:not([contenteditable="false"])') ||
+    if (!address || !(element instanceof win.HTMLElement) || !element.isConnected || element.closest(UNSAFE_HOST) ||
         element.querySelector('input,textarea,select,button,a[href],[role="button"],[contenteditable]:not([contenteditable="false"])')) return null;
     const style = win.getComputedStyle(element);
     if (style.display === 'none' || style.visibility === 'hidden' || !element.getClientRects().length) return null;
