@@ -3,7 +3,7 @@
   "name": "0xlabel",
   "version": "1",
   "description": "Your names for wallet addresses. One small, self-hosted address book.",
-  "minimum_chrome_version": "120",
+  "minimum_chrome_version": "125",
   "permissions": ["storage", "alarms", "scripting", "contextMenus", "activeTab"],
   "optional_host_permissions": ["http://*/*", "https://*/*"],
   "background": {"service_worker": "background.js", "type": "module"},

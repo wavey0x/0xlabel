@@ -42,7 +42,7 @@ test('installed extension: authenticated HTTP/HTTPS books, source isolation, ala
     await popup.locator('#name').fill('Local');
     await popup.locator('#connect').click();
     await expect(popup.locator('#settings')).toBeHidden({ timeout: 10000 });
-    await expect(popup.locator('#connection')).toHaveValue(local);
+    await expect(popup.locator('#connection')).toHaveText('Local');
     const siteSwitch = popup.getByRole('switch', { name: 'Show my labels on this site' });
     await expect(siteSwitch).not.toBeChecked();
     await expect(popup.locator('#site-view')).toHaveText('Website defaults');
@@ -66,7 +66,7 @@ test('installed extension: authenticated HTTP/HTTPS books, source isolation, ala
     await popup.locator('#api-url').fill(remote); await popup.locator('#token').fill('test-only-token'); await popup.locator('#name').fill('Remote');
     await popup.locator('#connect').click();
     await expect(popup.locator('#settings')).toBeHidden();
-    await expect(popup.locator('#connection')).toHaveValue(remote);
+    await expect(popup.locator('#connection')).toHaveText('Remote');
     await expect(website.locator('#wallet')).not.toHaveAttribute('data-0xlabel-label');
     expect((await (await api.get(local+'/labels')).json()).records).toEqual([localRecord]);
     const caches = await worker.evaluate(async ({local,remote}) => {
@@ -82,7 +82,8 @@ test('installed extension: authenticated HTTP/HTTPS books, source isolation, ala
     await api.put(`${remote}/labels/global/${address}`, { data:{labels:[],version:remoteRecord.version} });
     await worker.evaluate(() => chrome.alarms.create('sync', { when:Date.now()+100 }));
     await expect(website.locator('#wallet')).not.toHaveAttribute('data-0xlabel-label', /./, { timeout:10000 });
-    await popup.locator('#connection').selectOption(local);
+    await popup.locator('#connection').click();
+    await popup.getByRole('menuitemradio', { name: /^Local / }).click();
     await expect(website.locator('#wallet')).toHaveAttribute('data-0xlabel-label','Local treasury');
     await website.getByRole('button',{name:'Edit wallet labels',exact:true}).first().click();
     await website.getByRole('textbox',{name:'Label 1'}).fill('Local edited');
@@ -120,8 +121,9 @@ test('installed extension: authenticated HTTP/HTTPS books, source isolation, ala
     await expect(website.locator('[data-0xlabel-address],[data-0xlabel-label],[data-0xlabel-ui]')).toHaveCount(0);
     await another.close();
     const added='0x'+'ef'.repeat(20);
+    await popup.getByRole('button', { name: '+ Add address', exact: true }).click();
     await popup.locator('#manual-address').fill(added); await popup.locator('#network').fill('8453');
-    await popup.getByRole('button',{name:'Label address',exact:true}).click();
+    await popup.getByRole('button',{name:'Add tags',exact:true}).click();
     await popup.getByRole('textbox',{name:'Label 1'}).fill('New Base wallet');
     await popup.getByRole('button',{name:'Add label',exact:false}).click();
     await popup.getByRole('textbox',{name:'Label 2'}).fill('Second alias');
@@ -134,7 +136,7 @@ test('installed extension: authenticated HTTP/HTTPS books, source isolation, ala
     await expect(popup.locator('.record')).toContainText('New Base wallet');
     await expect(popup.locator('.record')).toHaveAttribute('title', checksumAddress(added));
     await popup.locator('#search').fill(added.toUpperCase());
-    await expect(popup.locator('#manual-address')).toHaveValue(checksumAddress(added));
+    await expect(popup.locator('.record')).toHaveCount(1);
     await popup.bringToFront();
     await popup.locator('#results .copy').click();
     // Keep the popup focused until the clipboard write completes.

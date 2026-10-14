@@ -3,7 +3,11 @@
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>0xlabel</title><link rel="stylesheet" href="popup.css"></head>
 <body>
   <header><h1><span>0x</span>label</h1><button id="settings-toggle" class="quiet" aria-label="Connection settings">Connections</button></header>
-  <div class="connection-line"><select id="connection" aria-label="Active connection"><option value="">Add a connection</option></select><button id="refresh" class="quiet" aria-label="Refresh selected book">↻</button></div>
+  <div class="connection-line">
+    <button id="connection" aria-label="Active connection" aria-haspopup="menu" aria-expanded="false" popovertarget="connection-menu"><span>Connect a book</span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></button>
+    <div id="connection-menu" popover role="menu" aria-label="Connections"></div>
+    <button id="refresh" class="quiet" aria-label="Refresh selected book">↻</button>
+  </div>
   <p id="sync" class="muted"></p>
   <section id="settings" hidden>
     <form id="connection-form">
@@ -20,10 +24,15 @@
     <div class="site-line"><div class="site-info"><span id="site-name">This website</span><span id="site-view" class="muted">Website defaults</span></div><button id="site-toggle" class="site-switch" role="switch" aria-checked="false" aria-label="Show my labels on this site" aria-describedby="site-name"><span></span></button></div>
     <div id="adapter-warning" hidden><p></p><button id="retry" class="quiet">Retry</button><button id="disable" class="quiet">Turn off for this site</button></div>
   </section>
-  <label>Your book<input id="search" type="search" placeholder="Search names or paste a full address" autocomplete="off" spellcheck="false" autocorrect="off" autocapitalize="off"></label>
+  <div class="book-heading"><label for="search">Your book</label><button id="add-address" class="quiet" aria-expanded="false" aria-controls="manual-form">+ Add address</button></div>
+  <form id="manual-form" hidden>
+    <label for="manual-address">Address</label>
+    <div class="manual-line"><input id="manual-address" placeholder="Paste a full 0x address" autocomplete="off" spellcheck="false" autocorrect="off" autocapitalize="off" required><button type="submit" class="primary">Add tags</button></div>
+    <div class="manual-network"><label for="network">Chain ID <span class="muted">(optional)</span></label><input id="network" inputmode="numeric" autocomplete="off" placeholder="All networks"></div>
+  </form>
+  <input id="search" type="search" placeholder="Search tags or addresses" autocomplete="off" spellcheck="false" autocorrect="off" autocapitalize="off">
   <div id="results"></div>
   <p id="empty" class="muted"></p>
-  <form id="manual-form"><input id="manual-address" aria-label="Full wallet address" placeholder="0x… full address" required><input id="network" aria-label="Optional chain ID" inputmode="numeric" placeholder="Chain ID (optional)"><button type="submit" class="quiet">Label address</button></form>
   <footer><button id="export" class="quiet">Export this book</button><span id="count" class="muted"></span></footer>
   <p id="message" role="status"></p>
   <div id="editor-host" hidden></div>

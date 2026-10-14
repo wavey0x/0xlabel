@@ -27,6 +27,32 @@ async function rpc(message) {
   return response.result;
 }
 const tell = error => { $('#message').textContent = error?.message || String(error || ''); };
+const connectionMenu = $('#connection-menu');
+function renderConnections() {
+  const active = state.connections.find(connection => connection.url === state.connectionKey);
+  $('#connection span').textContent = active?.name || 'Connect a book';
+  $('#connection').setAttribute('aria-label', active ? `Active connection: ${active.name}` : 'Connect a book');
+  $('#connection').title = active?.url || 'Add a connection';
+  const focused = connectionMenu.contains(document.activeElement);
+  const focusedURL = focused ? document.activeElement.dataset.url : null;
+  const options = state.connections.map(connection => {
+    const button = document.createElement('button');
+    button.type = 'button'; button.dataset.url = connection.url; button.title = connection.url;
+    button.setAttribute('role', 'menuitemradio');
+    button.setAttribute('aria-checked', String(connection.url === state.connectionKey));
+    button.autofocus = connection.url === state.connectionKey;
+    button.innerHTML = `<span><strong></strong><small></small></span>${COPIED_ICON}`;
+    button.querySelector('strong').textContent = connection.name;
+    button.querySelector('small').textContent = connection.url.replace(/^https?:\/\//, '');
+    return button;
+  });
+  const add = document.createElement('button');
+  add.type = 'button'; add.className = 'add-connection'; add.textContent = '+ Add connection';
+  add.setAttribute('role', 'menuitem');
+  add.autofocus = !active;
+  connectionMenu.replaceChildren(...options, add);
+  if (focused) (options.find(button => button.dataset.url === focusedURL) || add).focus();
+}
 function render(next = state) {
   if (!Number.isSafeInteger(next.selectionGeneration) || !Number.isSafeInteger(next.stateRevision)) return;
   if (next.selectionGeneration < state.selectionGeneration) return;
@@ -34,11 +60,7 @@ function render(next = state) {
   state = next;
   bookEntries = state.records.map(record => ({ record, text: [record.address, ...record.labels].join('\n').toLocaleLowerCase(), row: null }));
   if (editor) editor.updateState(next);
-  const select = $('#connection');
-  select.replaceChildren();
-  if (!state.connections.length) select.append(new Option('Add a connection', ''));
-  for (const connection of state.connections) select.append(new Option(connection.name, connection.url));
-  select.value = state.connectionKey || '';
+  renderConnections();
   $('#sync').textContent = state.error ? `Using cached labels · ${state.error}` :
     state.syncedAt ? `Last synced ${new Date(state.syncedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : 'Connect to your helper to start.';
   $('#refresh').disabled = !state.connectionKey || busy;
@@ -50,16 +72,16 @@ function render(next = state) {
   $('#site-view').textContent = enabled ? 'Your labels' : 'Website defaults';
   search();
 }
-function settings() {
-  $('#settings').hidden = !$('#settings').hidden;
-  if (!$('#settings').hidden) {
+function settings(open = true) {
+  $('#settings').hidden = !open;
+  if (open) {
     $('#api-url').value = state.connectionKey || 'http://127.0.0.1:8712';
     $('#name').value = state.connectionName || '';
     $('#token').value = '';
     $('#pairing').focus();
   }
 }
-$('#settings-toggle').onclick = settings;
+$('#settings-toggle').onclick = () => settings($('#settings').hidden);
 $('#pairing').addEventListener('input', event => {
   try {
     const value = JSON.parse(event.target.value);
@@ -82,10 +104,31 @@ $('#connection-form').onsubmit = async event => {
   } catch (error) { tell(error); }
   finally { busy = false; $('#connect').disabled = false; render(); }
 };
-$('#connection').onchange = async event => {
-  try { render(await rpc({ type: 'Select', url: event.target.value })); tell(''); }
+connectionMenu.addEventListener('beforetoggle', event => {
+  $('#connection').setAttribute('aria-expanded', String(event.newState === 'open'));
+});
+$('#connection').addEventListener('keydown', event => {
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault(); connectionMenu.showPopover();
+  }
+});
+connectionMenu.addEventListener('keydown', event => {
+  if (event.key === 'Tab') { connectionMenu.hidePopover(); $('#connection').focus(); return; }
+  if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+  event.preventDefault();
+  const options = [...connectionMenu.querySelectorAll('button')];
+  const index = options.indexOf(document.activeElement);
+  const next = event.key === 'Home' ? 0 : event.key === 'End' ? options.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length;
+  options[next]?.focus();
+});
+connectionMenu.addEventListener('click', async event => {
+  const option = event.target.closest('button');
+  if (!option) return;
+  connectionMenu.hidePopover();
+  if (!option.dataset.url) { settings(); return; }
+  try { render(await rpc({ type: 'Select', url: option.dataset.url })); tell(''); }
   catch (error) { tell(error); }
-};
+});
 $('#refresh').onclick = async () => {
   if (busy) return;
   busy = true; render();
@@ -138,7 +181,7 @@ function bookRow(record) {
       await navigator.clipboard.writeText(displayAddress); copy.innerHTML = COPIED_ICON;
       copy.setAttribute('aria-label', `Copied ${displayAddress}`); copy.title = 'Copied';
     }
-    catch { $('#manual-address').value = displayAddress; $('#manual-address').select(); }
+    catch { manualEntry(true); $('#manual-address').value = displayAddress; $('#manual-address').select(); }
   };
   row.append(open, copy);
   return row;
@@ -152,12 +195,17 @@ function search() {
     $('#results').replaceChildren(...rows);
     visibleRows = rows;
   }
-  const full = parseAddress(value);
-  if (full) $('#manual-address').value = checksumAddress(full);
-  const empty = !matches.length ? state.records.length ? 'No matching labels. You can name an address below.' : 'This book is empty. Name an address below or on an enabled website.' : matches.length > 100 ? 'Showing the first 100 matches. Search to narrow the list.' : '';
+  const empty = !matches.length ? state.records.length ? 'No matching tags.' : 'No tags yet.' : matches.length > 100 ? 'Showing the first 100 matches. Search to narrow the list.' : '';
   if ($('#empty').textContent !== empty) $('#empty').textContent = empty;
 }
 $('#search').oninput = search;
+function manualEntry(open) {
+  $('#manual-form').hidden = !open;
+  $('#add-address').setAttribute('aria-expanded', String(open));
+  $('#add-address').textContent = open ? 'Cancel' : '+ Add address';
+  if (open) $('#manual-address').focus();
+}
+$('#add-address').onclick = () => manualEntry($('#manual-form').hidden);
 $('#manual-address').onchange = () => {
   const address = parseAddress($('#manual-address').value.trim());
   if (address) $('#manual-address').value = checksumAddress(address);
@@ -170,6 +218,8 @@ $('#manual-form').onsubmit = event => {
     $('#manual-address').value = checksumAddress(address);
     const id = $('#network').value.trim();
     const scope = id ? normalizeScope(`eip155:${id}`) : 'global';
+    if (!state.connectionKey) throw new Error('Connect to an API first.');
+    manualEntry(false);
     edit(address, scope); tell('');
   } catch (error) { tell(error); }
 };
