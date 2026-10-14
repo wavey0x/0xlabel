@@ -12,7 +12,8 @@ let entries = [];
 let visibleRows = [];
 const tell = error => { $('#message').textContent = error?.message || String(error || ''); };
 const shadow = $('#editor-host').attachShadow({ mode: 'open' });
-await editorStyles(shadow);
+// Paint the saved book once, rather than an unfinished shell and an empty book.
+const ready = Promise.all([editorStyles(shadow), rpc({ type: 'State' })]);
 const theme = matchMedia('(prefers-color-scheme: dark)');
 const applyTheme = () => $('#editor-host').toggleAttribute('data-dark', theme.matches);
 theme.addEventListener('change', applyTheme); applyTheme();
@@ -161,5 +162,11 @@ $('#export').onclick = () => {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 chrome.runtime.onMessage.addListener(message => { if (message.type === 'Updated') render(message.state); });
-render();
-try { render((await rpc({ type: 'State' })).state); } catch (error) { tell(error); }
+try {
+  const [, response] = await ready;
+  render(response.state);
+} catch (error) { render(); tell(error); }
+finally {
+  $('.book').hidden = false;
+  $('#search').focus({ preventScroll: true });
+}
