@@ -19,7 +19,9 @@ export function addressText(root) {
   const joined = new Set();
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     const parent = node.parentElement;
-    if (!parent || found.has(parent)) continue;
+    // Whitespace between elements carries no address and no boundary: a split
+    // display is still read whole from one of its non-blank nodes.
+    if (!parent || found.has(parent) || !node.data.trim()) continue;
     if (FULL_ADDRESS.test(node.data)) found.add(parent);
     else if (parent.childNodes.length > 1 && !joined.has(parent)) {
       joined.add(parent);
