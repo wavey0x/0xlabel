@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { address, other, start, health, reported } from './controller.js';
+import { address, other, record, start, health, reported } from './controller.js';
 
 // Every registered adapter owes the same guarantees, whatever site it reads.
 // Adding a website means adding an entry here beside its entry in adapters.js:
@@ -60,6 +60,18 @@ for (const site of sites) {
       await expect(page.locator('#sound')).toHaveAttribute('data-0xlabel-label', 'Treasury');
     });
 
+    test('invalid links do not disable sound address annotations', async ({ page }) => {
+      const href = `http://[/address/${address}`;
+      await open(page, `<a id="invalid" href="${href}">${address}</a>` + site.canonical('sound'));
+      expect(await health(page)).toMatchObject({ status: 'ready' });
+      for (const id of ['invalid', 'sound']) {
+        await expect(page.locator('#' + id)).toHaveAttribute('data-0xlabel-address', address);
+        await expect(page.locator('#' + id)).toHaveAttribute('data-0xlabel-label', 'Treasury');
+      }
+      await expect(page.locator('#invalid')).toHaveAttribute('href', href);
+      await expect(page.locator('#invalid')).toHaveText(address);
+    });
+
     test('leaves editable and interactive content alone', async ({ page }) => {
       await open(page, `<input value="${address}"><button id="pressable">${address}</button>
         <div contenteditable="true">${address}</div><span aria-hidden="true">${address}</span>`);
@@ -75,3 +87,41 @@ for (const site of sites) {
     });
   });
 }
+
+test.describe('Generic address text', () => {
+  test('recognizes whole addresses regardless of casing or adjacent text boundaries', async ({ page }) => {
+    await start(page, { site: 'https://plain.example/wallets', html: `<main>
+      <span id="uppercase">${address.toUpperCase()}</span><span id="prefix"></span><span id="split"></span>
+      <span id="fragment">0xabab…abab</span><span id="prose">Wallet: ${address}</span><span id="long">${address}ab</span>
+      </main><script>
+      document.querySelector('#prefix').append(document.createTextNode('0'), document.createComment('framework boundary'), document.createTextNode('${address.slice(1).toUpperCase()}'));
+      document.querySelector('#split').append(document.createTextNode('${address.slice(0, 21)}'), document.createTextNode('${address.slice(21)}'));
+      </script>` });
+    for (const id of ['uppercase', 'prefix', 'split']) {
+      await expect(page.locator('#' + id)).toHaveAttribute('data-0xlabel-address', address);
+      await expect(page.locator('#' + id)).toHaveAttribute('data-0xlabel-label', 'Treasury');
+    }
+    for (const id of ['fragment', 'prose', 'long']) {
+      await expect(page.locator('#' + id)).not.toHaveAttribute('data-0xlabel-address');
+    }
+    await expect(page.locator('#uppercase')).toHaveText(address.toUpperCase());
+    await expect(page.locator('#prefix')).toHaveText(address.toUpperCase());
+    await expect(page.locator('#split')).toHaveText(address);
+  });
+
+  test('updates split address identity when the website replaces its text', async ({ page }) => {
+    await start(page, { site: 'https://plain.example/wallets',
+      records: [record, { ...record, address: other, labels: ['Other wallet'] }],
+      html: `<main><span id="subject"></span></main><script>
+      document.querySelector('#subject').append(document.createTextNode('0x'), document.createTextNode('${address.slice(2)}'));
+      </script>`,
+    });
+    const subject = page.locator('#subject');
+    await expect(subject).toHaveAttribute('data-0xlabel-label', 'Treasury');
+    await subject.evaluate((element, other) => { element.lastChild.data = other.slice(2); }, other);
+    await expect(subject).toHaveAttribute('data-0xlabel-address', other);
+    await expect(subject).toHaveAttribute('data-0xlabel-label', 'Other wallet');
+    await expect(subject).toHaveText(other);
+    expect(await health(page)).toMatchObject({ status: 'ready' });
+  });
+});

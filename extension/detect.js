@@ -9,15 +9,25 @@ export const AMBIGUOUS = 'contradictory-address-evidence';
 const ADDRESS_PATH = /^\/address\/([^/]+)\/?$/;
 const FRAGMENT = /^(?:[a-z]+:)?(0x[0-9a-f]+)[.…]+([0-9a-f]+)$/;
 
-const FULL_ADDRESS = /0x[0-9a-fA-F]{40}/;
+const FULL_ADDRESS = /0x[0-9a-f]{40}/i;
 
 // Elements whose own text shows a whole address. On a site we have no adapter
 // for, walking text costs one pass instead of testing nearly every element.
 export function addressText(root) {
   const walker = (root.ownerDocument || root).createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const found = new Set();
+  const joined = new Set();
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-    if (FULL_ADDRESS.test(node.data) && node.parentElement) found.add(node.parentElement);
+    const parent = node.parentElement;
+    if (!parent || found.has(parent)) continue;
+    if (FULL_ADDRESS.test(node.data)) found.add(parent);
+    else if (parent.childNodes.length > 1 && !joined.has(parent)) {
+      joined.add(parent);
+      // Frameworks can split one display into adjacent text nodes. Read a
+      // leaf's combined text once, without aggregating whole container trees.
+      if ([...parent.children].every(child => child.matches('[data-0xlabel-ui]')) &&
+          FULL_ADDRESS.test(parent.textContent)) found.add(parent);
+    }
   }
   return [...found];
 }
@@ -26,7 +36,9 @@ export function addressText(root) {
 export function addressLink(element, url) {
   const link = element.closest('a[href]');
   if (!link) return null;
-  const href = new URL(link.getAttribute('href'), url);
+  let href;
+  try { href = new URL(link.getAttribute('href'), url); }
+  catch { return null; } // Malformed website links provide no address evidence.
   const address = parseAddress(href.pathname.match(ADDRESS_PATH)?.[1]);
   return address ? { address, network: scopeOf(explorerNetwork(href.hostname)) } : null;
 }
