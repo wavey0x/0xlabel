@@ -12,7 +12,7 @@ Collect address tags in one book and bring the same context to different website
 
 - **Easy to add.** Tag an address directly on the page with a compact inline editor.
 - **One consistent view.** The same tags follow addresses across enabled websites. Open the full-page book to search, add, edit, or export them.
-- **Your book, your storage.** Keep it on your laptop or connect to your own authenticated API. Local and remote books stay separate.
+- **Your book, your storage.** Kept on your device by default. Keep several books, each one named, and put any of them on a server you run to share it between your devices.
 - **Fast by default.** Cached lookups handle hundreds of addresses. A simple periodic pull keeps the selected book fresh.
 - **Easy to compare.** Reveal the website's original display for one address or the whole page, without changing your saved tags.
 
@@ -20,23 +20,30 @@ Works with Etherscan-family explorers and Safe. Other enabled sites use conserva
 
 ### Privacy
 
-Your SQLite book lives on your laptop or a server you control, behind an authenticated API. 0xlabel has no central service, accounts, or analytics. API credentials stay in trusted extension storage and never reach content scripts.
+Your addresses stay in your browser profile unless you put a book on a server you run, in which case it lives in a SQLite file you control behind an authenticated API. 0xlabel has no central service, accounts, or analytics. Access keys stay in trusted extension storage and never reach content scripts.
 
 **Tags displayed on a website are readable by that website.** The extension keeps your stored book under your control; its on-page overlay is not hidden from the site.
 
 ### Get started
 
-With Python 3.10+ and [uv](https://docs.astral.sh/uv/getting-started/installation/):
-
 ```sh
 git clone https://github.com/wavey0x/0xlabel.git
-cd 0xlabel
-uv run 0xlabel
 ```
 
 1. Open `brave://extensions` or `chrome://extensions`, enable **Developer mode**, and **Load unpacked** → this project's `extension` folder.
-2. Open 0xlabel. Choose **Connect a book** → **Add connection**, paste the helper's JSON, then connect.
-3. Enable the website in the popup. Click a purple tag beside an address to name it.
+2. Enable the website in the popup. Click a purple tag beside an address to name it.
+
+That is the whole setup. Your addresses are kept on this device, with no server and nothing to configure.
+
+#### Sharing a book between devices
+
+Run a server, with Python 3.10+ and [uv](https://docs.astral.sh/uv/getting-started/installation/):
+
+```sh
+uv run 0xlabel
+```
+
+It prints one line. In 0xlabel, open the address book menu, choose **+ Add an address book**, and paste it. The new book lives on that server; the one on your device stays where it is, and you switch between them in the same menu.
 
 ![The compact translucent editor adding a tag directly to a transfer list](docs/images/editor.png)
 
@@ -44,6 +51,6 @@ uv run 0xlabel
 
 ### Small by design
 
-One Python process, one SQLite table, and a plain JavaScript extension. No application build step. Cached labels remain available when the API is offline; saving needs a connection.
+A plain JavaScript extension, and a single Python process with one SQLite table if you want a book on a server. No application build step. A book on a server keeps a local copy, so an unreachable server costs freshness and not the book.
 
 Early development; installed as an unpacked extension. See the [setup guide](INSTALL.md) for remote hosting, backups, updates, and development checks.

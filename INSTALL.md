@@ -28,17 +28,17 @@ On Windows, use `.venv\Scripts\pip` and `.venv\Scripts\0xlabel`.
 
 Open `brave://extensions` or `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, and select this repository's **extension** folder. Do not load the repository root. Chrome 125 or newer is required. Pin 0xlabel to the toolbar.
 
-Choose **Connect a book** → **Add connection**, paste the JSON printed by the helper, name it **Local**, and connect. Accept the browser's permission request. That JSON contains your access token; keep it private. Connection setup closes with Cancel, ×, or Escape. The popup's settings button and the full-page picker's **Edit this connection** update a saved name or token.
+0xlabel starts with one address book kept on this device. There is nothing to connect and nothing to configure.
 
-Open a supported website, then turn on the popup's **On this website** switch. The toolbar turns deep purple when labeling is active. Permissions are granted per website; other sites remain untouched. **Open address book** opens a full-page extension tab for searching, adding, editing, removing, and exporting tags. It uses the same cached book and API; no extra service is needed.
+Open a supported website, then turn on the popup's **On this website** switch. The toolbar turns deep purple when labeling is active. Permissions are granted per website; other sites remain untouched. **Open address book** opens a full-page extension tab for searching, adding, editing, removing, importing, and exporting tags.
 
 Click a purple tag beside an address to edit its names. The first name is the default; + appends an alias and arrows reorder them. Enter saves; Escape or an outside click dismisses the draft. Turn off **Show tags** to temporarily reveal the website's original presentation for matching occurrences on that page. The popup's **On this website** switch restores every website default and persists across refreshes.
 
 New inline labels apply globally. Editing an existing network override retains its scope. **Add address** in the full-page book offers an optional chain ID for a scoped list; removing that override reveals the global names. The address switch suppresses the whole replacement until restored or reset by refresh, navigation, or switching books. **Remove tags** in the book editor prepares a deletion; Save commits it.
 
-## Connect to a remote API
+## Keep a book on a server
 
-Run the same helper on your remote machine, behind an HTTPS reverse proxy:
+A book on a server can be reached from more than one device. Run the helper on your machine, or on a remote one behind an HTTPS reverse proxy:
 
 ```sh
 uv run 0xlabel --public-url https://labels.example.com
@@ -54,9 +54,11 @@ labels.example.com {
 
 Use a reachable hostname and valid certificate. If serving under a path, pass the full base URL to `--public-url` and strip that path at the proxy. Requests reject redirects, so use the API's final URL.
 
-Choose **Add connection** in either view's book picker and name the remote API **Remote**. Each full API URL, including its port and path, owns a separate cache. **Selecting Remote never overwrites Local's database or cache.** Switching back displays Local's retained book and refreshes it. The laptop helper can stop while you use Remote.
+The helper prints one line. In either view, open the address book menu, choose **+ Add an address book**, and paste it; the name fills in from the server's hostname. The key travels in the link's fragment, which your browser never sends to the server. Keep the line private.
 
-Sync is a read-only snapshot pull, about once a minute while the browser runs, plus startup, selection, browsing resume, and manual refresh. Failed pulls keep the previous cache. An explicit save is the only operation that changes a book; saving needs a reachable API. Conflicting or failed saves preserve the draft.
+Books are separate and switching between them changes neither, so the book on your device stays exactly as it was while you use one kept on a server. **Address book settings** renames a book, or removes it: removing one kept on a server only forgets it here, while removing one kept on this device deletes its addresses. **Import** in the full-page book carries addresses from an exported file into the book that is open.
+
+For a book kept on a server, sync is a read-only snapshot pull, about once a minute while the browser runs, plus startup, switching books, browsing resume, opening the popup, and manual refresh. Failed pulls keep the previous copy. An explicit save is the only operation that changes a book; saving to a server book needs that server. Conflicting or failed saves preserve the draft.
 
 ## Data and backups
 
