@@ -83,7 +83,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
     books = Array.isArray(saved.books) ? saved.books.filter(item => item?.id && item?.name && item?.storage?.kind) : [];
     if (!books.length) {
       // Everyone starts with a book, so labeling works before anything is set up.
-      books = [{ id: uuid(), name: 'My addresses', storage: { kind: 'device' } }];
+      books = [{ id: uuid(), name: 'default', storage: { kind: 'device' } }];
       active = books[0].id;
       await saveBooks();
     }

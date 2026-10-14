@@ -250,7 +250,7 @@ test('a name we chose, rather than one you typed, gives way to a free one', asyn
   await store.init();
   await store.add({ storage: { kind: 'device' } });
   await store.add({ storage: { kind: 'device' } });
-  assert.deepEqual(store.state().books.map(item => item.name), ['My addresses', 'Address book', 'Address book 2']);
+  assert.deepEqual(store.state().books.map(item => item.name), ['default', 'Address book', 'Address book 2']);
 });
 
 test('a book says which kind of storage holds it', async () => {

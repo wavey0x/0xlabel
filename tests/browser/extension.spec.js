@@ -58,7 +58,7 @@ test('installed extension: a book that works with no setup, moving it to a serve
     await popup.goto(`chrome-extension://${id}/popup.html`);
     // Nothing has been set up, so there is a book and it is on this device.
     await expect(popup.locator('#site-name')).toHaveText('127.0.0.1');
-    await expect(popup.locator('#location')).toHaveText('My addresses');
+    await expect(popup.locator('#location')).toHaveText('default');
     const siteSwitch = popup.getByRole('switch', { name: 'Show my tags on this website' });
     await expect(siteSwitch).not.toBeChecked();
     await popup.locator('#site-toggle').click();
