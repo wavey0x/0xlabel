@@ -13,6 +13,11 @@ export const BRAND_MARK = brandMark();
 // Small outline glyphs shared by 0xlabel's UI.
 export const LABEL_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 2h5l7 7-5 5-7-7Z"/><circle cx="5" cy="5" r=".8"/></svg>';
 export const COPY_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2" width="8" height="10" rx="1.5"/><path d="M10 12v1a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h3"/></svg>';
+// Where a book is kept, at a glance: a screen for this device, stacked platters
+// for a server.
+export const DEVICE_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1.8" y="3" width="12.4" height="8" rx="1.3"/><path d="M5.5 13.5h5"/></svg>';
+export const SERVER_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="8" cy="3.6" rx="5.2" ry="2.1"/><path d="M2.8 3.6v8.8c0 1.16 2.33 2.1 5.2 2.1s5.2-.94 5.2-2.1V3.6"/><path d="M2.8 8c0 1.16 2.33 2.1 5.2 2.1s5.2-.94 5.2-2.1"/></svg>';
+
 export const COPIED_CHECK_MS = 1500;
 
 export const COPIED_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="var(--0xlabel-accent)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 8 3 3 7-7"/></svg>';

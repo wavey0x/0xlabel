@@ -226,3 +226,36 @@ test('a file that is not a book is refused before anything is written', async ()
   await assert.rejects(store.merge([{ address, scope: 'global', labels: [] }]));
   assert.deepEqual(store.state().records.map(entry => entry.labels[0]), ['Treasury']);
 });
+
+test('two address books cannot share a name, however they are kept', async () => {
+  const { store } = harness();
+  await store.init();
+  await store.rename(store.state().activeBook, 'Work');
+  await assert.rejects(store.add({ name: 'work', storage: { kind: 'device' } }), /already have an address book called/);
+  await assert.rejects(store.add({ name: 'Work', storage: onServer }), /already have an address book called/);
+  await store.add({ name: 'Team', storage: onServer });
+  await assert.rejects(store.rename(store.state().activeBook, 'Work'), /already have an address book called/);
+  assert.deepEqual(store.state().books.map(item => item.name), ['Work', 'Team']);
+});
+
+test('the same server is never two address books', async () => {
+  const { store } = harness();
+  await store.init();
+  await store.add({ name: 'Team', storage: onServer });
+  await assert.rejects(store.add({ name: 'Team again', storage: onServer }), /already one of your address books/);
+});
+
+test('a name we chose, rather than one you typed, gives way to a free one', async () => {
+  const { store } = harness();
+  await store.init();
+  await store.add({ storage: { kind: 'device' } });
+  await store.add({ storage: { kind: 'device' } });
+  assert.deepEqual(store.state().books.map(item => item.name), ['My addresses', 'Address book', 'Address book 2']);
+});
+
+test('a book says which kind of storage holds it', async () => {
+  const { store } = harness();
+  await store.init();
+  await store.add({ name: 'Team', storage: onServer });
+  assert.deepEqual(store.state().books.map(item => item.kind), ['device', 'server']);
+});

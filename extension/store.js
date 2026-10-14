@@ -22,6 +22,15 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
   let pull = null;
 
   const entry = id => books.find(item => item.id === id);
+  const taken = (name, exceptId) => books.some(item =>
+    item.id !== exceptId && item.name.toLocaleLowerCase() === name.toLocaleLowerCase());
+  // A name people chose is never altered behind their back; one we chose for
+  // them is, because being stopped over a name you never typed is senseless.
+  function freeName(candidates) {
+    for (const candidate of candidates) if (candidate && !taken(candidate)) return candidate;
+    const base = candidates[candidates.length - 1] || 'Address book';
+    for (let suffix = 2; ; suffix += 1) if (!taken(`${base} ${suffix}`)) return `${base} ${suffix}`;
+  }
   const transport = item => item.storage.kind === 'server'
     ? createServerBook({ url: item.storage.url, token: item.storage.token, fetch: fetcher })
     : createDeviceBook({ storage, key: recordsKey(item.id), now });
@@ -34,7 +43,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
   function state() {
     const current = entry(active);
     return {
-      books: books.map(item => ({ id: item.id, name: item.name,
+      books: books.map(item => ({ id: item.id, name: item.name, kind: item.storage.kind,
         where: item.storage.kind === 'server' ? new URL(item.storage.url).hostname : 'On this device' })),
       activeBook: active, bookName: current?.name || '', bookKind: current?.storage.kind || 'device',
       records, stateRevision: revision, syncedAt, error,
@@ -123,8 +132,13 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
     if (where.kind === 'server' && (!where.url || !where.token)) throw new Error('Paste the link your server printed.');
     if (books.length >= 20) throw new Error('That is as many address books as 0xlabel keeps.');
     return serial(async () => {
-      const item = { id: uuid(), name: '', storage: where };
-      item.name = cleanName(name, where.kind === 'server' ? new URL(where.url).hostname : 'New book');
+      if (where.kind === 'server' && books.some(other => other.storage.url === where.url)) {
+        throw new Error('That server is already one of your address books.');
+      }
+      const chosen = cleanName(name, '');
+      if (chosen && taken(chosen)) throw new Error(`You already have an address book called ${chosen}.`);
+      const host = where.kind === 'server' ? new URL(where.url) : null;
+      const item = { id: uuid(), name: chosen || freeName(host ? [host.hostname, host.host] : ['Address book']), storage: where };
       const candidate = transport(item);
       const found = await candidate.load();
       if (copyFrom && found.length) throw new Error('That server already holds a book, so nothing was copied into it.');
@@ -153,7 +167,9 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
     return serial(async () => {
       const item = entry(id);
       if (!item) throw new Error('That address book is gone.');
-      item.name = cleanName(name, item.name);
+      const chosen = cleanName(name, item.name);
+      if (taken(chosen, id)) throw new Error(`You already have an address book called ${chosen}.`);
+      item.name = chosen;
       await saveBooks();
       changed();
       return state();

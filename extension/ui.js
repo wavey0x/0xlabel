@@ -1,5 +1,5 @@
 import { hostPermission, parseConnectLink } from './shared.js';
-import { COPIED_ICON } from './icons.js';
+import { COPIED_ICON, DEVICE_ICON, SERVER_ICON } from './icons.js';
 
 export const emptyState = { books: [], activeBook: null, bookName: '', bookKind: 'device', records: [], stateRevision: -1, syncedAt: null, error: null };
 export const $ = selector => document.querySelector(selector);
@@ -67,9 +67,12 @@ export function bookPicker({ choose, add }) {
       button.setAttribute('role', 'menuitemradio');
       button.setAttribute('aria-checked', String(item.id === state.activeBook));
       button.autofocus = item.id === state.activeBook;
-      button.innerHTML = `<span><strong></strong><small></small></span>${COPIED_ICON}`;
+      // The host only earns a line when it is not already the book's name.
+      const host = item.kind === 'server' && item.where !== item.name ? item.where : '';
+      button.innerHTML = `<i class="kept">${item.kind === 'server' ? SERVER_ICON : DEVICE_ICON}</i>` +
+        `<span><strong></strong>${host ? '<small></small>' : ''}</span>${COPIED_ICON}`;
       button.querySelector('strong').textContent = item.name;
-      button.querySelector('small').textContent = item.where;
+      if (host) button.querySelector('small').textContent = host;
       return button;
     }) : [];
     const create = document.createElement('button');
@@ -90,6 +93,8 @@ export function newBookForm({ container, state, created, busy, error, visible = 
   let named = false;
   container.innerHTML = `<header class="view-heading"><h2>New address book</h2><button type="button" class="quiet icon" data-cancel aria-label="Close">×</button></header>
     <form id="new-book" novalidate>
+      <label for="book-name">Name</label>
+      <input id="book-name" maxlength="40" autocomplete="off" placeholder="Address book">
       <fieldset class="choices">
         <legend>Where to keep it</legend>
         <label><input type="radio" name="where" value="server" checked> On a server<small>Share it between your devices.</small></label>
@@ -100,8 +105,6 @@ export function newBookForm({ container, state, created, busy, error, visible = 
         <input id="connect-link" type="text" autocomplete="off" spellcheck="false" placeholder="http://127.0.0.1:8712#key=…">
         <p class="muted setup-note">Run <code>uv run 0xlabel</code> and copy the line it prints.</p>
       </div>
-      <label for="book-name">Name</label>
-      <input id="book-name" maxlength="40" autocomplete="off" placeholder="Address book">
       <label id="copy-row" class="check"><input type="checkbox" id="copy-current"> <span></span></label>
       <p id="server-error" class="message" role="alert"></p>
       <footer class="form-actions"><button type="button" class="quiet" data-cancel>Cancel</button><button id="connect" type="submit" class="primary">Create</button></footer>
@@ -166,7 +169,7 @@ export function newBookForm({ container, state, created, busy, error, visible = 
       form.reset(); named = false; get('#server-error').textContent = '';
       refit();
       if (modal) container.showModal(); else container.hidden = false;
-      visible(true); get('#connect-link').focus();
+      visible(true); get('#book-name').focus();
     },
   };
 }
