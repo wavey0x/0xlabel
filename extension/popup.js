@@ -56,7 +56,20 @@ $('#retry').onclick = async () => {
     tell('');
   } catch (error) { tell(error); }
 };
-$('#open-book').onclick = () => chrome.runtime.openOptionsPage().catch(tell);
+$('#open-book').onclick = async () => {
+  const button = $('#open-book');
+  if (button.disabled) return;
+  button.disabled = true; tell('');
+  try {
+    const url = chrome.runtime.getURL('book.html');
+    const [book] = await chrome.runtime.getContexts({ contextTypes: ['TAB'], documentUrls: [url] });
+    if (book) {
+      await chrome.tabs.update(book.tabId, { active: true });
+      await chrome.windows.update(book.windowId, { focused: true });
+    } else await chrome.tabs.create({ url });
+  } catch (error) { tell(error); }
+  finally { button.disabled = false; }
+};
 chrome.runtime.onMessage.addListener(message => { if (message.type === 'Updated') render(message.state); });
 render();
 try {

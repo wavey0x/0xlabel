@@ -198,6 +198,21 @@ test('installed extension: authenticated HTTP/HTTPS books, source isolation, ala
     expect((await (await api.get(local+'/labels')).json()).records.some(record=>record.address===added)).toBe(false);
     await popup.getByRole('button', { name: 'Open address book', exact: false }).click();
     expect(context.pages().filter(page=>page.url()===`chrome-extension://${id}/book.html`)).toHaveLength(1);
+    // Reopening the book preserves a user's search and unsaved draft.
+    await book.locator('#search').fill('Local');
+    await book.locator('.record').click();
+    await book.getByRole('textbox', { name: 'Label 1' }).fill('Unsaved book edit');
+    await popup.getByRole('button', { name: 'Open address book', exact: false }).click();
+    await expect(book.locator('#search')).toHaveValue('Local');
+    await expect(book.getByRole('textbox', { name: 'Label 1' })).toHaveValue('Unsaved book edit');
+    expect(context.pages().filter(page=>page.url()===`chrome-extension://${id}/book.html`)).toHaveLength(1);
+    await book.close();
+    const reopenedPromise = context.waitForEvent('page');
+    await popup.getByRole('button', { name: 'Open address book', exact: false }).click();
+    const reopened = await reopenedPromise;
+    await reopened.waitForURL(`chrome-extension://${id}/book.html`);
+    await expect(reopened.locator('.record')).toHaveCount(1);
+    await expect(reopened.locator('.record')).toContainText('Local edited');
     expect(errors).toEqual([]);
   } finally {
     await context.close(); await api.dispose(); await rm(profile,{recursive:true,force:true});
