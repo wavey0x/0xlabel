@@ -157,6 +157,13 @@ test('installed extension: a book that works with no setup, moving it to a serve
     await api.put(`${remote}/labels/global/${address}`, { data:{labels:[],version:remoteRecord.version} });
     await worker.evaluate(() => chrome.alarms.create('sync', { when:Date.now()+100 }));
     await expect(website.locator('#wallet')).not.toHaveAttribute('data-0xlabel-label', /./, { timeout:10000 });
+    // A pull that learns nothing changes nothing: no new revision, so no view
+    // is told anything and no page repaints.
+    const revisionNow = async () => (await popup.evaluate(() => chrome.runtime.sendMessage({ type: 'State' }))).result.state.stateRevision;
+    const settled = await revisionNow();
+    await worker.evaluate(() => chrome.alarms.create('sync', { when:Date.now()+100 }));
+    await popup.waitForTimeout(1000);
+    expect(await revisionNow()).toBe(settled);
     await switchTo('Local');
     await expect(website.locator('#wallet')).toHaveAttribute('data-0xlabel-label','Local treasury');
     await website.getByRole('button',{name:'Edit wallet labels',exact:true}).first().click();

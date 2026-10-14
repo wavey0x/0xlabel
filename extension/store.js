@@ -1,9 +1,12 @@
-import { findRecord, normalizeLabels, normalizeScope, parseAddress, recordKey, sameLabels, validateSnapshot } from './shared.js';
+import { findRecord, normalizeLabels, normalizeScope, parseAddress, recordKey, sameLabels, sameRecords, validateSnapshot } from './shared.js';
 import { createDeviceBook, deviceKeys } from './stores/device.js';
 import { createServerBook } from './stores/server.js';
 
 const MAX_NAME = 40;
 const cacheKey = id => `cache:${id}`;
+// How recently a book kept elsewhere has to have been asked about before asking
+// again is worth the round trip. Opening five tabs is not five syncs.
+const PULL_FLOOR = 60000;
 
 // Books are named things people switch between. Where a book is kept is a
 // property of that book, chosen once when it is made, so nothing below ever
@@ -20,6 +23,9 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
   // A book whose pages could not be read is never saved over: the save would
   // write over names this worker never managed to see.
   let unreadable = false;
+  // What the server last said this book was, and when we last asked.
+  let mark = null;
+  let pulledAt = 0;
   let queue = Promise.resolve();
   let pull = null;
 
@@ -67,7 +73,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
   }
   async function saveBooks() { await storage.set({ books, activeBook: active }); }
   async function cache() {
-    if (entry(active)?.storage.kind === 'server') await storage.set({ [cacheKey(active)]: { records, syncedAt } });
+    if (entry(active)?.storage.kind === 'server') await storage.set({ [cacheKey(active)]: { records, syncedAt, mark } });
   }
 
   async function open(id) {
@@ -77,15 +83,18 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
     error = null;
     needsRefresh = false;
     unreadable = false;
+    mark = null;
+    pulledAt = 0;
     if (item.storage.kind === 'server') {
       const saved = (await storage.get(cacheKey(id)))[cacheKey(id)];
       try {
         records = validateSnapshot({ records: saved?.records || [] });
         syncedAt = saved?.syncedAt || null;
+        mark = typeof saved?.mark === 'string' ? saved.mark : null;
       } catch { records = []; syncedAt = null; }
     } else {
       syncedAt = null;
-      try { records = await book.load(); }
+      try { records = (await book.load()).records; }
       catch (failure) { records = []; error = failure.message; unreadable = true; }
     }
   }
@@ -109,14 +118,21 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
     const promise = serial(async () => {
       if (active !== started) return state();
       try {
-        const next = await book.load();
+        const answer = await book.load(mark);
         if (active !== started) return state();
-        records = next;
+        pulledAt = now();
+        mark = answer.mark ?? mark;
+        // A book that came back saying the same thing as the copy we hold is
+        // not news: no revision, no broadcast, no page repainted for nothing.
+        const news = Boolean(answer.records) && !sameRecords(records, answer.records);
+        const healed = error !== null || unreadable;
+        if (news) records = answer.records;
         if (entry(active).storage.kind === 'server') syncedAt = now();
         error = null;
         needsRefresh = false;
         unreadable = false;
         await cache();
+        if (!news && !healed) return state();
       } catch (failure) {
         error = failure.message;
       }
@@ -126,6 +142,22 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
     pull = { book: started, promise };
     promise.finally(() => { if (pull?.promise === promise) pull = null; }).catch(() => {});
     return promise;
+  }
+
+  // The pull nobody asked for. A book kept here has nobody else to hear from,
+  // so there is nothing to ask; a book we failed to read is always worth
+  // another try. Its own alarm paces it.
+  function heartbeat() {
+    if (unreadable || entry(active)?.storage.kind === 'server') return refresh();
+    return Promise.resolve(state());
+  }
+
+  // Asked for wherever someone is about to look at a book: a popup opening, a
+  // page coming back to the front, an editor opening. Five tabs waking at once
+  // is one pull, not five.
+  function sync() {
+    if (pulledAt && now() - pulledAt < PULL_FLOOR && !unreadable) return Promise.resolve(state());
+    return heartbeat();
   }
 
   function use(id) {
@@ -153,13 +185,13 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
       const host = where.kind === 'server' ? new URL(where.url) : null;
       const item = { id: uuid(), name: chosen || freeName(host ? [host.hostname, host.host] : ['Address book']), storage: where };
       const candidate = transport(item);
-      const found = await candidate.load();
+      const { records: found, mark: found_mark } = await candidate.load();
       if (copyFrom && found.length) throw new Error('That server already holds a book, so nothing was copied into it.');
       if (copyFrom) {
         const source = entry(copyFrom);
         if (!source) throw new Error('There is nothing to copy.');
-        const taken = source.id === active ? records : await transport(source).load();
-        for (const label of taken) await candidate.put({ ...label, version: null });
+        const taken = source.id === active ? records : (await transport(source).load()).records;
+        await candidate.putMany(taken.map(({ address, scope, labels }) => ({ address, scope, labels, version: null })));
       }
       books = [...books, item];
       active = item.id;
@@ -167,7 +199,9 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
       error = null;
       needsRefresh = false;
       // The new book was just read to make it; reading it again proves nothing.
-      records = copyFrom ? await candidate.load() : found;
+      records = copyFrom ? (await candidate.load()).records : found;
+      mark = copyFrom ? null : found_mark;
+      pulledAt = now();
       syncedAt = item.storage.kind === 'server' ? now() : null;
       await saveBooks();
       await cache();
@@ -240,8 +274,11 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
       if (unreadable) throw new Error('This address book could not be read, so nothing was saved over it.');
       // A write that may already have landed is checked, never simply repeated.
       if (book.uncertainWrites && needsRefresh) {
-        records = await book.load();
+        const answer = await book.load();
+        records = answer.records ?? records;
+        mark = answer.mark ?? mark;
         syncedAt = now();
+        pulledAt = now();
         needsRefresh = false;
         await cache();
         const latest = findRecord(records, address, scope);
@@ -289,5 +326,5 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
     });
   }
 
-  return { init, state, use, add, rename, remove, refresh, merge, save };
+  return { init, state, use, add, rename, remove, refresh, sync, heartbeat, merge, save };
 }

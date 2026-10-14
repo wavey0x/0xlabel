@@ -10,7 +10,7 @@ import secrets
 import sqlite3
 from contextlib import closing
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -60,6 +60,16 @@ class LabelWrite(BaseModel):
         return cleaned
 
 
+class LabelChange(LabelWrite):
+    address: str
+    scope: str
+
+
+class BookWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    changes: list[LabelChange] = Field(max_length=5000)
+
+
 def record(row: sqlite3.Row | None) -> dict | None:
     if row is None:
         return None
@@ -92,6 +102,11 @@ def create_app(database: str | Path, token: str) -> FastAPI:
                 PRIMARY KEY (address, scope)
             )
         """)
+        # One number that changes whenever the book does. Asking "has anything
+        # changed?" then costs a row, rather than the whole book over the wire.
+        connection.execute("CREATE TABLE IF NOT EXISTS book (revision INTEGER NOT NULL)")
+        if connection.execute("SELECT COUNT(*) FROM book").fetchone()[0] == 0:
+            connection.execute("INSERT INTO book VALUES (0)")
     if os.name != "nt":
         database.chmod(0o600)
 
@@ -111,44 +126,101 @@ def create_app(database: str | Path, token: str) -> FastAPI:
         response.headers["X-Content-Type-Options"] = "nosniff"
         return response
 
-    @app.get("/labels", dependencies=[Depends(authenticated)])
-    def read_book():
-        with closing(connect()) as connection:
-            rows = connection.execute("SELECT * FROM labels ORDER BY scope, address").fetchall()
-        return {"records": [record(row) for row in rows]}
+    def revision_of(connection: sqlite3.Connection) -> int:
+        return connection.execute("SELECT revision FROM book").fetchone()[0]
 
-    @app.put("/labels/{scope}/{address}", dependencies=[Depends(authenticated)])
-    def replace_list(scope: str, address: str, change: LabelWrite):
-        address, scope = address_key(address), scope_key(scope)
+    def bump(connection: sqlite3.Connection) -> int:
+        connection.execute("UPDATE book SET revision = revision + 1")
+        return revision_of(connection)
+
+    @app.get("/labels", dependencies=[Depends(authenticated)])
+    def read_book(request: Request):
+        with closing(connect()) as connection:
+            mark = f'"{revision_of(connection)}"'
+            # A book that has not changed is not sent again. This is the usual
+            # answer, so it is the one worth making cheap.
+            if request.headers.get("if-none-match") == mark:
+                return Response(status_code=304, headers={"ETag": mark})
+            rows = connection.execute("SELECT * FROM labels ORDER BY scope, address").fetchall()
+        return JSONResponse({"records": [record(row) for row in rows]}, headers={"ETag": mark})
+
+    def apply(connection: sqlite3.Connection, address: str, scope: str, change: LabelWrite) -> dict | None:
+        """Write one record inside a transaction the caller owns."""
+        if not change.labels:
+            connection.execute("DELETE FROM labels WHERE address = ? AND scope = ?", (address, scope))
+            return None
+        saved = {
+            "address": address, "scope": scope,
+            "labels": change.labels, "version": secrets.token_hex(16),
+        }
+        connection.execute(
+            "INSERT INTO labels VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(address, scope) DO UPDATE SET labels_json=excluded.labels_json, version=excluded.version",
+            (address, scope, json.dumps(change.labels, ensure_ascii=False), saved["version"]),
+        )
+        return saved
+
+    def held(connection: sqlite3.Connection, address: str, scope: str) -> sqlite3.Row | None:
+        return connection.execute(
+            "SELECT * FROM labels WHERE address = ? AND scope = ?", (address, scope)
+        ).fetchone()
+
+    def unlocked(work):
         try:
-            with closing(connect()) as connection, connection:
-                connection.execute("BEGIN IMMEDIATE")
-                current = connection.execute(
-                    "SELECT * FROM labels WHERE address = ? AND scope = ?", (address, scope)
-                ).fetchone()
-                current_version = current["version"] if current else None
-                if change.version != current_version:
-                    return JSONResponse(status_code=409, content={
-                        "detail": "Saved elsewhere while you were editing.",
-                        "current": record(current),
-                    })
-                if not change.labels:
-                    connection.execute("DELETE FROM labels WHERE address = ? AND scope = ?", (address, scope))
-                    return {"record": None}
-                saved = {
-                    "address": address, "scope": scope,
-                    "labels": change.labels, "version": secrets.token_hex(16),
-                }
-                connection.execute(
-                    "INSERT INTO labels VALUES (?, ?, ?, ?) "
-                    "ON CONFLICT(address, scope) DO UPDATE SET labels_json=excluded.labels_json, version=excluded.version",
-                    (address, scope, json.dumps(change.labels, ensure_ascii=False), saved["version"]),
-                )
-            return {"record": saved}
+            return work()
         except sqlite3.OperationalError as error:
             if "locked" in str(error).lower():
                 raise HTTPException(503, "The book is busy. Refresh and try again.") from error
             raise
+
+    @app.put("/labels/{scope}/{address}", dependencies=[Depends(authenticated)])
+    def replace_list(scope: str, address: str, change: LabelWrite):
+        address, scope = address_key(address), scope_key(scope)
+
+        def work():
+            with closing(connect()) as connection, connection:
+                connection.execute("BEGIN IMMEDIATE")
+                current = held(connection, address, scope)
+                if change.version != (current["version"] if current else None):
+                    return JSONResponse(status_code=409, content={
+                        "detail": "Saved elsewhere while you were editing.",
+                        "current": record(current),
+                    })
+                saved = apply(connection, address, scope, change)
+                mark = bump(connection)
+            return JSONResponse({"record": saved}, headers={"ETag": f'"{mark}"'})
+
+        return unlocked(work)
+
+    # A file carried in is one decision, so it is one transaction: either the
+    # whole batch lands or none of it does, and either way it is one round trip.
+    @app.put("/labels", dependencies=[Depends(authenticated)])
+    def replace_many(write: BookWrite):
+        changes = [(address_key(change.address), scope_key(change.scope), change) for change in write.changes]
+        seen = set()
+        for address, scope, _ in changes:
+            if (address, scope) in seen:
+                raise HTTPException(422, "Each address and scope may appear once in a batch.")
+            seen.add((address, scope))
+
+        def work():
+            with closing(connect()) as connection, connection:
+                connection.execute("BEGIN IMMEDIATE")
+                conflicts = []
+                for address, scope, change in changes:
+                    current = held(connection, address, scope)
+                    if change.version != (current["version"] if current else None):
+                        conflicts.append({"address": address, "scope": scope, "current": record(current)})
+                if conflicts:
+                    return JSONResponse(status_code=409, content={
+                        "detail": "Saved elsewhere while this file was being added.",
+                        "conflicts": conflicts,
+                    })
+                saved = [apply(connection, address, scope, change) for address, scope, change in changes]
+                mark = bump(connection)
+            return JSONResponse({"records": saved}, headers={"ETag": f'"{mark}"'})
+
+        return unlocked(work)
 
     return app
 

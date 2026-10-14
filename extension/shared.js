@@ -100,6 +100,14 @@ export function findRecord(records, address, scope) {
   return records.find(item => item.address === address && item.scope === scope) || null;
 }
 
+// Whether two readings of a book say the same thing. A sync that learns
+// nothing should cost nothing downstream.
+export function sameRecords(left, right) {
+  if (left.length !== right.length) return false;
+  const index = new Map(left.map(item => [recordKey(item.address, item.scope), item.version]));
+  return right.every(item => index.get(recordKey(item.address, item.scope)) === item.version);
+}
+
 export function indexBook(records) {
   return new Map(records.map(entry => [recordKey(entry.address, entry.scope), entry]));
 }

@@ -78,9 +78,10 @@ try {
   $('#site-name').textContent = siteURL?.hostname || 'No website open';
   const result = await rpc({ type: 'State', tabId: tab?.id });
   sites = result.sites; render(result.state);
-  // The popup is only ever open for a moment, so sync while it is, rather than
-  // asking for a button press to make the time above it true.
-  rpc({ type: 'Refresh' }).then(render).catch(() => {});
+  // The popup is only ever open for a moment, so ask while it is, rather than
+  // waiting for a button press to make the time above it true. The ask is
+  // conditional and rate limited, so opening the popup repeatedly costs little.
+  rpc({ type: 'Sync' }).then(render).catch(() => {});
   if (result.health?.status === 'stale' && sites[siteURL?.origin]) {
     $('#adapter-warning p').textContent = `${result.health.adapter} labeling paused. Your book is safe.`;
     $('#adapter-warning').hidden = false;

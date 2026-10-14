@@ -36,6 +36,8 @@ export function createDeviceBook({ storage, book, now = Date.now }) {
   }
 
   return {
+    // Nothing else writes this book, so there is never a cheaper answer than
+    // reading it: it has no mark to compare against.
     async load() {
       const held = await storage.get(deviceKeys(book));
       const records = [];
@@ -44,7 +46,7 @@ export function createDeviceBook({ storage, book, now = Date.now }) {
         for (const record of page) records.push(record);
       }
       // Validated whole: one address held twice, in two pages, is caught here.
-      return validateSnapshot({ records });
+      return { records: validateSnapshot({ records }), mark: null };
     },
     async put({ address, scope, labels, version }) {
       const name = pageName(address);

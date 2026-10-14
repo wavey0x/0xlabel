@@ -37,10 +37,12 @@ async function initialize() {
   const ids = (await chrome.scripting.getRegisteredContentScripts()).filter(script =>
     !Object.keys(sites).some(origin => sites[origin] && script.id === scriptId(origin))).map(script => script.id);
   if (ids.length) await chrome.scripting.unregisterContentScripts({ ids });
-  if (!await chrome.alarms.get('sync')) await chrome.alarms.create('sync', { periodInMinutes: 1 });
+  // A backstop, not a metronome: the pulls that matter are the ones a person
+  // is about to look at, and those are asked for by name below.
+  if (!await chrome.alarms.get('sync')) await chrome.alarms.create('sync', { periodInMinutes: 5 });
   await chrome.contextMenus.removeAll();
   chrome.contextMenus.create({ id: 'edit-label', title: 'Label address with 0xlabel', contexts: ['page', 'link', 'selection'] });
-  store.refresh().catch(() => {});
+  store.sync().catch(() => {});
 }
 
 async function send(tabId, message, options = { frameId: 0 }) {
@@ -101,7 +103,7 @@ async function handle(message, sender) {
   }
   if (!view && !page) throw new Error('This page is not enabled.');
   if (message.type === 'Save') return store.save(message.draft);
-  if (message.type === 'Resume') { store.refresh().catch(() => {}); return {}; }
+  if (message.type === 'Resume' || message.type === 'Sync') { store.sync().catch(() => {}); return {}; }
   if (message.type === 'Health' && page) {
     // The toolbar describes the outer page. Embedded views cannot replace its
     // adapter status (including unrelated contract and advertising frames).
@@ -166,7 +168,7 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     reply({ ok: false, error: error.message, status: error.status, current: error.current }));
   return true;
 });
-chrome.alarms.onAlarm.addListener(alarm => { if (alarm.name === 'sync') ready.then(() => store.refresh()).catch(() => {}); });
+chrome.alarms.onAlarm.addListener(alarm => { if (alarm.name === 'sync') ready.then(() => store.heartbeat()).catch(() => {}); });
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   ready.then(() => { if (tab?.id && sites[siteOrigin(tab.url)]) return send(tab.id, { type: 'OpenEditor', selection: info.selectionText, link: info.linkUrl }, { frameId: info.frameId || 0 }); }).catch(() => {});
 });

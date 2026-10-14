@@ -19,6 +19,52 @@ def put(book, labels, version=None, scope='global', address=ADDRESS):
     return book.put(f'/labels/{scope}/{address}', json={'labels': labels, 'version': version})
 
 
+
+def batch(book, changes):
+    return book.put('/labels', json={'changes': changes})
+
+
+def test_a_file_lands_whole_or_not_at_all(book):
+    other = '0x' + 'cd' * 20
+    answer = batch(book, [
+        {'address': ADDRESS, 'scope': 'global', 'labels': ['Treasury'], 'version': None},
+        {'address': other, 'scope': 'eip155:8453', 'labels': ['Payroll'], 'version': None},
+    ])
+    assert answer.status_code == 200
+    saved = answer.json()['records']
+    assert [item['labels'] for item in saved] == [['Treasury'], ['Payroll']]
+    assert len(book.get('/labels').json()['records']) == 2
+
+    # One stale version in the batch, and nothing in it is written.
+    refused = batch(book, [
+        {'address': ADDRESS, 'scope': 'global', 'labels': ['Renamed'], 'version': saved[0]['version']},
+        {'address': other, 'scope': 'eip155:8453', 'labels': ['Renamed too'], 'version': 'stale'},
+    ])
+    assert refused.status_code == 409
+    assert refused.json()['conflicts'] == [{'address': other, 'scope': 'eip155:8453', 'current': saved[1]}]
+    assert sorted(item['labels'][0] for item in book.get('/labels').json()['records']) == ['Payroll', 'Treasury']
+    assert batch(book, [{'address': ADDRESS, 'scope': 'global', 'labels': ['Twice'], 'version': None},
+                        {'address': ADDRESS, 'scope': 'global', 'labels': ['Again'], 'version': None}]).status_code == 422
+
+
+def test_a_book_that_has_not_changed_is_not_sent_again(book):
+    first = book.get('/labels')
+    mark = first.headers['ETag']
+    assert mark and first.json() == {'records': []}
+    again = book.get('/labels', headers={'If-None-Match': mark})
+    assert again.status_code == 304 and again.content == b'' and again.headers['ETag'] == mark
+
+    saved = put(book, ['Treasury']).json()['record']
+    changed = book.get('/labels', headers={'If-None-Match': mark})
+    assert changed.status_code == 200 and changed.json()['records'] == [saved]
+    assert changed.headers['ETag'] != mark
+    assert book.get('/labels', headers={'If-None-Match': changed.headers['ETag']}).status_code == 304
+
+    # A deletion changes the book even though it leaves nothing behind.
+    put(book, [], saved['version'])
+    assert book.get('/labels', headers={'If-None-Match': changed.headers['ETag']}).status_code == 200
+
+
 def test_every_operation_requires_token(tmp_path):
     with TestClient(create_app(tmp_path / 'book.sqlite3', TOKEN)) as client:
         for headers in [{}, {'Authorization': 'Bearer wrong'}, {'Authorization': 'Basic nope'}]:

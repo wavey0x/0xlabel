@@ -8,7 +8,11 @@ const other = '0x' + 'cd'.repeat(20);
 const host = 'http://127.0.0.1:8712';
 const token = 'test-only-secret';
 const onServer = { kind: 'server', url: host, token };
-const response = (value, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => structuredClone(value) });
+const response = (value, status = 200, mark = null) => ({
+  ok: status >= 200 && status < 300, status,
+  headers: { get: name => (name.toLowerCase() === 'etag' ? mark : null) },
+  json: async () => structuredClone(value),
+});
 
 function harness({ remote = [] } = {}) {
   const saved = {};
@@ -27,19 +31,35 @@ function harness({ remote = [] } = {}) {
     set: async entries => { writes.push(...Object.keys(entries)); Object.assign(saved, structuredClone(entries)); },
     remove: async keys => { for (const key of [].concat(keys)) delete saved[key]; },
   };
+  // A stand-in for server.py: a revision that changes with the book, a
+  // conditional read, one record at a time and many in one go.
+  let revision = 0;
+  const held = (address, scope) => book.find(item => item.address === address && item.scope === scope) || null;
+  const apply = ({ address, scope, labels }) => {
+    revision += 1;
+    const next = labels.length ? { address, scope, labels, version: 'v' + revision } : null;
+    book = [...book.filter(item => item.address !== address || item.scope !== scope), ...(next ? [next] : [])];
+    return next;
+  };
   const fetch = async (url, options = {}) => {
     calls.push({ url, ...options });
     if (intercept) { const result = await intercept(url, options); if (result) return result; }
-    if (!options.method) return response({ records: book });
-    const [, tail] = url.split('/labels/');
-    const scope = decodeURIComponent(tail.split('/')[0]);
-    const at = tail.split('/')[1];
+    const mark = `"${revision}"`;
+    const path = url.slice(url.indexOf('/labels'));
+    if (!options.method) {
+      if (options.headers?.['If-None-Match'] === mark) return response(null, 304, mark);
+      return response({ records: book }, 200, mark);
+    }
     const body = JSON.parse(options.body);
-    const current = book.find(item => item.address === at && item.scope === scope) || null;
-    if (body.version !== (current?.version || null)) return response({ current }, 409);
-    const next = body.labels.length ? { address: at, scope, labels: body.labels, version: 'v' + calls.length } : null;
-    book = [...book.filter(item => item.address !== at || item.scope !== scope), ...(next ? [next] : [])];
-    return response({ record: next });
+    if (path === '/labels') {
+      const conflicts = body.changes.filter(change => change.version !== (held(change.address, change.scope)?.version || null));
+      if (conflicts.length) return response({ detail: 'Saved elsewhere while this file was being added.', conflicts }, 409, mark);
+      return response({ records: body.changes.map(apply) }, 200, `"${revision}"`);
+    }
+    const [, scope, at] = path.split('/').map(decodeURIComponent).filter((_, index) => index !== 0);
+    const current = held(at, scope);
+    if (body.version !== (current?.version || null)) return response({ current }, 409, mark);
+    return response({ record: apply({ address: at, scope, labels: body.labels }) }, 200, `"${revision}"`);
   };
   const make = () => createStore({ storage, fetch, now: () => 100, uuid: () => `id-${++counter}` });
   return { store: make(), make, saved, calls, storage, fetch, writes,
@@ -330,6 +350,62 @@ test('a file that is not a book is refused before anything is written', async ()
   await write(store, ['Treasury']);
   await assert.rejects(store.merge([{ address, scope: 'global', labels: [] }]));
   assert.deepEqual(store.state().records.map(entry => entry.labels[0]), ['Treasury']);
+});
+
+test('a sync that learns nothing costs nothing, and a book kept here is never asked', async () => {
+  const { store, calls, remote } = harness({ remote: [{ address, scope: 'global', labels: ['Shared'], version: 'one' }] });
+  await store.init();
+  const device = store.state().activeBook;
+  await store.add({ name: 'Team', storage: onServer });
+  const settled = store.state().stateRevision;
+
+  calls.length = 0;
+  await store.refresh();
+  assert.equal(store.state().stateRevision, settled, 'nothing changed, so no view is told anything');
+  assert.deepEqual(calls.map(call => call.headers['If-None-Match']), [`"0"`], 'and it asked the cheap way');
+
+  // A book this worker holds in storage has nobody else to hear from.
+  await store.use(device);
+  calls.length = 0;
+  await store.sync();
+  assert.deepEqual(calls, []);
+
+  // Switching to a book kept elsewhere is a reason to ask; asking twice is not.
+  await store.use(store.state().books.find(item => item.name === 'Team').id);
+  calls.length = 0;
+  await store.sync();
+  assert.equal(calls.length, 1);
+  await store.sync();
+  assert.equal(calls.length, 1, 'a book asked about a moment ago is not asked again');
+  assert.deepEqual(remote().map(entry => entry.labels[0]), ['Shared']);
+});
+
+test('a book that did change is sent once, and every view hears about it', async () => {
+  const { store, intercept } = harness({ remote: [{ address, scope: 'global', labels: ['Shared'], version: 'one' }] });
+  await store.init();
+  await store.add({ name: 'Team', storage: onServer });
+  const settled = store.state().stateRevision;
+  intercept(() => ({ ok: true, status: 200, headers: { get: () => '"9"' },
+    json: async () => ({ records: [{ address, scope: 'global', labels: ['Renamed elsewhere'], version: 'two' }] }) }));
+  await store.refresh();
+  assert.deepEqual(store.state().records.map(entry => entry.labels[0]), ['Renamed elsewhere']);
+  assert.ok(store.state().stateRevision > settled);
+});
+
+test('a file carried into a book on a server travels in one request', async () => {
+  const { store, calls, remote } = harness();
+  await store.init();
+  await store.add({ name: 'Team', storage: onServer });
+  calls.length = 0;
+  const { added } = await store.merge(Array.from({ length: 50 }, (_, index) => ({
+    address: '0x' + index.toString(16).padStart(40, '0'), scope: 'global',
+    labels: ['Carried ' + index], version: 'from-file',
+  })));
+  assert.equal(added, 50);
+  const writes = calls.filter(call => call.method === 'PUT');
+  assert.equal(writes.length, 1, 'fifty addresses, one round trip');
+  assert.equal(JSON.parse(writes[0].body).changes.length, 50);
+  assert.equal(remote().length, 50);
 });
 
 test('two address books cannot share a name, however they are kept', async () => {

@@ -309,6 +309,9 @@ export async function createPageController({
     }
     if (editor && !editor.closeIfUnchanged()) { position(true); return; }
     editorTarget = { ...target, book: state.activeBook };
+    // About to edit is the moment a stale copy becomes a conflict, so this is
+    // worth an ask. It is conditional and rate limited in the worker.
+    resume();
     overlay.show();
     overlay.theme();
     const book = state.activeBook;
