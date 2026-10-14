@@ -203,3 +203,26 @@ test('an interrupted write is checked before it is retried', async () => {
   assert.deepEqual(remote().map(entry => entry.labels[0]), ['Treasury']);
   assert.equal(remote().length, 1, 'the write is not repeated');
 });
+
+test('a book carried in from a file joins the one that is open, replacing matching names', async () => {
+  const { store } = harness();
+  await store.init();
+  await write(store, ['Treasury']);
+  const { added } = await store.merge([
+    { address, scope: 'global', labels: ['Renamed'], version: 'from-file' },
+    { address: other, scope: 'eip155:8453', labels: ['Payroll'], version: 'from-file' },
+  ]);
+  assert.equal(added, 2);
+  const names = Object.fromEntries(store.state().records.map(entry => [entry.address, entry.labels[0]]));
+  assert.deepEqual(names, { [address]: 'Renamed', [other]: 'Payroll' });
+  assert.ok(store.state().records.every(entry => entry.version !== 'from-file'),
+    'the receiving book issues its own versions');
+});
+
+test('a file that is not a book is refused before anything is written', async () => {
+  const { store } = harness();
+  await store.init();
+  await write(store, ['Treasury']);
+  await assert.rejects(store.merge([{ address, scope: 'global', labels: [] }]));
+  assert.deepEqual(store.state().records.map(entry => entry.labels[0]), ['Treasury']);
+});

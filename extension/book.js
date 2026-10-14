@@ -150,6 +150,20 @@ $('#refresh').onclick = async () => {
   try { render(await rpc({ type: 'Refresh' })); tell(''); } catch (error) { tell(error); }
   finally { $('#refresh').removeAttribute('aria-busy'); render(); }
 };
+$('#import').onclick = () => $('#import-file').click();
+$('#import-file').onchange = async event => {
+  const [file] = event.target.files;
+  event.target.value = '';
+  if (!file) return;
+  try {
+    const parsed = JSON.parse(await file.text());
+    const result = await rpc({ type: 'Import', records: parsed.records ?? parsed });
+    render(result.state);
+    tell(`Added ${result.added} address${result.added === 1 ? '' : 'es'} to ${state.bookName}.`);
+  } catch (error) {
+    tell(error instanceof SyntaxError ? 'That file is not a 0xlabel export.' : error);
+  }
+};
 $('#export').onclick = () => {
   const blob = new Blob([JSON.stringify({ records: state.records }, null, 2) + '\n'], { type: 'application/json' });
   const url = URL.createObjectURL(blob);

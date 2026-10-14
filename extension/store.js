@@ -176,6 +176,24 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
     });
   }
 
+  // Addresses carried in from a file land in the book that is open, replacing
+  // any names already held for the same address on the same network.
+  async function merge(incoming) {
+    const wanted = validateSnapshot({ records: incoming });
+    return serial(async () => {
+      for (const want of wanted) {
+        const existing = findRecord(records, want.address, want.scope);
+        const saved = await book.put({ address: want.address, scope: want.scope, labels: want.labels,
+          version: existing?.version || null });
+        records = [...records.filter(item => item.address !== want.address || item.scope !== want.scope),
+          ...(saved ? [saved] : [])];
+      }
+      await cache();
+      changed();
+      return { state: state(), added: wanted.length };
+    });
+  }
+
   async function save(draft) {
     if (draft.book !== active) throw new Error('You switched address books. Close this editor and try again.');
     const address = parseAddress(draft.address);
@@ -231,5 +249,5 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
     });
   }
 
-  return { init, state, use, add, rename, remove, refresh, save };
+  return { init, state, use, add, rename, remove, refresh, merge, save };
 }

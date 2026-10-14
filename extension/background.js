@@ -123,6 +123,7 @@ async function handle(message, sender) {
     }
     return store.add({ name: message.name, storage: where, copyFrom: message.copyFrom });
   }
+  if (message.type === 'Import') return store.merge(message.records);
   if (message.type === 'RenameBook') return store.rename(message.book, message.name);
   if (message.type === 'RemoveBook') return store.remove(message.book);
   if (message.type === 'Refresh') return store.refresh();
