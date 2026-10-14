@@ -238,16 +238,28 @@ test('a book can be renamed, and an empty name leaves the old one standing', asy
 });
 
 test('an interrupted write is checked before it is retried', async () => {
-  const { store, storage, make, remote } = harness();
+  const { store, make, remote, calls, storage, saved } = harness();
   await store.init();
   await store.add({ name: 'Team', storage: onServer });
-  // The worker stops after the write leaves, so the book never hears the answer.
-  await storage.set({ needsRefresh: true });
+  // The write reaches the server, and the worker stops before it hears the
+  // answer: nothing locally knows that it landed.
+  await write(store, ['Treasury']);
+  const landed = remote()[0];
+  const book = store.state().activeBook;
+  // What the worker would have left behind: a write sent, its answer unheard.
+  await storage.set({ [`sync:${book}`]: { ...saved[`sync:${book}`], pending: true } });
   const resumed = make();
   await resumed.init();
+  assert.deepEqual(resumed.state().records.map(entry => entry.labels[0]), ['Treasury']);
+
+  // A retry of the same draft, carrying the version it was written against.
+  calls.length = 0;
   await write(resumed, ['Treasury']);
   assert.deepEqual(remote().map(entry => entry.labels[0]), ['Treasury']);
   assert.equal(remote().length, 1, 'the write is not repeated');
+  assert.equal(remote()[0].version, landed.version, 'and nothing was written over it');
+  assert.deepEqual(calls.filter(call => call.method).map(call => call.method), [],
+    'it looked before it wrote, and then had nothing to write');
 });
 
 test('a view open before the worker restarted is not left behind by the book', async () => {

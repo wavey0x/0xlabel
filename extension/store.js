@@ -32,6 +32,8 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
   // A book that could not be read is never saved over: the save would write
   // over names this worker never managed to see.
   let unreadable = false;
+  // A write left for a server, whose answer this worker may never have heard.
+  // It belongs to the book it was for, and outlives the worker that sent it.
   // What the server last said this book was, and when we last asked.
   let mark = null;
   let pulledAt = 0;
@@ -80,7 +82,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
     [...held.filter(item => item.address !== address || item.scope !== scope), ...(record ? [record] : [])];
   async function saveBooks() { await storage.set({ books, activeBook: active }); }
   async function saveSync() {
-    if (remote) await storage.set({ [syncKey(active)]: { mark, syncedAt } });
+    if (remote) await storage.set({ [syncKey(active)]: { mark, syncedAt, pending: needsRefresh } });
   }
 
   async function open(id) {
@@ -97,6 +99,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
       const saved = (await storage.get(syncKey(id)))[syncKey(id)];
       mark = typeof saved?.mark === 'string' ? saved.mark : null;
       syncedAt = saved?.syncedAt || null;
+      needsRefresh = Boolean(saved?.pending);
     }
     try {
       const held = await local.load(id);
@@ -320,7 +323,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
           throw conflict;
         }
       }
-      if (remote) { needsRefresh = true; await storage.set({ needsRefresh: true }); }
+      if (remote) { needsRefresh = true; await saveSync(); }
       let saved;
       try {
         if (remote) {
@@ -338,25 +341,27 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
           // A book kept here refused because the draft was old, not because the
           // copy is: only a server can have been written behind our back.
           const stale = (findRecord(records, address, scope)?.version ?? null) !== (current?.version ?? null);
+          needsRefresh = false;
           if (stale) {
             records = replace(records, address, scope, current);
             if (remote) ({ revision } = await local.write(started, [current || erase(address, scope)]));
-            needsRefresh = false;
             changed({ address, scope, record: current });
           }
-          needsRefresh = false;
+          if (remote) await saveSync();
           // Whoever got there first wrote the very names this draft carries, so
           // the book says what it was asked to say. A refused write that leaves
           // nothing to decide is a save, not a conflict.
           if (sameLabels(current?.labels || [], labels)) return {};
         } else if (failure.status && failure.status < 500) {
           needsRefresh = false;
+          if (remote) await saveSync();
         }
         throw failure;
       }
       records = replace(records, address, scope, saved);
       error = null;
       needsRefresh = false;
+      await saveSync();
       changed({ address, scope, record: saved });
       // The answer is that it is saved. What was saved reaches this view the
       // same way it reaches every other one, so the book travels once.
