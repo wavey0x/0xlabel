@@ -1,6 +1,6 @@
 import { parseAddress, query } from './shared.js';
 import { explorerNetwork, safeNetwork, scopeOf } from './networks.js';
-import { addressLink, collect } from './detect.js';
+import { addressLink, addressText, collect } from './detect.js';
 
 // An adapter describes one website to the detection kernel:
 //
@@ -97,9 +97,11 @@ const genericAdapter = site({
   probe: () => ({ status: 'ready' }),
   rules: {
     // Whole, leaf display values only: never guess from an abbreviation, and
-    // never trust a site attribute we have no adapter to vouch for.
-    targets: 'a,span,code,p,td,div',
-    skip: element => [...element.children].some(child => !child.matches('[data-0xlabel-ui]')),
+    // never trust a site attribute we have no adapter to vouch for. Which tag
+    // shows the address is not our business; that it shows nothing else is.
+    candidates: addressText,
+    skip: element => element.matches('html,body,head') ||
+      [...element.children].some(child => !child.matches('[data-0xlabel-ui]')),
   },
 });
 

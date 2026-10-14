@@ -9,6 +9,19 @@ export const AMBIGUOUS = 'contradictory-address-evidence';
 const ADDRESS_PATH = /^\/address\/([^/]+)\/?$/;
 const FRAGMENT = /^(?:[a-z]+:)?(0x[0-9a-f]+)[.…]+([0-9a-f]+)$/;
 
+const FULL_ADDRESS = /0x[0-9a-fA-F]{40}/;
+
+// Elements whose own text shows a whole address. On a site we have no adapter
+// for, walking text costs one pass instead of testing nearly every element.
+export function addressText(root) {
+  const walker = (root.ownerDocument || root).createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const found = new Set();
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (FULL_ADDRESS.test(node.data) && node.parentElement) found.add(node.parentElement);
+  }
+  return [...found];
+}
+
 // A link naming a full address. A known explorer host also names its chain.
 export function addressLink(element, url) {
   const link = element.closest('a[href]');
@@ -55,8 +68,8 @@ export function identify(element, url, { attributes = [], identifies = [], ancho
 }
 
 // Identify every candidate an adapter's rules select within a changed branch.
-export function collect(root, url, { targets, skip, sources = () => [], ...rules }) {
-  return query(root, targets).flatMap(element => {
+export function collect(root, url, { targets, candidates, skip, sources = () => [], ...rules }) {
+  return (candidates ? candidates(root) : query(root, targets)).flatMap(element => {
     if (skip?.(element)) return [];
     let identity;
     try {
