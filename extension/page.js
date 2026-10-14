@@ -192,10 +192,17 @@ export async function createPageController({
     if (stopped) return;
     try {
       if (!probe(force)) { dirty.clear(); return; }
-      const roots = [...dirty];
+      const roots = new Set(dirty);
       dirty.clear();
-      // A bounded number of changed branches; collapse redundant descendants.
-      const branches = roots.includes(doc) ? [doc] : roots.filter(root => root.isConnected && !roots.some(other => other !== root && other.contains(root)));
+      // Drop branches an ancestor branch already covers. Walking up to a dirty
+      // ancestor costs the tree depth; comparing every pair of branches does not
+      // scale, and it was that cost, not scanning, which forced a whole-page
+      // rescan as soon as a page changed in many places at once.
+      const branches = roots.has(doc) ? [doc] : [...roots].filter(root => {
+        if (!root.isConnected) return false;
+        for (let parent = root.parentNode; parent; parent = parent.parentNode) if (roots.has(parent)) return false;
+        return true;
+      });
       for (const root of branches) scan(root);
       for (const element of [...targets.keys()]) if (!element.isConnected) remove(element);
       if (editorTarget) {
@@ -212,7 +219,8 @@ export async function createPageController({
   }
   function schedule(root = doc) {
     dirty.add(root);
-    if (dirty.size > 32) { dirty.clear(); dirty.add(doc); }
+    // Far more branches than this and the whole document is the cheaper scan.
+    if (dirty.size > 256) { dirty.clear(); dirty.add(doc); }
     if (!timer) timer = setTimeout(run, 40);
   }
   const observer = new MutationObserver(changes => {
