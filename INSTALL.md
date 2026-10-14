@@ -26,15 +26,15 @@ On Windows, use `.venv\Scripts\pip` and `.venv\Scripts\0xlabel`.
 
 ## Load the extension
 
-Open `brave://extensions` or `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, and select this repository's **extension** folder. Do not load the repository root. Chrome 120 or newer is required. Pin 0xlabel to the toolbar.
+Open `brave://extensions` or `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, and select this repository's **extension** folder. Do not load the repository root. Chrome 125 or newer is required. Pin 0xlabel to the toolbar.
 
-In **Connections**, paste the JSON printed by the helper, name it **Local**, and connect. Accept the browser's permission request. That JSON contains your access token; keep it private.
+Choose **Connect a book** → **Add connection**, paste the JSON printed by the helper, name it **Local**, and connect. Accept the browser's permission request. That JSON contains your access token; keep it private. Connection setup closes with Cancel, ×, or Escape. The popup's settings button and the full-page picker's **Edit this connection** update a saved name or token.
 
-Open a supported website, then turn on the popup's **Show my labels on this site** switch. The toolbar turns green when labeling is active. Permissions are granted per website; other sites remain untouched.
+Open a supported website, then turn on the popup's **On this website** switch. The toolbar turns green when labeling is active. Permissions are granted per website; other sites remain untouched. **Open address book** opens a full-page extension tab for searching, adding, editing, removing, and exporting tags. It uses the same cached book and API; no extra service is needed.
 
-Click a blue tag beside an address to edit its names. The first name is the default; + appends an alias and arrows reorder them. Enter saves; Escape or an outside click dismisses the draft. The eye temporarily reveals the website's original presentation, while the per-site switch restores every website default.
+Click a blue tag beside an address to edit its names. The first name is the default; + appends an alias and arrows reorder them. Enter saves; Escape or an outside click dismisses the draft. Turn off **This address** to temporarily reveal the website's original presentation for matching occurrences on that page. The popup's **On this website** switch restores every website default and persists across refreshes.
 
-New inline labels apply globally. Editing an existing network override retains its scope. The popup's optional chain ID can create a scoped list explicitly; removing that override reveals the global names. The eye suppresses the whole replacement until restored or reset by refresh, navigation, or switching books.
+New inline labels apply globally. Editing an existing network override retains its scope. **Add address** in the full-page book offers an optional chain ID for a scoped list; removing that override reveals the global names. The address switch suppresses the whole replacement until restored or reset by refresh, navigation, or switching books. **Remove tags** in the book editor prepares a deletion; Save commits it.
 
 ## Connect to a remote API
 
@@ -54,7 +54,7 @@ labels.example.com {
 
 Use a reachable hostname and valid certificate. If serving under a path, pass the full base URL to `--public-url` and strip that path at the proxy. Requests reject redirects, so use the API's final URL.
 
-Add the remote connection JSON in the popup and name it **Remote**. Each full API URL, including its port and path, owns a separate cache. **Selecting Remote never overwrites Local's database or cache.** Switching back displays Local's retained book and refreshes it. The laptop helper can stop while you use Remote.
+Choose **Add connection** in either view's book picker and name the remote API **Remote**. Each full API URL, including its port and path, owns a separate cache. **Selecting Remote never overwrites Local's database or cache.** Switching back displays Local's retained book and refreshes it. The laptop helper can stop while you use Remote.
 
 Sync is a read-only snapshot pull, about once a minute while the browser runs, plus startup, selection, browsing resume, and manual refresh. Failed pulls keep the previous cache. An explicit save is the only operation that changes a book; saving needs a reachable API. Conflicting or failed saves preserve the draft.
 
@@ -68,7 +68,7 @@ uv run 0xlabel --port 8713 --data-dir /path/to/book
 
 `OXLABEL_DATA_DIR` sets the directory, and `OXLABEL_TOKEN` supplies a token instead of `token.txt`. Restart the helper after changing its token and update that connection in the popup. Keep credentials and books outside the checkout.
 
-**Export this book** downloads the selected book's records without credentials. For a complete server backup, stop the helper and copy `labels.sqlite3` and `token.txt`. Restore them to that installation's data directory before restarting. Switching APIs does not transfer or merge data.
+**Export book** on the full-page view downloads the selected book's records without credentials. For a complete server backup, stop the helper and copy `labels.sqlite3` and `token.txt`. Restore them to that installation's data directory before restarting. Switching APIs does not transfer or merge data.
 
 ## Updates and privacy
 

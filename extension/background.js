@@ -75,21 +75,21 @@ function authorizedPage(sender) {
   try { return sender.id === chrome.runtime.id && sender.tab && sender.frameId === 0 && sites[siteOrigin(sender.url)]; }
   catch { return false; }
 }
-function trustedPopup(sender) {
-  return sender.id === chrome.runtime.id && sender.url === chrome.runtime.getURL('popup.html');
+function trustedView(sender) {
+  return sender.id === chrome.runtime.id && ['popup.html', 'book.html'].some(page => sender.url === chrome.runtime.getURL(page));
 }
 
 async function handle(message, sender) {
   await ready;
-  const popup = trustedPopup(sender);
+  const view = trustedView(sender);
   const page = authorizedPage(sender);
   if (message.type === 'State' && sender.id === chrome.runtime.id) {
-    if (!popup && !page) return { enabled: false };
-    const tabId = popup ? message.tabId : sender.tab.id;
-    if (popup && tabId && !health.has(tabId)) await refreshAction(tabId);
-    return { state: client.state(), enabled: Boolean(page), ...(popup ? { sites } : {}), health: health.get(tabId) || null };
+    if (!view && !page) return { enabled: false };
+    const tabId = view ? message.tabId : sender.tab.id;
+    if (view && tabId && !health.has(tabId)) await refreshAction(tabId);
+    return { state: client.state(), enabled: Boolean(page), ...(view ? { sites } : {}), health: health.get(tabId) || null };
   }
-  if (!popup && !page) throw new Error('This page is not enabled.');
+  if (!view && !page) throw new Error('This page is not enabled.');
   if (message.type === 'Save') return client.save(message.draft);
   if (message.type === 'Resume') { client.refresh().catch(() => {}); return {}; }
   if (message.type === 'Health' && page) {
@@ -99,7 +99,7 @@ async function handle(message, sender) {
     await updateAction(sender.tab.id, value);
     return {};
   }
-  if (!popup) throw new Error('Open the extension popup to change settings.');
+  if (!view) throw new Error('Open 0xlabel to change settings.');
   if (message.type === 'Connect') {
     const origin = hostPermission(message.connection.url);
     if (!await chrome.permissions.contains({ origins: [origin] })) throw new Error('Allow access to this API first.');

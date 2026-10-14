@@ -1,6 +1,6 @@
 import { findRecord, MAX_LABELS, MAX_NAME_LENGTH, normalizeLabels } from './shared.js';
 import { checksumAddress } from './checksum.js';
-import { COPY_ICON, COPIED_ICON, EYE_ICON, EYE_OFF_ICON } from './icons.js';
+import { COPY_ICON, COPIED_ICON } from './icons.js';
 
 const element = (tag, text, attrs = {}) => {
   const node = document.createElement(tag);
@@ -15,8 +15,8 @@ export async function editorStyles(root) {
   root.adoptedStyleSheets = [sheet];
 }
 
-// Shared by the page popover and popup. The draft never follows a recycled row.
-export function createEditor(container, { address, scope = 'global', state, save, close, onSaved = () => {}, onLayout = () => {}, visibility, toggleVisibility }) {
+// Shared by the page popover and book. The draft never follows a recycled row.
+export function createEditor(container, { address, scope = 'global', state, save, close, onSaved = () => {}, onLayout = () => {}, visibility, toggleVisibility, modal = false }) {
   const connectionKey = state.connectionKey;
   const connectionName = state.connectionName || 'No connection';
   const displayAddress = checksumAddress(address);
@@ -28,13 +28,14 @@ export function createEditor(container, { address, scope = 'global', state, save
   let activeState = state;
   let pageNotice = '';
 
-  const panel = element('section', undefined, { class: 'editor', role: 'dialog', 'aria-label': 'Edit wallet labels' });
-  panel.innerHTML = `<header><strong><span class="brand">0x</span>label</strong><span class="source"></span>${visibility ? '<button type="button" class="quiet visibility"></button>' : '<button type="button" class="quiet close" aria-label="Close editor" title="Close">×</button>'}</header>
+  const panel = element(modal ? 'dialog' : 'section', undefined, { class: 'editor', role: 'dialog', 'aria-label': 'Edit wallet labels' });
+  panel.innerHTML = `<header><strong><span class="brand">0x</span>label</strong><span class="source"></span>${visibility ? '<div class="visibility-group"><span>This address</span><button type="button" class="switch visibility" role="switch" aria-label="Show my tags for this address" aria-checked="true"><span></span></button></div>' : '<button type="button" class="quiet close" aria-label="Close editor" title="Close">×</button>'}</header>
     <div class="address-line"><code></code><button type="button" class="quiet copy" aria-label="Copy">${COPY_ICON}</button></div>
     <div class="rows"></div>
     <p class="preview"></p><p class="notice" role="status"></p><div class="conflict" hidden></div>
-    <footer><button type="button" class="quiet add" aria-label="Add label" title="Add label">+</button><button type="button" class="primary save">Save</button></footer>`;
+    <footer><button type="button" class="quiet add" aria-label="Add label" title="Add label">+</button>${modal && own ? '<button type="button" class="quiet clear">Remove tags</button>' : ''}<button type="button" class="primary save">Save</button></footer>`;
   container.replaceChildren(panel);
+  if (modal) panel.showModal();
   const get = selector => panel.querySelector(selector);
   get('code').textContent = displayAddress;
   get('.source').textContent = connectionName;
@@ -44,7 +45,9 @@ export function createEditor(container, { address, scope = 'global', state, save
   get('.save').title = `Save to ${connectionName}`;
   function outside(event) {
     const path = event.composedPath();
-    if (event.button === 0 && !path.includes(panel) && !path.some(node => node.matches?.('[data-0xlabel-edit]'))) finish();
+    const box = modal && panel.getBoundingClientRect();
+    const inside = path.includes(panel) && (!modal || event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom);
+    if (event.button === 0 && !inside && !path.some(node => node.matches?.('[data-0xlabel-edit]'))) finish();
   }
   // Dismiss before the browser focuses the clicked website control. The
   // composed path distinguishes panel content across its shadow boundary.
@@ -53,6 +56,7 @@ export function createEditor(container, { address, scope = 'global', state, save
     if (!closed) {
       closed = true;
       panel.ownerDocument.removeEventListener('pointerdown', outside, true);
+      if (modal) panel.close();
       close();
     }
   }
@@ -63,14 +67,15 @@ export function createEditor(container, { address, scope = 'global', state, save
     if (!visibility || closed) return;
     const view = visibility();
     const button = get('.visibility');
-    button.hidden = !view.available;
+    get('.visibility-group').hidden = !view.available;
     button.disabled = !view.enabled;
-    button.innerHTML = view.hidden ? EYE_OFF_ICON : EYE_ICON;
-    button.title = view.hidden ? 'Show my label' : 'Show website original';
-    button.setAttribute('aria-label', button.title);
+    button.setAttribute('aria-checked', String(!view.hidden));
+    button.title = `${view.hidden ? 'Show my tags' : 'Show website original'} for this address on this page. Resets on refresh.`;
   }
   if (visibility) get('.visibility').onclick = () => { if (!closed) { toggleVisibility(); updateVisibility(); } };
   else get('.close').onclick = finish;
+  if (modal) panel.addEventListener('cancel', event => { event.preventDefault(); finish(); });
+  if (get('.clear')) get('.clear').onclick = () => { draft.labels = []; renderRows(); };
   get('.copy').onclick = async () => {
     try {
       await navigator.clipboard.writeText(displayAddress);
@@ -113,6 +118,7 @@ export function createEditor(container, { address, scope = 'global', state, save
       row.querySelector('[aria-label^="Remove"]').disabled = busy;
     });
     get('.add').disabled = busy || rows.length >= MAX_LABELS;
+    if (get('.clear')) get('.clear').disabled = busy || !draft.labels.length;
   }
   function renderRows(focus = 0) {
     const rows = get('.rows');

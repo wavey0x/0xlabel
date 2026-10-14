@@ -132,13 +132,13 @@ test('website-script clicks and keypresses cannot submit edits', async ({ page }
   }
 });
 
-test('the eye reveals all matching addresses without changing the draft or book, and retains the comparison through updates and saves', async ({ page }) => {
+test('the address switch reveals all matching addresses without changing the draft or book, and retains the comparison through updates and saves', async ({ page }) => {
   await start(page, { records: [{ ...record, labels: ['Treasury'] }], html: `<header>Explorer</header><main>
     <a id="first" class="hash-tag" href="/address/${address}"><span>Website name</span></a>
     <a id="second" class="hash-tag" href="/address/${address}">Website name</a></main>` });
   await edit(page).click();
   await input(page).fill('Edited tag');
-  await page.getByRole('button', { name: 'Show website original' }).click();
+  await page.getByRole('switch', { name: 'Show my tags for this address' }).click();
   await expect(input(page)).toHaveValue('Edited tag');
   await expect(page.locator('[data-0xlabel-label]')).toHaveCount(0);
   await expect(page.locator('#first')).toHaveText('Website name');
@@ -156,16 +156,16 @@ test('the eye reveals all matching addresses without changing the draft or book,
   await expect(page.locator('[data-0xlabel-label]')).toHaveCount(0);
   await edit(page).click();
   await expect(input(page)).toHaveValue('Edited tag');
-  await page.getByRole('button', { name: 'Show my label' }).click();
+  await page.getByRole('switch', { name: 'Show my tags for this address' }).click();
   await expect(page.locator('[data-0xlabel-label="Edited tag"]')).toHaveCount(3);
   await expect(page.locator('#first')).toHaveText('Updated website name');
-  await page.getByRole('button', { name: 'Show website original' }).click();
+  await page.getByRole('switch', { name: 'Show my tags for this address' }).click();
   await input(page).press('Escape');
   await page.evaluate(() => { window.site = new URL('https://etherscan.io/accounts?p=2'); window.controller.retry(); });
   await expect(page.locator('[data-0xlabel-label="Edited tag"]')).toHaveCount(3);
 });
 
-test('Safe resolves loading and composed addresses; the eye isolates chains and suppresses global fallback after scoped deletion', async ({ page }) => {
+test('Safe resolves loading and composed addresses; the address switch isolates chains and suppresses global fallback after scoped deletion', async ({ page }) => {
   const records = [{ ...record, labels: ['Global'] }, { ...record, scope: 'eip155:1', labels: ['Ethereum'], version: 'network' }];
   const html = `<header><span id="wallet" data-testid="safe-selector-trigger-address"><b>0xabab</b><span>${'ab'.repeat(16)}</span><b>abab</b></span>
     <a data-testid="safe-item-explorer-link" href="https://etherscan.io/address/${address}">Explorer</a></header>
@@ -176,7 +176,7 @@ test('Safe resolves loading and composed addresses; the eye isolates chains and 
   await expect(page.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Ethereum');
   await expect(page.locator('#base')).toHaveAttribute('data-0xlabel-label', 'Global');
   await edit(page).click();
-  await page.getByRole('button', { name: 'Show website original' }).click();
+  await page.getByRole('switch', { name: 'Show my tags for this address' }).click();
   await page.getByRole('button', { name: 'Remove name 1' }).click();
   await save(page).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -198,7 +198,7 @@ test('book switches reset comparisons, preserve source-bound drafts and reject o
   await expect(page.locator('#first')).toHaveAttribute('data-0xlabel-label', 'Latest');
   await edit(page).click();
   await input(page).fill('Local draft');
-  await page.getByRole('button', { name: 'Show website original' }).click();
+  await page.getByRole('switch', { name: 'Show my tags for this address' }).click();
   await page.evaluate(() => window.controller.updateState({ ...window.state, connectionKey: 'https://remote.example', connectionName: 'Remote', selectionGeneration: 2, records: [{ ...window.state.records[0], labels: ['Remote'] }] }));
   await expect(page.locator('#first')).toHaveAttribute('data-0xlabel-label', 'Remote');
   await expect(save(page)).toBeDisabled();

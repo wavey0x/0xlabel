@@ -11,10 +11,10 @@
 Collect address tags in one book and bring the same context to different websites. See recurring addresses, follow connections, and make sense of onchain activity. Add tags directly on the page; links and copy controls keep working.
 
 - **Easy to add.** Tag an address directly on the page with a compact inline editor.
-- **One consistent view.** The same tags follow addresses across enabled websites. Search your whole book from the popup.
+- **One consistent view.** The same tags follow addresses across enabled websites. Open the full-page book to search, add, edit, or export them.
 - **Your book, your storage.** Keep it on your laptop or connect to your own authenticated API. Local and remote books stay separate.
 - **Fast by default.** Cached lookups handle hundreds of addresses. A simple periodic pull keeps the selected book fresh.
-- **Easy to compare.** The eye reveals the website's original display. A per-site switch restores all website defaults.
+- **Easy to compare.** Matching switches control one address or a whole website. Reveal originals without changing your saved tags.
 
 Works with Etherscan-family explorers and Safe. Other enabled sites use conservative detection for full EVM addresses.
 
@@ -35,7 +35,7 @@ uv run 0xlabel
 ```
 
 1. Open `brave://extensions` or `chrome://extensions`, enable **Developer mode**, and **Load unpacked** → this project's `extension` folder.
-2. Open 0xlabel. Paste the helper's connection JSON into **Connections**, then connect.
+2. Open 0xlabel. Choose **Connect a book** → **Add connection**, paste the helper's JSON, then connect.
 3. Enable the website in the popup. Click a blue tag beside an address to name it.
 
 ![The real inline editor, with a sample label being entered beside a transfer](docs/images/editor.png)

@@ -1,40 +1,26 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>0xlabel</title><link rel="stylesheet" href="popup.css"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>0xlabel</title><link rel="stylesheet" href="ui.css"><link rel="stylesheet" href="popup.css"></head>
 <body>
-  <header><h1><span>0x</span>label</h1><button id="settings-toggle" class="quiet" aria-label="Connection settings">Connections</button></header>
-  <div class="connection-line">
-    <button id="connection" aria-label="Active connection" aria-haspopup="menu" aria-expanded="false" popovertarget="connection-menu"><span>Connect a book</span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></button>
-    <div id="connection-menu" popover role="menu" aria-label="Connections"></div>
-    <button id="refresh" class="quiet" aria-label="Refresh selected book">↻</button>
-  </div>
-  <p id="sync" class="muted"></p>
-  <section id="settings" hidden>
-    <form id="connection-form">
-      <label>Connection details<textarea id="pairing" rows="2" placeholder='Paste the JSON printed by your helper'></textarea></label>
-      <div class="divider">or enter them below</div>
-      <label>API address<input id="api-url" type="url" placeholder="http://127.0.0.1:8712" required></label>
-      <label>Access token<input id="token" type="password" autocomplete="off" placeholder="Leave blank to keep a saved token"></label>
-      <label>Name<input id="name" maxlength="50" placeholder="Local or Remote"></label>
-      <p class="muted">A different API address creates a separate book. Connecting only downloads it.</p>
-      <button id="connect" class="primary" type="submit">Connect</button>
-    </form>
-  </section>
-  <section class="site">
-    <div class="site-line"><div class="site-info"><span id="site-name">This website</span><span id="site-view" class="muted">Website defaults</span></div><button id="site-toggle" class="site-switch" role="switch" aria-checked="false" aria-label="Show my labels on this site" aria-describedby="site-name"><span></span></button></div>
-    <div id="adapter-warning" hidden><p></p><button id="retry" class="quiet">Retry</button><button id="disable" class="quiet">Turn off for this site</button></div>
-  </section>
-  <div class="book-heading"><label for="search">Your book</label><button id="add-address" class="quiet" aria-expanded="false" aria-controls="manual-form">+ Add address</button></div>
-  <form id="manual-form" hidden>
-    <label for="manual-address">Address</label>
-    <div class="manual-line"><input id="manual-address" placeholder="Paste a full 0x address" autocomplete="off" spellcheck="false" autocorrect="off" autocapitalize="off" required><button type="submit" class="primary">Add tags</button></div>
-    <div class="manual-network"><label for="network">Chain ID <span class="muted">(optional)</span></label><input id="network" inputmode="numeric" autocomplete="off" placeholder="All networks"></div>
-  </form>
-  <input id="search" type="search" placeholder="Search tags or addresses" autocomplete="off" spellcheck="false" autocorrect="off" autocapitalize="off">
-  <div id="results"></div>
-  <p id="empty" class="muted"></p>
-  <footer><button id="export" class="quiet">Export this book</button><span id="count" class="muted"></span></footer>
-  <p id="message" role="status"></p>
-  <div id="editor-host" hidden></div>
+  <main class="panel">
+    <section id="home">
+      <header class="view-heading"><h1 class="brand"><span>0x</span>label</h1><button id="settings-toggle" class="quiet icon" aria-label="Connection settings" title="Connection settings"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M2 4h4m3 0h5M2 8h8m3 0h1M2 12h1m3 0h8"/><circle cx="7.5" cy="4" r="1.5"/><circle cx="11.5" cy="8" r="1.5"/><circle cx="4.5" cy="12" r="1.5"/></svg></button></header>
+      <span class="eyebrow">Address book</span>
+      <div class="connection-line">
+        <button id="connection" aria-label="Active connection" aria-haspopup="menu" aria-expanded="false" popovertarget="connection-menu"><span>Connect a book</span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></button>
+        <div id="connection-menu" popover role="menu" aria-label="Connections"></div>
+        <button id="refresh" class="quiet icon" aria-label="Sync address book" title="Sync address book"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 5a5.5 5.5 0 1 0 .3 5M13 2v3H10"/></svg></button>
+      </div>
+      <p id="sync" class="muted" role="status"></p>
+      <section class="site">
+        <div class="site-info"><span class="eyebrow">On this website</span><strong id="site-name">No website open</strong><span id="site-view" class="muted">Website originals</span></div>
+        <button id="site-toggle" class="switch" role="switch" aria-checked="false" aria-label="Show my tags on this website" aria-describedby="site-name"><span></span></button>
+      </section>
+      <div id="adapter-warning" hidden><p></p><button id="retry" class="quiet">Retry</button><button id="disable" class="quiet">Turn off</button></div>
+      <button id="open-book" class="open-book quiet">Open address book <span aria-hidden="true">↗</span></button>
+    </section>
+    <section id="settings" hidden></section>
+    <p id="message" class="message" role="status"></p>
+  </main>
   <script type="module" src="popup.js"></script>
 </body></html>

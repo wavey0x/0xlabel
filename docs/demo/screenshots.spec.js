@@ -24,7 +24,7 @@ test('render the README examples with the shipped extension and sample data', as
     if (theme === 'dark') {
       await page.getByRole('button', { name: 'Edit wallet labels', exact: true }).first().click();
       await page.getByRole('textbox', { name: 'Label 1' }).fill('Treasury vault');
-      await expect(page.getByRole('button', { name: 'Show website original', exact: true })).toBeEnabled();
+      await expect(page.getByRole('switch', { name: 'Show my tags for this address', exact: true })).toBeEnabled();
       await expect(page.getByRole('dialog')).toBeVisible();
       const from = await page.locator('th').nth(2).boundingBox();
       const to = await page.locator('th').nth(3).boundingBox();
