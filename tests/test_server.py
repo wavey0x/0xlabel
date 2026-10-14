@@ -87,3 +87,14 @@ def test_token_created_once_with_private_file(tmp_path, monkeypatch):
     first = load_token(tmp_path)
     assert len(first) >= 32 and load_token(tmp_path) == first
     assert (tmp_path / 'token.txt').stat().st_mode & 0o777 == 0o600
+
+
+def test_connect_link_carries_the_key_in_the_fragment():
+    """The extension reads the key from the fragment, which is never sent to us."""
+    from server import connect_link
+
+    link = connect_link("http://127.0.0.1:8712/", "sk-example")
+    assert link == "http://127.0.0.1:8712#key=sk-example"
+    base, _, fragment = link.partition("#")
+    assert "sk-example" not in base, "a key in the path or query would reach the server"
+    assert fragment == "key=sk-example"

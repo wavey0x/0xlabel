@@ -171,6 +171,11 @@ def load_token(directory: Path) -> str:
     return token
 
 
+def connect_link(base: str, token: str) -> str:
+    """The one line a person pastes into the extension."""
+    return f"{base.rstrip('/')}#key={token}"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", default="127.0.0.1")
@@ -184,11 +189,12 @@ def main() -> None:
         args.data_dir.chmod(0o700)
     token = load_token(args.data_dir)
     app = create_app(args.data_dir / "labels.sqlite3", token)
-    pairing_url = args.public_url or f"http://127.0.0.1:{args.port}"
-    print("0xlabel is ready. Keep the connection details private.", flush=True)
-    print("Paste this into the extension's connection field:", flush=True)
-    print(json.dumps({"url": pairing_url, "token": token}), flush=True)
-    print(f"Book: {args.data_dir / 'labels.sqlite3'}", flush=True)
+    base = args.public_url or f"http://127.0.0.1:{args.port}"
+    # One line to paste. The key rides in the fragment, which a browser never
+    # sends to a server, so the link cannot carry it back out over the wire.
+    print("0xlabel is ready. Paste this link into the extension:", flush=True)
+    print(connect_link(base, token), flush=True)
+    print(f"Keep it private. Book: {args.data_dir / 'labels.sqlite3'}", flush=True)
     uvicorn.run(app, host=args.host, port=args.port, access_log=False)
 
 
