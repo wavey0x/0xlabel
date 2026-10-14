@@ -93,12 +93,11 @@ export function newBookForm({ container, state, created, busy, error, visible = 
   let named = false;
   container.innerHTML = `<header class="view-heading"><h2>New address book</h2><button type="button" class="quiet icon" data-cancel aria-label="Close">×</button></header>
     <form id="new-book" novalidate>
-      <label for="book-name">Name</label>
-      <input id="book-name" maxlength="40" autocomplete="off" placeholder="Address book">
+      <input id="book-name" maxlength="40" autocomplete="off" aria-label="Address book name" placeholder="Address book name">
       <fieldset class="choices">
         <legend>Where to keep it</legend>
-        <label><input type="radio" name="where" value="server" checked> On a server<small>Share it between your devices.</small></label>
-        <label><input type="radio" name="where" value="device"> On this device<small>Nothing leaves your computer.</small></label>
+        <label><input type="radio" name="where" value="device" checked> On this device<small>Nothing leaves your computer.</small></label>
+        <label><input type="radio" name="where" value="server"> On a server<small>Share it between your devices.</small></label>
       </fieldset>
       <div id="server-fields">
         <label for="connect-link">Link from your server</label>

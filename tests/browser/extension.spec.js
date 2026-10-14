@@ -74,6 +74,7 @@ test('installed extension: a book that works with no setup, moving it to a serve
     const addBook = async (url, key, name) => {
       await popup.locator('#location').click();
       await popup.getByRole('menuitem', { name: /Add an address book/ }).click();
+      await popup.getByRole('radio', { name: /On a server/ }).check();
       await popup.locator('#connect-link').fill(`${url}#key=${key}`);
       if (name) await popup.locator('#book-name').fill(name);
       await popup.locator('#connect').click();
