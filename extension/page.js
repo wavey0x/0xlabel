@@ -124,8 +124,10 @@ export async function createPageController({
     for (const element of claims.keys()) {
       for (let parent = element.parentElement; parent; parent = parent.parentElement) if (claims.has(parent)) claims.delete(parent);
     }
-    for (const element of [...targets.keys()]) {
-      if (!element.isConnected || (root === doc || root === element || root.contains(element)) && !claims.has(element)) remove(element);
+    // Only targets this branch covers can have gone stale. Disconnected ones
+    // are swept once per batch in run(), whatever branch they were found in.
+    for (const element of root === doc ? [...targets.keys()] : query(root, `[${ADDRESS}]`)) {
+      if (!claims.has(element)) remove(element);
     }
     for (const [element, target] of claims) {
       const previous = targets.get(element);
