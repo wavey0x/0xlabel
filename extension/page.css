@@ -8,7 +8,9 @@ a[data-0xlabel-label], span[data-0xlabel-label], code[data-0xlabel-label] {
 }
 [data-0xlabel-label]::before {
   content: attr(data-0xlabel-label);
-  font: 700 .875rem/1.5 system-ui, sans-serif;
+  /* Fixed units on purpose: rem would resolve against the website's own root
+     size, and a 62.5% reset is common enough to shrink labels to 8.75px. */
+  font: 700 14px/1.5 system-ui, sans-serif;
   letter-spacing: normal;
   text-transform: none;
   display: inline-block;
