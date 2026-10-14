@@ -5,8 +5,9 @@
   <main class="book">
     <header class="book-header"><h1 class="brand" aria-label="0xlabel"><img class="brand-mark" src="icons/mark.svg" alt="0x">label</h1>
       <div class="connection-line">
-        <button id="location" aria-label="Where your book is kept" aria-haspopup="menu" aria-expanded="false" popovertarget="location-menu"><span>On this device</span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></button>
-        <div id="location-menu" popover role="menu" aria-label="Where to keep your book"></div>
+        <button id="location" aria-label="Address book" aria-haspopup="menu" aria-expanded="false" popovertarget="location-menu"><span>On this device</span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></button>
+        <div id="location-menu" popover role="menu" aria-label="Your address books"></div>
+        <button id="book-settings" class="quiet icon" aria-label="Address book settings" title="Address book settings"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M2 4h4m3 0h5M2 8h8m3 0h1M2 12h1m3 0h8"/><circle cx="7.5" cy="4" r="1.5"/><circle cx="11.5" cy="8" r="1.5"/><circle cx="4.5" cy="12" r="1.5"/></svg></button>
         <button id="refresh" class="quiet icon" aria-label="Sync address book" title="Sync address book"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 5a5.5 5.5 0 1 0 .3 5M13 2v3H10"/></svg></button>
       </div>
     </header>
@@ -19,7 +20,21 @@
     <footer class="book-footer"><span id="sync" class="muted" role="status"></span><span class="muted">Your book. Your own API.</span></footer>
     <p id="message" class="message" role="status"></p>
   </main>
-  <dialog id="server" class="panel" aria-label="Your own server"></dialog>
+  <dialog id="server" class="panel" aria-label="New address book"></dialog>
+  <dialog id="manage-dialog" class="panel" aria-labelledby="manage-heading">
+    <header class="view-heading"><h2 id="manage-heading">Address book settings</h2><button id="close-manage" type="button" class="quiet icon" aria-label="Close settings">×</button></header>
+    <form id="manage-form" novalidate>
+      <label for="book-rename">Name</label>
+      <input id="book-rename" maxlength="40" autocomplete="off">
+      <p id="book-where" class="muted setup-note"></p>
+      <p id="manage-error" class="message" role="alert"></p>
+      <footer class="form-actions"><button id="remove-book" type="button" class="quiet danger">Remove…</button><span class="spacer"></span><button id="cancel-manage" type="button" class="quiet">Cancel</button><button id="save-manage" type="submit" class="primary">Save</button></footer>
+    </form>
+    <div id="remove-confirm" hidden>
+      <p id="remove-copy"></p>
+      <footer class="form-actions"><span class="spacer"></span><button id="keep-book" type="button" class="quiet">Cancel</button><button id="confirm-remove" type="button" class="primary danger">Remove</button></footer>
+    </div>
+  </dialog>
   <dialog id="add-dialog" class="panel" aria-labelledby="add-heading">
     <header class="view-heading"><h2 id="add-heading">Add address</h2><button id="close-add" type="button" class="quiet icon" aria-label="Close address entry">×</button></header>
     <form id="manual-form" novalidate>

@@ -113,14 +113,18 @@ async function handle(message, sender) {
     return {};
   }
   if (!view) throw new Error('Open 0xlabel to change settings.');
-  if (message.type === 'Use') {
-    if (message.location === 'server' && message.url) {
-      if (!await chrome.permissions.contains({ origins: [hostPermission(message.url)] })) {
+  if (message.type === 'Use') return store.use(message.book);
+  if (message.type === 'AddBook') {
+    const where = message.storage;
+    if (where?.kind === 'server') {
+      if (!await chrome.permissions.contains({ origins: [hostPermission(where.url)] })) {
         throw new Error('Allow access to that server first.');
       }
     }
-    return store.use(message.location, { url: message.url, token: message.token });
+    return store.add({ name: message.name, storage: where, copyFrom: message.copyFrom });
   }
+  if (message.type === 'RenameBook') return store.rename(message.book, message.name);
+  if (message.type === 'RemoveBook') return store.remove(message.book);
   if (message.type === 'Refresh') return store.refresh();
   if (message.type === 'Site') {
     const tab = await chrome.tabs.get(message.tabId);

@@ -5,9 +5,9 @@ import { normalizeAPI, parseConnectLink } from '../extension/shared.js';
 
 const address = '0x' + 'ab'.repeat(20);
 const other = '0x' + 'cd'.repeat(20);
-const server = 'http://127.0.0.1:8712';
+const host = 'http://127.0.0.1:8712';
 const token = 'test-only-secret';
-const record = (name, version = name, at = address, scope = 'global') => ({ address: at, scope, labels: [name], version });
+const onServer = { kind: 'server', url: host, token };
 const response = (value, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => structuredClone(value) });
 
 function harness({ remote = [] } = {}) {
@@ -15,6 +15,7 @@ function harness({ remote = [] } = {}) {
   const calls = [];
   let book = remote;
   let intercept;
+  let counter = 0;
   const storage = {
     get: async keys => {
       const all = structuredClone(saved);
@@ -23,6 +24,7 @@ function harness({ remote = [] } = {}) {
       return Object.fromEntries(wanted.filter(key => key in all).map(key => [key, all[key]]));
     },
     set: async entries => Object.assign(saved, structuredClone(entries)),
+    remove: async keys => { for (const key of [].concat(keys)) delete saved[key]; },
   };
   const fetch = async (url, options = {}) => {
     calls.push({ url, ...options });
@@ -38,110 +40,166 @@ function harness({ remote = [] } = {}) {
     book = [...book.filter(item => item.address !== at || item.scope !== scope), ...(next ? [next] : [])];
     return response({ record: next });
   };
-  const store = createStore({ storage, fetch, now: () => 100 });
-  return { store, saved, calls, storage, fetch,
+  const make = () => createStore({ storage, fetch, now: () => 100, uuid: () => `id-${++counter}` });
+  return { store: make(), make, saved, calls, storage, fetch,
     remote: () => book, intercept: value => { intercept = value; } };
 }
-const link = `${server}#key=${token}`;
-const useServer = store => store.use('server', { url: server, token });
+const write = (store, labels, { book = store.state().activeBook, at = address, version = null } = {}) =>
+  store.save({ book, address: at, scope: 'global', labels, version });
 
-test('a book exists before anything is set up, and saving needs no connection', async () => {
+test('a book exists before anything is set up, and labeling needs no connection', async () => {
   const { store, saved } = harness();
   await store.init();
-  assert.equal(store.state().location, 'device');
-  assert.equal(store.state().locationName, 'On this device');
-  await store.save({ location: 'device', address, scope: 'global', labels: ['Treasury'], version: null });
+  assert.equal(store.state().books.length, 1);
+  assert.equal(store.state().books[0].where, 'On this device');
+  await write(store, ['Treasury']);
   assert.deepEqual(store.state().records.map(entry => entry.labels[0]), ['Treasury']);
-  assert.equal(saved.book.length, 1, 'the device book is the storage, not a cache of one');
+  assert.ok(saved[`book:${store.state().activeBook}`], 'the device book is the storage, not a cache of one');
 });
 
 test('a device book survives a restart and removing every name deletes the record', async () => {
   const first = harness();
   await first.store.init();
-  await first.store.save({ location: 'device', address, scope: 'global', labels: ['Treasury'], version: null });
+  await write(first.store, ['Treasury']);
   const version = first.store.state().records[0].version;
 
-  const second = createStore({ storage: first.storage, fetch: first.fetch, now: () => 200 });
-  await second.init();
-  assert.deepEqual(second.state().records.map(entry => entry.labels[0]), ['Treasury']);
-  await second.save({ location: 'device', address, scope: 'global', labels: [], version });
-  assert.deepEqual(second.state().records, []);
+  const resumed = first.make();
+  await resumed.init();
+  assert.deepEqual(resumed.state().records.map(entry => entry.labels[0]), ['Treasury']);
+  await write(resumed, [], { version });
+  assert.deepEqual(resumed.state().records, []);
 });
 
 test('a stale version is refused rather than quietly overwriting the newer names', async () => {
   const { store } = harness();
   await store.init();
-  await store.save({ location: 'device', address, scope: 'global', labels: ['First'], version: null });
-  await assert.rejects(
-    store.save({ location: 'device', address, scope: 'global', labels: ['Second'], version: null }),
+  await write(store, ['First']);
+  await assert.rejects(write(store, ['Second']),
     error => error.status === 409 && error.current.labels[0] === 'First');
 });
 
 test('an unreadable device book is never presented, or saved over, as an empty one', async () => {
-  const { store, storage } = harness();
-  await storage.set({ book: [{ address, scope: 'global', labels: [] }] });
+  const { store, storage, make } = harness();
   await store.init();
-  assert.equal(store.state().records.length, 0);
-  assert.match(store.state().error, /record/i);
-  await assert.rejects(store.save({ location: 'device', address, scope: 'global', labels: ['Treasury'], version: null }));
+  await storage.set({ [`book:${store.state().activeBook}`]: [{ address, scope: 'global', labels: [] }] });
+  const resumed = make();
+  await resumed.init();
+  assert.equal(resumed.state().records.length, 0);
+  assert.match(resumed.state().error, /record/i);
+  await assert.rejects(write(resumed, ['Treasury']));
 });
 
 test('a connect link carries the key in the fragment, which is never sent to the server', () => {
-  assert.deepEqual(parseConnectLink(link), { url: normalizeAPI(server), token });
-  assert.deepEqual(parseConnectLink(`  ${server}/#key=${token}  `), { url: normalizeAPI(server), token });
-  assert.throws(() => parseConnectLink(server), /access key/);
+  assert.deepEqual(parseConnectLink(`${host}#key=${token}`), { url: normalizeAPI(host), token });
+  assert.deepEqual(parseConnectLink(`  ${host}/#key=${token}  `), { url: normalizeAPI(host), token });
+  assert.throws(() => parseConnectLink(host), /access key/);
   assert.throws(() => parseConnectLink('nonsense'), /link/);
 });
 
-test('moving to an empty server copies the book there and keeps labeling it', async () => {
-  const { store, remote } = harness();
+test('books are separate, and switching between them changes neither', async () => {
+  const { store, remote } = harness({ remote: [] });
   await store.init();
-  await store.save({ location: 'device', address, scope: 'global', labels: ['Treasury'], version: null });
-  await useServer(store);
-  assert.equal(store.state().location, 'server');
-  assert.deepEqual(remote().map(entry => entry.labels[0]), ['Treasury']);
-  await store.save({ location: 'server', address: other, scope: 'global', labels: ['Payroll'], version: null });
-  assert.deepEqual(remote().map(entry => entry.labels[0]).sort(), ['Payroll', 'Treasury']);
+  const device = store.state().activeBook;
+  await write(store, ['Mine']);
+
+  await store.add({ name: 'Team', storage: onServer });
+  assert.equal(store.state().bookName, 'Team');
+  assert.deepEqual(store.state().records, [], 'a new book starts with what its storage holds');
+  await write(store, ['Shared']);
+
+  await store.use(device);
+  assert.deepEqual(store.state().records.map(entry => entry.labels[0]), ['Mine']);
+  await store.use(store.state().books.find(item => item.name === 'Team').id);
+  assert.deepEqual(store.state().records.map(entry => entry.labels[0]), ['Shared']);
+  assert.deepEqual(remote().map(entry => entry.labels[0]), ['Shared'], 'the server holds only its own book');
 });
 
-test('a server that already holds a book is joined as it is, and the device book waits unchanged', async () => {
-  const { store, saved } = harness({ remote: [record('Shared', 'one')] });
+test('a server book is named after its host unless it is given a name', async () => {
+  const { store } = harness();
   await store.init();
-  await store.save({ location: 'device', address: other, scope: 'global', labels: ['Mine'], version: null });
-  await useServer(store);
-  assert.deepEqual(store.state().records.map(entry => entry.labels[0]), ['Shared']);
-  assert.deepEqual(saved.book.map(entry => entry.labels[0]), ['Mine'], 'the device book is left where it was');
-  await store.use('device');
-  assert.deepEqual(store.state().records.map(entry => entry.labels[0]), ['Mine']);
+  await store.add({ storage: onServer });
+  assert.equal(store.state().bookName, '127.0.0.1');
+});
+
+test('a new book can start as a copy, and will not be poured into one already in use', async () => {
+  const copied = harness({ remote: [] });
+  await copied.store.init();
+  const device = copied.store.state().activeBook;
+  await write(copied.store, ['Treasury']);
+  await copied.store.add({ name: 'Team', storage: onServer, copyFrom: device });
+  assert.deepEqual(copied.remote().map(entry => entry.labels[0]), ['Treasury']);
+
+  const occupied = harness({ remote: [{ address: other, scope: 'global', labels: ['Theirs'], version: 'one' }] });
+  await occupied.store.init();
+  await write(occupied.store, ['Mine']);
+  await assert.rejects(
+    occupied.store.add({ name: 'Team', storage: onServer, copyFrom: occupied.store.state().activeBook }),
+    /already holds a book/);
+  assert.equal(occupied.store.state().books.length, 1, 'a refused book is not half made');
+});
+
+test('a draft written for one book is never saved into another', async () => {
+  const { store } = harness();
+  await store.init();
+  const device = store.state().activeBook;
+  await store.add({ name: 'Team', storage: onServer });
+  await assert.rejects(write(store, ['Treasury'], { book: device }), /switched/);
 });
 
 test('an unreachable server costs freshness, not the book', async () => {
-  const { store, intercept } = harness({ remote: [record('Shared', 'one')] });
+  const { store, intercept } = harness({ remote: [{ address, scope: 'global', labels: ['Shared'], version: 'one' }] });
   await store.init();
-  await useServer(store);
+  await store.add({ name: 'Team', storage: onServer });
   intercept(() => { throw new Error('offline'); });
   await store.refresh();
   assert.deepEqual(store.state().records.map(entry => entry.labels[0]), ['Shared']);
   assert.match(store.state().error, /could not be reached/);
 });
 
-test('a draft written for one place is never saved into another', async () => {
+test('removing a device book takes its addresses; removing a server book only forgets it', async () => {
+  const { store, saved, remote } = harness({ remote: [] });
+  await store.init();
+  const device = store.state().activeBook;
+  await write(store, ['Mine']);
+  await store.add({ name: 'Team', storage: onServer });
+  await write(store, ['Shared']);
+  const team = store.state().activeBook;
+
+  await store.remove(team);
+  assert.deepEqual(remote().map(entry => entry.labels[0]), ['Shared'], 'the server still holds it');
+  assert.equal(store.state().activeBook, device);
+
+  await store.add({ name: 'Second', storage: { kind: 'device' } });
+  const second = store.state().activeBook;
+  await write(store, ['Scratch']);
+  await store.remove(second);
+  assert.equal(saved[`book:${second}`], undefined, 'its addresses go with it');
+});
+
+test('there is always an address book to label into', async () => {
   const { store } = harness();
   await store.init();
-  await assert.rejects(
-    store.save({ location: 'server', address, scope: 'global', labels: ['Treasury'], version: null }),
-    /moved/);
+  await assert.rejects(store.remove(store.state().activeBook), /at least one/);
+});
+
+test('a book can be renamed, and an empty name leaves the old one standing', async () => {
+  const { store } = harness();
+  await store.init();
+  await store.rename(store.state().activeBook, '  Work   wallets  ');
+  assert.equal(store.state().bookName, 'Work wallets');
+  await store.rename(store.state().activeBook, '   ');
+  assert.equal(store.state().bookName, 'Work wallets');
 });
 
 test('an interrupted write is checked before it is retried', async () => {
-  const { store, storage, fetch, remote } = harness();
+  const { store, storage, make, remote } = harness();
   await store.init();
-  await useServer(store);
+  await store.add({ name: 'Team', storage: onServer });
   // The worker stops after the write leaves, so the book never hears the answer.
   await storage.set({ needsRefresh: true });
-  const resumed = createStore({ storage, fetch, now: () => 300 });
+  const resumed = make();
   await resumed.init();
-  await resumed.save({ location: 'server', address, scope: 'global', labels: ['Treasury'], version: null });
+  await write(resumed, ['Treasury']);
   assert.deepEqual(remote().map(entry => entry.labels[0]), ['Treasury']);
   assert.equal(remote().length, 1, 'the write is not repeated');
 });

@@ -1,5 +1,5 @@
 import { hostPermission } from './shared.js';
-import { $, rpc, emptyState, currentSnapshot, syncText, locationPicker, serverForm } from './ui.js';
+import { $, rpc, emptyState, currentSnapshot, syncText, bookPicker, newBookForm } from './ui.js';
 
 let state = emptyState;
 let sites = {};
@@ -8,14 +8,16 @@ let siteURL;
 let busy = false;
 let siteBusy = false;
 const tell = error => { $('#message').textContent = error?.message || String(error || ''); };
-const setup = serverForm({ container: $('#server'), state: () => state, connected: render,
+const setup = newBookForm({ container: $('#server'), state: () => state, created: render,
   busy: value => { busy = value; render(); }, error: tell,
   visible: open => { $('#home').hidden = open; tell(''); },
 });
-const picker = locationPicker({ choose: async place => {
-  if (place === 'server') return setup.open();
-  try { render(await rpc({ type: 'Use', location: place })); tell(''); } catch (error) { tell(error); }
-} });
+const picker = bookPicker({
+  add: () => setup.open(),
+  choose: async book => {
+    try { render(await rpc({ type: 'Use', book })); tell(''); } catch (error) { tell(error); }
+  },
+});
 function render(next = state) {
   if (!currentSnapshot(next, state)) return;
   state = next;

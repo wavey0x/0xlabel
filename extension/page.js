@@ -282,22 +282,22 @@ export async function createPageController({
   function open(target) {
     if (!target) return;
     if (editor && editorTarget?.address === target.address && editorTarget.network === target.network &&
-        editorTarget.place === state.location) {
-      editorTarget = { ...target, place: state.location };
+        editorTarget.book === state.activeBook) {
+      editorTarget = { ...target, book: state.activeBook };
       position(true); editor.focus();
       return;
     }
     if (editor && !editor.closeIfUnchanged()) { position(true); return; }
-    editorTarget = { ...target, place: state.location };
+    editorTarget = { ...target, book: state.activeBook };
     overlay.show();
     overlay.theme();
-    const place = state.location;
+    const book = state.activeBook;
     const key = recordKey(target.address, target.network);
     const visibility = () => {
       const live = targets.get(editorTarget?.element);
       return {
         available: Boolean(recordFor(target)), hidden: hiddenLabels.has(key),
-        enabled: state.location === place && health.status === 'ready' && href === url().href &&
+        enabled: state.activeBook === book && health.status === 'ready' && href === url().href &&
           live?.element.isConnected && live.address === target.address && live.network === target.network,
       };
     };
@@ -343,7 +343,7 @@ export async function createPageController({
   function updateState(next) {
     if (!next || !Number.isSafeInteger(next.stateRevision)) return;
     if (next.stateRevision < state.stateRevision) return;
-    const switched = next.location !== state.location;
+    const switched = next.activeBook !== state.activeBook;
     if (switched) hiddenLabels.clear();
     state = next;
     book = indexBook(next.records);

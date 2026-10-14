@@ -58,7 +58,7 @@ test('installed extension: a book that works with no setup, moving it to a serve
     await popup.goto(`chrome-extension://${id}/popup.html`);
     // Nothing has been set up, so there is a book and it is on this device.
     await expect(popup.locator('#site-name')).toHaveText('127.0.0.1');
-    await expect(popup.locator('#location')).toHaveText('On this device');
+    await expect(popup.locator('#location')).toHaveText('My addresses');
     const siteSwitch = popup.getByRole('switch', { name: 'Show my tags on this website' });
     await expect(siteSwitch).not.toBeChecked();
     await popup.locator('#site-toggle').click();
@@ -71,16 +71,21 @@ test('installed extension: a book that works with no setup, moving it to a serve
     await expect(website.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Kept on this device');
 
     // Moving the book onto a server takes one pasted line and nothing else.
-    const useServer = async (url, key) => {
+    const addBook = async (url, key, name) => {
       await popup.locator('#location').click();
-      await popup.getByRole('menuitemradio', { name: /On my own server/ }).click();
+      await popup.getByRole('menuitem', { name: /Add an address book/ }).click();
       await popup.locator('#connect-link').fill(`${url}#key=${key}`);
+      if (name) await popup.locator('#book-name').fill(name);
       await popup.locator('#connect').click();
     };
-    await useServer(local, 'test-only-token');
+    const switchTo = async name => {
+      await popup.locator('#location').click();
+      await popup.getByRole('menuitemradio', { name: new RegExp(name) }).click();
+    };
+    await addBook(local, 'test-only-token', 'Local');
     await expect(popup.locator('#server')).toBeHidden({ timeout: 10000 });
-    await expect(popup.locator('#location')).toHaveAttribute('title', local);
-    // That server already holds a book, so it is joined rather than overwritten.
+    await expect(popup.locator('#location')).toHaveText('Local');
+    // The new book holds what its server holds, and nothing was copied into it.
     expect((await (await api.get(local+'/labels')).json()).records).toEqual([localRecord]);
     await expect(website.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Local treasury');
     await expect(embedded.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Local treasury');
@@ -119,20 +124,20 @@ test('installed extension: a book that works with no setup, moving it to a serve
     await expect(foreign.frameLocator('iframe').locator('[data-0xlabel-address],[data-0xlabel-ui]')).toHaveCount(0);
     await foreign.close(); await website.bringToFront();
 
-    // A key the server refuses never becomes the place the book lives.
-    await useServer(remote, 'wrong-token');
+    // A key the server refuses never becomes a book.
+    await addBook(remote, 'wrong-token', 'Remote');
     await expect(popup.locator('#server-error')).toContainText('rejected');
     await popup.locator('#connect-link').press('Escape');
     await expect(popup.locator('#server')).toBeHidden();
-    await expect(popup.locator('#location')).toHaveAttribute('title', local);
-    // An empty server is given a copy of the book being carried to it.
-    await useServer(remote, 'test-only-token');
+    await expect(popup.locator('#location')).toHaveText('Local');
+    // Books are separate: a second one shows what its own server holds.
+    await addBook(remote, 'test-only-token', 'Remote');
     await expect(popup.locator('#server')).toBeHidden({ timeout: 10000 });
-    await expect(popup.locator('#location')).toHaveAttribute('title', remote);
-    expect((await (await api.get(remote+'/labels')).json()).records.map(entry => entry.labels[0])).toEqual(['Local treasury']);
+    await expect(popup.locator('#location')).toHaveText('Remote');
+    await expect(website.locator('#wallet')).not.toHaveAttribute('data-0xlabel-label');
+    await expect(embedded.locator('#wallet')).not.toHaveAttribute('data-0xlabel-label');
     expect((await (await api.get(local+'/labels')).json()).records).toEqual([localRecord]);
 
-    await api.put(`${remote}/labels/global/${address}`, { data:{labels:[],version:(await (await api.get(remote+'/labels')).json()).records[0].version} });
     const remoteRecord = (await (await api.put(`${remote}/labels/global/${address}`, { data:{labels:['Remote vault'],version:null} })).json()).record;
     // Exercise the real alarm listener with an accelerated one-shot test alarm.
     await worker.evaluate(() => chrome.alarms.create('sync', { when:Date.now()+100 }));
@@ -141,8 +146,7 @@ test('installed extension: a book that works with no setup, moving it to a serve
     await api.put(`${remote}/labels/global/${address}`, { data:{labels:[],version:remoteRecord.version} });
     await worker.evaluate(() => chrome.alarms.create('sync', { when:Date.now()+100 }));
     await expect(website.locator('#wallet')).not.toHaveAttribute('data-0xlabel-label', /./, { timeout:10000 });
-    await useServer(local, 'test-only-token');
-    await expect(popup.locator('#server')).toBeHidden({ timeout: 10000 });
+    await switchTo('Local');
     await expect(website.locator('#wallet')).toHaveAttribute('data-0xlabel-label','Local treasury');
     await website.getByRole('button',{name:'Edit wallet labels',exact:true}).first().click();
     await website.getByRole('textbox',{name:'Label 1'}).fill('Local edited');
@@ -220,12 +224,11 @@ test('installed extension: a book that works with no setup, moving it to a serve
     await book.locator('#manual-address').fill(added); await book.locator('#network').fill('8453');
     await book.getByRole('button',{name:'Add tags',exact:true}).click();
     await book.getByRole('textbox',{name:'Label 1'}).fill('New Base wallet');
-    // Moving the book under an open draft must not let it save into the new place.
-    await popup.locator('#location').click();
-    await popup.getByRole('menuitemradio', { name: /On this device/ }).click();
+    // Switching books under an open draft must not let it save into the new one.
+    await switchTo('Remote');
     await expect(book.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
     await expect(book.getByRole('textbox', { name: 'Label 1' })).toHaveValue('New Base wallet');
-    await useServer(local, 'test-only-token');
+    await switchTo('Local');
     await expect(book.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
     await book.getByRole('button',{name:'Add label',exact:false}).click();
     await book.getByRole('textbox',{name:'Label 2'}).fill('Second alias');
@@ -245,6 +248,7 @@ test('installed extension: a book that works with no setup, moving it to a serve
     await expect(book.getByRole('button', { name: `Copied ${checksumAddress(added)}`, exact: true })).toBeVisible();
     await website.bringToFront();
     expect(await website.evaluate(() => navigator.clipboard.readText())).toBe(checksumAddress(added));
+
     await book.bringToFront();
     const downloadPromise=book.waitForEvent('download');
     await book.locator('#export').click(); const download=await downloadPromise;
@@ -274,6 +278,31 @@ test('installed extension: a book that works with no setup, moving it to a serve
     await reopened.waitForURL(`chrome-extension://${id}/book.html`);
     await expect(reopened.locator('.record')).toHaveCount(1);
     await expect(reopened.locator('.record')).toContainText('Local edited');
+    // Renaming, and the two removals: forgetting a server book leaves the server
+    // holding it, while removing one kept here is the only way addresses are lost.
+    await reopened.bringToFront();
+    await reopened.locator('#book-settings').click();
+    await reopened.locator('#book-rename').fill('Local notebook');
+    await reopened.locator('#save-manage').click();
+    await expect(reopened.locator('#location')).toHaveText('Local notebook');
+    await reopened.locator('#book-settings').click();
+    await expect(reopened.locator('#book-where')).toContainText('127.0.0.1');
+    await reopened.locator('#remove-book').click();
+    await expect(reopened.locator('#remove-copy')).toContainText('keeps everything in it');
+    await expect(reopened.locator('#confirm-remove')).toHaveText('Remove');
+    await reopened.locator('#confirm-remove').click();
+    await expect(reopened.locator('#manage-dialog')).toBeHidden();
+    // The server still has every record the forgotten book was showing.
+    expect((await (await api.get(local+'/labels')).json()).records.length).toBeGreaterThan(0);
+    await expect(reopened.locator('#location')).not.toHaveText('Local notebook');
+    await reopened.locator('#book-settings').click();
+    await reopened.locator('#remove-book').click();
+    await expect(reopened.locator('#remove-copy')).toContainText('cannot be undone');
+    await expect(reopened.locator('#confirm-remove')).toHaveText('Delete');
+    await reopened.locator('#keep-book').click();
+    await expect(reopened.locator('#remove-confirm')).toBeHidden();
+    await reopened.locator('#cancel-manage').click();
+    await expect(reopened.locator('#manage-dialog')).toBeHidden();
     expect(errors).toEqual([]);
   } finally {
     await context.close(); await api.dispose(); await rm(profile,{recursive:true,force:true});

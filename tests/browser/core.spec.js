@@ -147,7 +147,7 @@ test('Safe resolves loading and composed addresses; the address switch isolates 
   await expect(page.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Global');
 });
 
-test('moving the book resets comparisons, preserve source-bound drafts and reject older page snapshots', async ({ page }) => {
+test('switching address books resets comparisons, preserve source-bound drafts and reject older page snapshots', async ({ page }) => {
   await start(page);
   await page.evaluate(() => {
     window.controller.updateState({ ...window.state, stateRevision: 3, records: [{ ...window.state.records[0], labels: ['Latest'] }] });
@@ -159,7 +159,9 @@ test('moving the book resets comparisons, preserve source-bound drafts and rejec
   await edit(page).click();
   await input(page).fill('Local draft');
   await page.getByRole('switch', { name: 'Show my tags for this address' }).click();
-  await page.evaluate(() => window.controller.updateState({ ...window.state, location: 'server', locationName: 'remote.example', server: 'https://remote.example', stateRevision: 4, records: [{ ...window.state.records[0], labels: ['Remote'] }] }));
+  await page.evaluate(() => window.controller.updateState({ ...window.state, stateRevision: 4, activeBook: 'book-2', bookName: 'Team',
+      books: [...window.state.books, { id: 'book-2', name: 'Team', where: 'remote.example' }],
+      records: [{ ...window.state.records[0], labels: ['Remote'] }] }));
   await expect(page.locator('#first')).toHaveAttribute('data-0xlabel-label', 'Remote');
   await expect(save(page)).toBeDisabled();
   await expect(input(page)).toHaveValue('Local draft');

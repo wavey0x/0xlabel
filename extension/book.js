@@ -1,4 +1,4 @@
-import { $, rpc, emptyState, currentSnapshot, syncText, locationPicker, serverForm, dismissDialog } from './ui.js';
+import { $, rpc, emptyState, currentSnapshot, syncText, bookPicker, newBookForm, dismissDialog } from './ui.js';
 import { parseAddress, normalizeScope } from './shared.js';
 import { scopeName } from './networks.js';
 import { checksumAddress } from './checksum.js';
@@ -16,16 +16,18 @@ await editorStyles(shadow);
 const theme = matchMedia('(prefers-color-scheme: dark)');
 const applyTheme = () => $('#editor-host').toggleAttribute('data-dark', theme.matches);
 theme.addEventListener('change', applyTheme); applyTheme();
-const setup = serverForm({ container: $('#server'), state: () => state, connected: render,
+const setup = newBookForm({ container: $('#server'), state: () => state, created: render,
   busy: value => { busy = value; render(); }, error: tell,
 });
-const picker = locationPicker({ choose: async place => {
-  if (place === 'server') return setup.open();
-  try { render(await rpc({ type: 'Use', location: place })); tell(''); } catch (error) { tell(error); }
-} });
+const picker = bookPicker({
+  add: () => setup.open(),
+  choose: async book => {
+    try { render(await rpc({ type: 'Use', book })); tell(''); } catch (error) { tell(error); }
+  },
+});
 function render(next = state) {
   if (!currentSnapshot(next, state)) return;
-  if (next.location !== state.location) $('#search').value = '';
+  if (next.activeBook !== state.activeBook) $('#search').value = '';
   state = next;
   picker(state);
   $('#location').disabled = busy;
@@ -84,6 +86,46 @@ function search() {
   $('#empty p').textContent = state.records.length ? 'No matching tags or addresses.' : 'No addresses tagged yet.';
 }
 $('#search').oninput = search;
+
+// Removing a book kept here destroys its addresses; removing one kept on a
+// server only forgets it. Same button, deliberately different words.
+const manage = $('#manage-dialog');
+const closeManage = () => { manage.close(); $('#remove-confirm').hidden = true; $('#manage-form').hidden = false;
+  $('#manage-error').textContent = ''; $('#location').focus(); };
+dismissDialog(manage, closeManage);
+$('#close-manage').onclick = closeManage;
+$('#cancel-manage').onclick = closeManage;
+$('#book-settings').onclick = () => {
+  const current = state.books.find(item => item.id === state.activeBook);
+  if (!current) return;
+  $('#book-rename').value = current.name;
+  $('#book-where').textContent = current.where === 'On this device'
+    ? 'Kept on this device.' : `Kept on ${current.where}.`;
+  $('#remove-book').disabled = state.books.length < 2;
+  $('#remove-book').title = state.books.length < 2 ? '0xlabel keeps at least one address book.' : '';
+  $('#manage-error').textContent = '';
+  $('#remove-confirm').hidden = true; $('#manage-form').hidden = false;
+  manage.showModal(); $('#book-rename').focus(); $('#book-rename').select();
+};
+$('#manage-form').onsubmit = async event => {
+  event.preventDefault();
+  try { render(await rpc({ type: 'RenameBook', book: state.activeBook, name: $('#book-rename').value })); closeManage(); }
+  catch (error) { $('#manage-error').textContent = error.message; }
+};
+$('#remove-book').onclick = () => {
+  const current = state.books.find(item => item.id === state.activeBook);
+  const count = new Set(state.records.map(record => record.address)).size;
+  $('#remove-copy').textContent = current.where === 'On this device'
+    ? `Delete ${current.name} and the ${count} address${count === 1 ? '' : 'es'} in it? This cannot be undone.`
+    : `Remove ${current.name} from 0xlabel? ${current.where} keeps everything in it.`;
+  $('#confirm-remove').textContent = current.where === 'On this device' ? 'Delete' : 'Remove';
+  $('#manage-form').hidden = true; $('#remove-confirm').hidden = false; $('#confirm-remove').focus();
+};
+$('#keep-book').onclick = () => { $('#remove-confirm').hidden = true; $('#manage-form').hidden = false; $('#remove-book').focus(); };
+$('#confirm-remove').onclick = async () => {
+  try { render(await rpc({ type: 'RemoveBook', book: state.activeBook })); closeManage(); }
+  catch (error) { $('#manage-error').textContent = error.message; $('#remove-confirm').hidden = true; $('#manage-form').hidden = false; }
+};
 const addDialog = $('#add-dialog');
 const closeAdd = () => { addDialog.close(); $('#manual-form').reset(); $('#address-error').textContent = ''; $('#add-address').focus(); };
 dismissDialog(addDialog, closeAdd);

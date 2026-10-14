@@ -29,8 +29,6 @@ export function createServerBook({ url, token, fetch: fetcher = globalThis.fetch
   }
 
   return {
-    name: new URL(url).hostname,
-    url,
     // A write can be interrupted between leaving here and being recorded, so the
     // store refreshes before retrying one rather than repeating it blindly.
     uncertainWrites: true,
