@@ -306,8 +306,10 @@ test('installed extension: a book that works with no setup, moving it to a serve
     // The two removals: forgetting a server book leaves the server holding it,
     // while removing one kept here is the only way addresses are lost.
     await reopened.locator('#remove-book').click();
-    await expect(reopened.locator('#remove-copy')).toContainText('keeps everything in it');
+    await expect(reopened.locator('#remove-copy')).toContainText('keeps its 1 address');
     await expect(reopened.locator('#confirm-remove')).toHaveText('Remove');
+    // Forgetting a book the server still holds costs nothing, so nothing is asked.
+    await expect(reopened.locator('#remove-name')).toBeHidden();
     await reopened.locator('#confirm-remove').click();
     await expect(reopened.locator('#remove-dialog')).toBeHidden();
     // The server still has every record the forgotten book was showing.
@@ -316,6 +318,12 @@ test('installed extension: a book that works with no setup, moving it to a serve
     await reopened.locator('#remove-book').click();
     await expect(reopened.locator('#remove-copy')).toContainText('cannot be undone');
     await expect(reopened.locator('#confirm-remove')).toHaveText('Delete');
+    // Addresses are only ever lost on purpose: the book's own name unlocks it.
+    await expect(reopened.locator('#confirm-remove')).toBeDisabled();
+    await reopened.locator('#remove-name').fill('Default');
+    await expect(reopened.locator('#confirm-remove')).toBeDisabled();
+    await reopened.locator('#remove-name').fill(' default ');
+    await expect(reopened.locator('#confirm-remove')).toBeEnabled();
     await reopened.locator('#keep-book').click();
     await expect(reopened.locator('#remove-dialog')).toBeHidden();
     expect(errors).toEqual([]);

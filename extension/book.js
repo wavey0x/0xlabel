@@ -34,6 +34,8 @@ function render(next = state) {
   state = next;
   picker(state);
   $('#location').disabled = busy;
+  // Only a book kept somewhere else can be out of date with what it holds.
+  $('#refresh').hidden = state.bookKind !== 'server';
   $('#remove-book').disabled = state.books.length < 2;
   $('#remove-book').title = state.books.length < 2 ? '0xlabel keeps at least one address book.' : 'Remove this address book';
   $('#refresh').disabled = busy || $('#refresh').hasAttribute('aria-busy');
@@ -100,18 +102,28 @@ dismissDialog(removeDialog, closeRemove);
 $('#close-remove').onclick = closeRemove;
 $('#keep-book').onclick = closeRemove;
 $('#remove-book').innerHTML = TRASH_ICON;
+// Only a book kept here is destroyed by this, so only that one is typed out
+// first. Forgetting a book a server holds is undone by pasting its link again.
+const typed = () => $('#remove-name').value.trim() === state.books.find(item => item.id === state.activeBook)?.name;
+$('#remove-name').oninput = () => { $('#confirm-remove').disabled = !typed(); };
+$('#remove-name').onkeydown = event => { if (event.key === 'Enter' && typed()) $('#confirm-remove').click(); };
 $('#remove-book').onclick = () => {
   const current = state.books.find(item => item.id === state.activeBook);
   if (!current) return;
   const here = current.where === 'On this device';
   const count = new Set(state.records.map(record => record.address)).size;
+  const addresses = `${count} address${count === 1 ? '' : 'es'}`;
   $('#remove-heading').textContent = here ? 'Delete address book' : 'Remove address book';
   $('#remove-copy').textContent = here
-    ? `Delete ${current.name} and the ${count} address${count === 1 ? '' : 'es'} in it? This cannot be undone.`
-    : `Remove ${current.name} from 0xlabel? ${current.where} keeps everything in it.`;
+    ? `Deletes ${current.name} and its ${addresses}. This cannot be undone.`
+    : `Removes ${current.name} from 0xlabel. ${current.where} keeps its ${addresses}.`;
   $('#confirm-remove').textContent = here ? 'Delete' : 'Remove';
+  $('#remove-name').hidden = !here;
+  $('#remove-name').value = '';
+  $('#confirm-remove').disabled = here;
   $('#remove-error').textContent = '';
-  removeDialog.showModal(); $('#confirm-remove').focus();
+  removeDialog.showModal();
+  (here ? $('#remove-name') : $('#confirm-remove')).focus();
 };
 $('#confirm-remove').onclick = async () => {
   try { render(await rpc({ type: 'RemoveBook', book: state.activeBook })); closeRemove(); }

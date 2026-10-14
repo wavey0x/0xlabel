@@ -31,3 +31,4 @@ td code { display: block; font: 12px/1.6 ui-monospace, monospace; overflow-wrap:
 #sync[data-offline="true"] { color: var(--0xlabel-warning); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @media (max-width: 600px) { .book { width: calc(100% - 24px); padding: 16px 0; } .book-header { margin-bottom: 28px; } .book-header .connection-line { width: 180px; } th,td { padding: 10px; } th:first-child { width: 35%; } td code { font-size: 10px; } .book-tools { gap: 8px; } }
+#remove-name { margin-top: 10px; }
