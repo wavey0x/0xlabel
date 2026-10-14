@@ -56,7 +56,7 @@ Use a reachable hostname and valid certificate. If serving under a path, pass th
 
 The helper prints one line. In either view, open the address book menu, choose **+ Add an address book**, and paste it; the name fills in from the server's hostname. The key travels in the link's fragment, which your browser never sends to the server. Keep the line private.
 
-Books are separate and switching between them changes neither, so the book on your device stays exactly as it was while you use one kept on a server. **Address book settings** renames a book, or removes it: removing one kept on a server only forgets it here, while removing one kept on this device deletes its addresses. **Import** in the full-page book carries addresses from an exported file into the book that is open.
+Books are separate and switching between them changes neither, so the book on your device stays exactly as it was while you use one kept on a server. A book is renamed in its own row in the list: hover it and click the pencil, or press F2 with the row focused. The trash button beside the book name removes the book that is open — removing one kept on a server only forgets it here, while removing one kept on this device deletes its addresses. **Import** in the full-page book carries addresses from an exported file into the book that is open.
 
 For a book kept on a server, sync is a read-only snapshot pull, about once a minute while the browser runs, plus startup, switching books, browsing resume, opening the popup, and manual refresh. Failed pulls keep the previous copy. An explicit save is the only operation that changes a book; saving to a server book needs that server. Conflicting or failed saves preserve the draft.
 

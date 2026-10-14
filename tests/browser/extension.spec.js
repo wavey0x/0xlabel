@@ -135,6 +135,16 @@ test('installed extension: a book that works with no setup, moving it to a serve
     await addBook(remote, 'test-only-token', 'Remote');
     await expect(popup.locator('#server')).toBeHidden({ timeout: 10000 });
     await expect(popup.locator('#location')).toHaveText('Remote');
+    // A browser popup is only as tall as its document, so an open menu has to
+    // fit inside it: every book stays reachable rather than clipped by the frame.
+    await popup.setViewportSize({ width: 380, height: 240 });
+    await popup.locator('#location').click();
+    await expect.poll(() => popup.evaluate(() => {
+      const menu = document.querySelector('#location-menu');
+      return menu.getBoundingClientRect().bottom + 20 <= document.body.getBoundingClientRect().height;
+    })).toBe(true);
+    await popup.keyboard.press('Escape');
+    await popup.setViewportSize({ width: 380, height: 600 });
     await expect(website.locator('#wallet')).not.toHaveAttribute('data-0xlabel-label');
     await expect(embedded.locator('#wallet')).not.toHaveAttribute('data-0xlabel-label');
     expect((await (await api.get(local+'/labels')).json()).records).toEqual([localRecord]);
@@ -279,30 +289,35 @@ test('installed extension: a book that works with no setup, moving it to a serve
     await reopened.waitForURL(`chrome-extension://${id}/book.html`);
     await expect(reopened.locator('.record')).toHaveCount(1);
     await expect(reopened.locator('.record')).toContainText('Local edited');
-    // Renaming, and the two removals: forgetting a server book leaves the server
-    // holding it, while removing one kept here is the only way addresses are lost.
+    // A book is renamed in its own row in the menu, and a name another book
+    // already holds is refused in that row rather than anywhere else.
     await reopened.bringToFront();
-    await reopened.locator('#book-settings').click();
-    await reopened.locator('#book-rename').fill('Local notebook');
-    await reopened.locator('#save-manage').click();
+    await reopened.locator('#location').click();
+    await reopened.getByRole('menuitem', { name: 'Rename Local', exact: true }).click();
+    const nameField = reopened.getByRole('textbox', { name: 'Rename Local', exact: true });
+    await nameField.fill('default');
+    await nameField.press('Enter');
+    await expect(reopened.locator('#location-menu .message')).toContainText('already have an address book');
+    await expect(reopened.locator('#location')).toHaveText('Local');
+    await nameField.fill('Local notebook');
+    await nameField.press('Enter');
     await expect(reopened.locator('#location')).toHaveText('Local notebook');
-    await reopened.locator('#book-settings').click();
+    await reopened.keyboard.press('Escape');
+    // The two removals: forgetting a server book leaves the server holding it,
+    // while removing one kept here is the only way addresses are lost.
     await reopened.locator('#remove-book').click();
     await expect(reopened.locator('#remove-copy')).toContainText('keeps everything in it');
     await expect(reopened.locator('#confirm-remove')).toHaveText('Remove');
     await reopened.locator('#confirm-remove').click();
-    await expect(reopened.locator('#manage-dialog')).toBeHidden();
+    await expect(reopened.locator('#remove-dialog')).toBeHidden();
     // The server still has every record the forgotten book was showing.
     expect((await (await api.get(local+'/labels')).json()).records.length).toBeGreaterThan(0);
     await expect(reopened.locator('#location')).not.toHaveText('Local notebook');
-    await reopened.locator('#book-settings').click();
     await reopened.locator('#remove-book').click();
     await expect(reopened.locator('#remove-copy')).toContainText('cannot be undone');
     await expect(reopened.locator('#confirm-remove')).toHaveText('Delete');
     await reopened.locator('#keep-book').click();
-    await expect(reopened.locator('#remove-confirm')).toBeHidden();
-    await reopened.locator('#cancel-manage').click();
-    await expect(reopened.locator('#manage-dialog')).toBeHidden();
+    await expect(reopened.locator('#remove-dialog')).toBeHidden();
     expect(errors).toEqual([]);
   } finally {
     await context.close(); await api.dispose(); await rm(profile,{recursive:true,force:true});

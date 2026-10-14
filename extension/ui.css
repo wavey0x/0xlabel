@@ -49,9 +49,21 @@ dialog::backdrop { background: var(--0xlabel-backdrop); backdrop-filter: blur(2p
 #location-menu strong { font-size: 12px; font-weight: 750; }
 #location-menu small { font-size: 10px; font-weight: 400; color: var(--0xlabel-muted); }
 #location-menu svg { width: 14px; height: 14px; flex-shrink: 0; color: var(--0xlabel-accent); }
-#location-menu button:not([aria-checked="true"]) > svg { visibility: hidden; }
+#location-menu button[data-book]:not([aria-checked="true"]) > svg { visibility: hidden; }
+/* A book is renamed in its own row: the pencil takes the mark's place while
+   the row is under the pointer or holds focus, so nothing new is on screen. */
+#location-menu .book-option { position: relative; display: flex; align-items: center; }
+#location-menu .book-option button[data-book] { flex: 1; min-width: 0; }
+#location-menu .book-option:hover button[data-book] > svg,#location-menu .book-option:has(.rename:focus) button[data-book] > svg { visibility: hidden; }
+#location-menu .rename { position: absolute; right: 7px; width: 22px; height: 22px; padding: 3px; opacity: 0; color: var(--0xlabel-muted); }
+#location-menu .book-option:hover .rename,#location-menu .rename:focus { opacity: 1; }
+#location-menu .rename:hover { color: var(--0xlabel-ink); }
+#location-menu .rename svg { width: 14px; height: 14px; }
+#location-menu .editing { gap: 8px; padding: 4px 8px; }
+#location-menu .name-edit { padding: 5px 7px; font-size: 12px; font-weight: 750; }
+#location-menu .message { margin: 4px 8px 2px; }
 #location-menu .new-book { font-size: 11px; font-weight: 700; color: var(--0xlabel-accent); }
-#location-menu button[data-book] + .new-book { margin-top: 4px; border-top: 1px solid var(--0xlabel-line); border-radius: 0 0 7px 7px; }
+#location-menu .book-option + .new-book { margin-top: 4px; border-top: 1px solid var(--0xlabel-line); border-radius: 0 0 7px 7px; }
 fieldset.choices { display: grid; gap: 8px; margin: 0 0 4px; padding: 0; border: 0; }
 fieldset.choices legend { padding: 0; font-size: 11px; font-weight: 700; color: var(--0xlabel-muted); }
 fieldset.choices label { display: grid; grid-template-columns: auto auto 1fr; gap: 2px 8px; align-items: center; font-size: 12px; font-weight: 700; cursor: pointer; }

@@ -24,6 +24,8 @@ const picker = bookPicker({
   choose: async book => {
     try { render(await rpc({ type: 'Use', book })); tell(''); } catch (error) { tell(error); }
   },
+  // A refused name is reported in the row being typed in, so the picker keeps it.
+  rename: async (book, name) => { render(await rpc({ type: 'RenameBook', book, name })); tell(''); },
 });
 function render(next = state) {
   if (!currentSnapshot(next, state)) return;
@@ -31,6 +33,8 @@ function render(next = state) {
   state = next;
   picker(state);
   $('#location').disabled = busy;
+  $('#remove-book').disabled = state.books.length < 2;
+  $('#remove-book').title = state.books.length < 2 ? '0xlabel keeps at least one address book.' : 'Remove this address book';
   $('#refresh').disabled = busy || $('#refresh').hasAttribute('aria-busy');
   $('#export').disabled = !state.records.length;
   $('#sync').textContent = busy ? 'Connecting…' : syncText(state);
@@ -89,41 +93,28 @@ $('#search').oninput = search;
 
 // Removing a book kept here destroys its addresses; removing one kept on a
 // server only forgets it. Same button, deliberately different words.
-const manage = $('#manage-dialog');
-const closeManage = () => { manage.close(); $('#remove-confirm').hidden = true; $('#manage-form').hidden = false;
-  $('#manage-error').textContent = ''; $('#location').focus(); };
-dismissDialog(manage, closeManage);
-$('#close-manage').onclick = closeManage;
-$('#cancel-manage').onclick = closeManage;
+const removeDialog = $('#remove-dialog');
+const closeRemove = () => { removeDialog.close(); $('#remove-error').textContent = ''; $('#location').focus(); };
+dismissDialog(removeDialog, closeRemove);
+$('#close-remove').onclick = closeRemove;
+$('#keep-book').onclick = closeRemove;
 $('#remove-book').innerHTML = TRASH_ICON;
-$('#book-settings').onclick = () => {
-  const current = state.books.find(item => item.id === state.activeBook);
-  if (!current) return;
-  $('#book-rename').value = current.name;
-  $('#remove-book').disabled = state.books.length < 2;
-  $('#remove-book').title = state.books.length < 2 ? '0xlabel keeps at least one address book.' : 'Remove this address book';
-  $('#manage-error').textContent = '';
-  $('#remove-confirm').hidden = true; $('#manage-form').hidden = false;
-  manage.showModal(); $('#book-rename').focus(); $('#book-rename').select();
-};
-$('#manage-form').onsubmit = async event => {
-  event.preventDefault();
-  try { render(await rpc({ type: 'RenameBook', book: state.activeBook, name: $('#book-rename').value })); closeManage(); }
-  catch (error) { $('#manage-error').textContent = error.message; }
-};
 $('#remove-book').onclick = () => {
   const current = state.books.find(item => item.id === state.activeBook);
+  if (!current) return;
+  const here = current.where === 'On this device';
   const count = new Set(state.records.map(record => record.address)).size;
-  $('#remove-copy').textContent = current.where === 'On this device'
+  $('#remove-heading').textContent = here ? 'Delete address book' : 'Remove address book';
+  $('#remove-copy').textContent = here
     ? `Delete ${current.name} and the ${count} address${count === 1 ? '' : 'es'} in it? This cannot be undone.`
     : `Remove ${current.name} from 0xlabel? ${current.where} keeps everything in it.`;
-  $('#confirm-remove').textContent = current.where === 'On this device' ? 'Delete' : 'Remove';
-  $('#manage-form').hidden = true; $('#remove-confirm').hidden = false; $('#confirm-remove').focus();
+  $('#confirm-remove').textContent = here ? 'Delete' : 'Remove';
+  $('#remove-error').textContent = '';
+  removeDialog.showModal(); $('#confirm-remove').focus();
 };
-$('#keep-book').onclick = () => { $('#remove-confirm').hidden = true; $('#manage-form').hidden = false; $('#remove-book').focus(); };
 $('#confirm-remove').onclick = async () => {
-  try { render(await rpc({ type: 'RemoveBook', book: state.activeBook })); closeManage(); }
-  catch (error) { $('#manage-error').textContent = error.message; $('#remove-confirm').hidden = true; $('#manage-form').hidden = false; }
+  try { render(await rpc({ type: 'RemoveBook', book: state.activeBook })); closeRemove(); }
+  catch (error) { $('#remove-error').textContent = error.message; }
 };
 const addDialog = $('#add-dialog');
 const closeAdd = () => { addDialog.close(); $('#manual-form').reset(); $('#address-error').textContent = ''; $('#add-address').focus(); };

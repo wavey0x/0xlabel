@@ -1,5 +1,5 @@
 import { hostPermission, parseConnectLink } from './shared.js';
-import { COPIED_ICON, DEVICE_ICON, SERVER_ICON } from './icons.js';
+import { COPIED_ICON, DEVICE_ICON, PENCIL_ICON, SERVER_ICON } from './icons.js';
 
 export const emptyState = { books: [], activeBook: null, bookName: '', bookKind: 'device', records: [], stateRevision: -1, syncedAt: null, error: null };
 export const $ = selector => document.querySelector(selector);
@@ -31,22 +31,36 @@ export function dismissDialog(dialog, close) {
   });
 }
 
-// One control for the book in use. The list of books only appears once there
-// is more than one, so nothing talks about books until you have two.
-export function bookPicker({ choose, add }) {
+// One control for the book in use, and the list of books it opens. A book is
+// renamed in its own row, so a name has nowhere else to be changed. Editing is
+// a local swap of that row: the list is rebuilt only once the edit is over.
+export function bookPicker({ choose, add, rename }) {
   const trigger = $('#location');
   const menu = $('#location-menu');
+  let latest = emptyState;
+  let editing = null;
+  const find = id => latest.books.find(item => item.id === id);
+  const mark = item => `<i class="kept">${item.kind === 'server' ? SERVER_ICON : DEVICE_ICON}</i>`;
+
   menu.addEventListener('beforetoggle', event => {
     trigger.setAttribute('aria-expanded', String(event.newState === 'open'));
+  });
+  // A browser popup is only as tall as its document, and a menu in the top
+  // layer adds nothing to it, so the open menu asks the page for its room.
+  menu.addEventListener('toggle', event => {
+    if (event.newState === 'open') makeRoom(); else document.body.style.minHeight = '';
   });
   trigger.addEventListener('keydown', event => {
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); menu.showPopover(); }
   });
   menu.addEventListener('keydown', event => {
+    if (event.key === 'F2' && document.activeElement?.dataset.book) {
+      event.preventDefault(); startEdit(document.activeElement.dataset.book); return;
+    }
     if (event.key === 'Tab') { menu.hidePopover(); trigger.focus(); return; }
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
-    const options = [...menu.querySelectorAll('button')];
+    const options = [...menu.querySelectorAll('[role^="menuitem"]')];
     const index = options.indexOf(document.activeElement);
     const next = event.key === 'Home' ? 0 : event.key === 'End' ? options.length - 1
       : (index + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length;
@@ -55,35 +69,107 @@ export function bookPicker({ choose, add }) {
   menu.addEventListener('click', event => {
     const option = event.target.closest('button');
     if (!option) return;
+    if (option.dataset.rename) { startEdit(option.dataset.rename); return; }
     menu.hidePopover();
     if (option.dataset.book) choose(option.dataset.book); else add();
   });
-  return state => {
-    trigger.querySelector('span').textContent = state.bookName || 'Address book';
-    trigger.setAttribute('aria-label', `Address book: ${state.bookName}`);
-    const options = state.books.length > 1 ? state.books.map(item => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.dataset.book = item.id;
-      button.setAttribute('role', 'menuitemradio');
-      button.setAttribute('aria-checked', String(item.id === state.activeBook));
-      button.autofocus = item.id === state.activeBook;
-      // The host only earns a line when it is not already the book's name.
-      const host = item.kind === 'server' && item.where !== item.name ? item.where : '';
-      button.innerHTML = `<i class="kept">${item.kind === 'server' ? SERVER_ICON : DEVICE_ICON}</i>` +
-        `<span><strong></strong>${host ? '<small></small>' : ''}</span>${COPIED_ICON}`;
-      button.querySelector('strong').textContent = item.name;
-      if (host) button.querySelector('small').textContent = host;
-      return button;
-    }) : [];
+
+  function makeRoom() {
+    if (!menu.matches(':popover-open')) return;
+    // Asking for the room every time, not only when it is short, keeps a second
+    // measurement from reading the room already made and taking it back.
+    document.body.style.minHeight = `${Math.ceil(menu.getBoundingClientRect().bottom + scrollY + 20)}px`;
+  }
+  function startEdit(id) {
+    const item = find(id);
+    if (!item) return;
+    editing = null; draw();
+    editing = id;
+    menu.querySelector(`[data-book="${id}"]`).closest('.book-option').replaceWith(editRow(item));
+    const field = menu.querySelector('.name-edit');
+    field.focus(); field.select();
+  }
+  // Leaving the field keeps what was typed and Escape drops it. A name the
+  // books refuse is answered in the row it was typed in, which stays open.
+  async function commit(item, value) {
+    if (editing !== item.id) return;
+    const name = value.trim();
+    editing = null;
+    if (!name || name === item.name) { draw(); return; }
+    try {
+      await rename(item.id, name);
+    } catch (error) {
+      editing = item.id;
+      const note = document.createElement('p');
+      note.className = 'message';
+      note.setAttribute('role', 'alert');
+      note.textContent = error.message;
+      menu.querySelector('.editing').after(note);
+      menu.querySelector('.name-edit').focus();
+      makeRoom();
+    }
+  }
+
+  function optionRow(item) {
+    const row = document.createElement('div');
+    row.className = 'book-option';
+    row.setAttribute('role', 'none');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.book = item.id;
+    button.setAttribute('role', 'menuitemradio');
+    button.setAttribute('aria-checked', String(item.id === latest.activeBook));
+    button.autofocus = item.id === latest.activeBook;
+    // The host only earns a line when it is not already the book's name.
+    const host = item.kind === 'server' && item.where !== item.name ? item.where : '';
+    button.innerHTML = `${mark(item)}<span><strong></strong>${host ? '<small></small>' : ''}</span>${COPIED_ICON}`;
+    button.querySelector('strong').textContent = item.name;
+    if (host) button.querySelector('small').textContent = host;
+    const pencil = document.createElement('button');
+    pencil.type = 'button';
+    pencil.className = 'rename';
+    pencil.dataset.rename = item.id;
+    pencil.setAttribute('role', 'menuitem');
+    pencil.setAttribute('aria-label', `Rename ${item.name}`);
+    pencil.title = `Rename ${item.name}`;
+    pencil.innerHTML = PENCIL_ICON;
+    row.append(button, pencil);
+    return row;
+  }
+  function editRow(item) {
+    const row = document.createElement('div');
+    row.className = 'book-option editing';
+    row.setAttribute('role', 'none');
+    row.innerHTML = mark(item);
+    const field = document.createElement('input');
+    field.className = 'name-edit';
+    field.maxLength = 40;
+    field.autocomplete = 'off';
+    field.value = item.name;
+    field.setAttribute('aria-label', `Rename ${item.name}`);
+    field.addEventListener('blur', () => commit(item, field.value));
+    field.addEventListener('keydown', event => {
+      event.stopPropagation();
+      if (event.key === 'Enter') { event.preventDefault(); commit(item, field.value); }
+      if (event.key === 'Escape') { event.preventDefault(); editing = null; draw(); menu.querySelector(`[data-book="${item.id}"]`)?.focus(); }
+    });
+    row.append(field);
+    return row;
+  }
+  function draw() {
+    trigger.querySelector('span').textContent = latest.bookName || 'Address book';
+    trigger.setAttribute('aria-label', `Address book: ${latest.bookName}`);
+    // A row being renamed owns the list until the name is settled.
+    if (editing) return;
     const create = document.createElement('button');
     create.type = 'button';
     create.className = 'new-book';
     create.setAttribute('role', 'menuitem');
     create.textContent = '+ Add an address book';
-    create.autofocus = !options.length;
-    menu.replaceChildren(...options, create);
-  };
+    menu.replaceChildren(...latest.books.map(optionRow), create);
+    makeRoom();
+  }
+  return state => { latest = state; draw(); };
 }
 
 // Making a book is the one moment its storage is chosen, and the one moment

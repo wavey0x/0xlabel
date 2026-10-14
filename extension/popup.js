@@ -17,6 +17,8 @@ const picker = bookPicker({
   choose: async book => {
     try { render(await rpc({ type: 'Use', book })); tell(''); } catch (error) { tell(error); }
   },
+  // A refused name is reported in the row being typed in, so the picker keeps it.
+  rename: async (book, name) => { render(await rpc({ type: 'RenameBook', book, name })); tell(''); },
 });
 function render(next = state) {
   if (!currentSnapshot(next, state)) return;
