@@ -25,8 +25,16 @@ const etherscanAdapter = site({
   id: 'Etherscan',
   matches: url => Boolean(explorerNetwork(url.hostname)),
   watch: ['data-highlight-value'],
+  // Address badges lose their decoration only while a custom label is visible.
   // Search suggestions keep their native link and a compact trailing action.
-  styles: `.search-panel-container li:has(> a[data-0xlabel-address] + [data-0xlabel-edit]) {
+  styles: `.badge:is([data-0xlabel-label], :has([data-0xlabel-label])) {
+      background: transparent !important;
+      border: 0 !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      padding: 0 !important;
+    }
+    .search-panel-container li:has(> a[data-0xlabel-address] + [data-0xlabel-edit]) {
       display: flex;
       align-items: center;
     }

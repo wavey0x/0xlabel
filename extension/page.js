@@ -66,7 +66,6 @@ export async function createPageController({
     const target = targets.get(element);
     if (!target) return;
     element.removeAttribute(LABEL);
-    element.style.removeProperty('--0xlabel-font-size');
     element.removeAttribute(ADDRESS);
     if (target.description && element.getAttribute('aria-description') === target.description) element.removeAttribute('aria-description');
     targets.delete(element);
@@ -85,8 +84,7 @@ export async function createPageController({
     const name = !hiddenLabels.has(recordKey(target.address, target.network)) && recordFor(target)?.labels[0];
     if (name) {
       // Preserve native nodes and copy sources; CSS substitutes only their
-      // visible glyphs, using the site's font size captured before substitution.
-      if (!target.element.hasAttribute(LABEL)) target.element.style.setProperty('--0xlabel-font-size', win.getComputedStyle(target.element).fontSize);
+      // visible glyphs with the shared custom-label typography.
       if (target.element.getAttribute(LABEL) !== name) target.element.setAttribute(LABEL, name);
       const description = `0xlabel: ${name}`;
       if (!target.element.hasAttribute('aria-description') || target.description === target.element.getAttribute('aria-description')) {
@@ -95,7 +93,6 @@ export async function createPageController({
       }
     } else {
       target.element.removeAttribute(LABEL);
-      target.element.style.removeProperty('--0xlabel-font-size');
       if (target.description && target.element.getAttribute('aria-description') === target.description) target.element.removeAttribute('aria-description');
       target.description = null;
     }
