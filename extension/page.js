@@ -331,6 +331,9 @@ export async function createPageController({
   // scrolls the absolute editor in the same browser frame as its address.
   listen(doc, 'scroll', event => { if (event.target !== doc) position(); }, { capture: true, passive: true });
   listen(win, 'resize', () => position(true), { passive: true });
+  // A system scheme change can repaint a website without touching its DOM, so
+  // nothing else would tell us the surface our labels sit on has moved.
+  listen(win.matchMedia('(prefers-color-scheme: dark)'), 'change', () => schedule());
   listen(win, 'popstate', () => schedule());
   listen(win, 'hashchange', () => schedule());
   listen(doc, 'visibilitychange', () => { if (!doc.hidden) { schedule(); resume(); } });
