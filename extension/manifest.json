@@ -8,14 +8,14 @@
   "optional_host_permissions": ["http://*/*", "https://*/*"],
   "background": {"service_worker": "background.js", "type": "module"},
   "options_ui": {"page": "book.html", "open_in_tab": true},
-  "icons": {"16": "icons/book-16.png", "32": "icons/book-32.png", "48": "icons/book-48.png", "128": "icons/book-128.png"},
+  "icons": {"16": "icons/mark-16.png", "32": "icons/mark-32.png", "48": "icons/mark-48.png", "128": "icons/mark-128.png"},
   "action": {
     "default_title": "0xlabel",
     "default_popup": "popup.html",
-    "default_icon": {"16": "icons/book-16.png", "24": "icons/book-24.png", "32": "icons/book-32.png", "48": "icons/book-48.png"}
+    "default_icon": {"16": "icons/mark-idle-16.png", "24": "icons/mark-idle-24.png", "32": "icons/mark-idle-32.png", "48": "icons/mark-idle-48.png"}
   },
   "web_accessible_resources": [{
-    "resources": ["page.js", "editor.js", "overlay.js", "editor.css", "icons.js", "shared.js", "adapters.js", "detect.js", "networks.js", "checksum.js", "vendor/keccak.js"],
+    "resources": ["page.js", "editor.js", "overlay.js", "editor.css", "colors.js", "colors.css", "icons.js", "shared.js", "adapters.js", "detect.js", "networks.js", "checksum.js", "vendor/keccak.js"],
     "matches": ["http://*/*", "https://*/*"]
   }]
 }

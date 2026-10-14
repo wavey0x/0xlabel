@@ -1,6 +1,6 @@
 import { findRecord, MAX_LABELS, MAX_NAME_LENGTH, normalizeLabels } from './shared.js';
 import { checksumAddress } from './checksum.js';
-import { COPY_ICON, COPIED_ICON } from './icons.js';
+import { BRAND_MARK, COPY_ICON, COPIED_ICON } from './icons.js';
 
 const element = (tag, text, attrs = {}) => {
   const node = document.createElement(tag);
@@ -11,7 +11,9 @@ const element = (tag, text, attrs = {}) => {
 
 export async function editorStyles(root) {
   const sheet = new CSSStyleSheet();
-  sheet.replaceSync(await (await fetch(new URL('./editor.css', import.meta.url))).text());
+  const styles = await Promise.all(['colors.css', 'editor.css'].map(async file =>
+    (await fetch(new URL(file, import.meta.url))).text()));
+  sheet.replaceSync(styles.join('\n'));
   root.adoptedStyleSheets = [sheet];
 }
 
@@ -29,7 +31,7 @@ export function createEditor(container, { address, scope = 'global', state, save
   let pageNotice = '';
 
   const panel = element(modal ? 'dialog' : 'section', undefined, { class: 'editor', role: 'dialog', 'aria-label': 'Edit wallet labels' });
-  panel.innerHTML = `<header><strong><span class="brand">0x</span>label</strong><span class="source"></span>${visibility ? '<div class="visibility-group"><span>This address</span><button type="button" class="switch visibility" role="switch" aria-label="Show my tags for this address" aria-checked="true"><span></span></button></div>' : '<button type="button" class="quiet close" aria-label="Close editor" title="Close">×</button>'}</header>
+  panel.innerHTML = `<header><strong class="brand" role="img" aria-label="0xlabel">${BRAND_MARK}label</strong><span class="source"></span>${visibility ? '<div class="visibility-group"><span>This address</span><button type="button" class="switch visibility" role="switch" aria-label="Show my tags for this address" aria-checked="true"><span></span></button></div>' : '<button type="button" class="quiet close" aria-label="Close editor" title="Close">×</button>'}</header>
     <div class="address-line"><code></code><button type="button" class="quiet copy" aria-label="Copy">${COPY_ICON}</button></div>
     <div class="rows"></div>
     <p class="preview"></p><p class="notice" role="status"></p><div class="conflict" hidden></div>
@@ -170,9 +172,9 @@ export function createEditor(container, { address, scope = 'global', state, save
       // Confirm the write first; a small local animation never determines
       // whether a save succeeded. Keep the button locked until it closes.
       const frames = matchMedia('(prefers-reduced-motion: reduce)').matches ? [{ opacity: 1 }, { opacity: 1 }] : [
-        { transform: 'scale(1)', boxShadow: '0 0 0 0 #4169e100' },
-        { transform: 'scale(1.06)', boxShadow: '0 0 0 4px #4169e133', offset: .35 },
-        { transform: 'scale(1)', boxShadow: '0 0 0 0 #4169e100' },
+        { transform: 'scale(1)', boxShadow: '0 0 0 0 transparent' },
+        { transform: 'scale(1.06)', boxShadow: '0 0 0 4px var(--0xlabel-accent-pulse)', offset: .35 },
+        { transform: 'scale(1)', boxShadow: '0 0 0 0 transparent' },
       ];
       await get('.save').animate(frames, { duration: 300, easing: 'ease-out' }).finished.catch(() => {});
       finish();

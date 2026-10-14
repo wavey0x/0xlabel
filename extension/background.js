@@ -1,3 +1,4 @@
+import { COLORS } from './colors.js';
 import { createClient } from './client.js';
 import { hostPermission } from './shared.js';
 
@@ -15,11 +16,13 @@ const scriptId = origin => 'site-' + [...origin].map(char => char.charCodeAt(0).
 
 async function register(origin) {
   const id = scriptId(origin);
-  if ((await chrome.scripting.getRegisteredContentScripts({ ids: [id] })).length) return;
-  await chrome.scripting.registerContentScripts([{
-    id, matches: [hostPermission(origin)], js: ['content.js'], css: ['page.css'],
+  const script = {
+    id, matches: [hostPermission(origin)], js: ['content.js'], css: ['colors.css', 'page.css'],
     runAt: 'document_idle', allFrames: false, persistAcrossSessions: true,
-  }]);
+  };
+  if ((await chrome.scripting.getRegisteredContentScripts({ ids: [id] })).length) {
+    await chrome.scripting.updateContentScripts([script]);
+  } else await chrome.scripting.registerContentScripts([script]);
 }
 
 async function initialize() {
@@ -47,11 +50,11 @@ async function updateAction(tabId, value) {
   if (value) health.set(tabId, value); else health.delete(tabId);
   const active = value?.status === 'ready';
   const paused = value?.status === 'stale';
-  const icon = active ? 'book-active' : 'book';
+  const icon = active ? 'mark' : 'mark-idle';
   await Promise.all([
     chrome.action.setIcon({ tabId, path: Object.fromEntries([16, 24, 32, 48].map(size => [size, `icons/${icon}-${size}.png`])) }),
     chrome.action.setTitle({ tabId, title: active ? '0xlabel · Active on this page' : paused ? '0xlabel · Labeling paused' : '0xlabel' }),
-    chrome.action.setBadgeBackgroundColor({ tabId, color: '#c88315' }),
+    chrome.action.setBadgeBackgroundColor({ tabId, color: COLORS.warningBadge }),
     chrome.action.setBadgeText({ tabId, text: paused ? '!' : '' }),
   ]);
 }
@@ -123,7 +126,7 @@ async function handle(message, sender) {
     for (const other of await chrome.tabs.query({})) {
       if (other.url && /^https?:/.test(other.url) && siteOrigin(other.url) === origin) {
         if (message.enabled) {
-          await chrome.scripting.insertCSS({ target: { tabId: other.id }, files: ['page.css'] });
+          await chrome.scripting.insertCSS({ target: { tabId: other.id }, files: ['colors.css', 'page.css'] });
           await chrome.scripting.executeScript({ target: { tabId: other.id }, files: ['content.js'] });
         } else {
           await send(other.id, { type: 'Disable' }); await updateAction(other.id, null);

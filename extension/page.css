@@ -16,7 +16,7 @@ a[data-0xlabel-label], span[data-0xlabel-label], code[data-0xlabel-label] {
   text-overflow: ellipsis;
   white-space: nowrap;
   vertical-align: bottom;
-  color: #4169e1;
+  color: var(--0xlabel-accent);
   font-weight: 700;
   pointer-events: none;
 }
