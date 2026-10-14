@@ -3,10 +3,10 @@
 const white = '#ffffff';
 const black = '#000000';
 const tint = (color, percent) => `color-mix(in srgb, ${color} ${percent}%, transparent)`;
-const accent = '#4169e1';
-// Royal blue reads at 3.9:1 on a dark surface, short of the 4.5:1 a label
-// needs. Lightened for dark websites only; the brand tints stay as they are.
-const accentOnDark = '#8aa6f0';
+const accent = '#5b21b6';
+// Deep purple reads at 2.1:1 on a dark surface, far short of the 4.5:1 a
+// label needs. Lightened for dark websites only; the tints stay as they are.
+const accentOnDark = '#a78bfa';
 
 export const COLORS = Object.freeze({
   accent,

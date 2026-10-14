@@ -6,4 +6,4 @@ Keep mandatory package and Chrome manifest versions fixed at `1` during developm
 
 Keep tests focused on address identity, data integrity, credential boundaries, and native website behavior. Avoid pixel positioning, animation timing, screenshots, and rendering-mechanic assertions in the regression suite; screenshot generation is a separate demo task.
 
-Use heavy minimalism: bold system type, compact aligned controls, quiet light/dark surfaces, and restrained royal-blue accents.
+Use heavy minimalism: bold system type, compact aligned controls, quiet light/dark surfaces, and restrained deep-purple accents.

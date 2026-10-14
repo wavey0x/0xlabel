@@ -36,7 +36,7 @@ uv run 0xlabel
 
 1. Open `brave://extensions` or `chrome://extensions`, enable **Developer mode**, and **Load unpacked** → this project's `extension` folder.
 2. Open 0xlabel. Choose **Connect a book** → **Add connection**, paste the helper's JSON, then connect.
-3. Enable the website in the popup. Click a blue tag beside an address to name it.
+3. Enable the website in the popup. Click a purple tag beside an address to name it.
 
 ![The compact translucent editor adding a tag directly to a transfer list](docs/images/editor.png)
 
