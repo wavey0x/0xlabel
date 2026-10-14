@@ -263,8 +263,12 @@ test('failed and conflicting saves retain the draft; replacing a newer record re
   expect(await page.evaluate(() => window.saves.at(-1))).toMatchObject({ address, labels: ['My edit', 'Operations'], version: 'newer' });
 });
 
-test('explorer identities come from complete sources, including named fee recipients and transaction-table spans', async ({ page }) => {
-  await start(page, { site: 'https://etherscan.io/', html: `<header>Explorer</header><main>
+test('explorer identities come from complete sources, including search suggestions, named fee recipients and transaction-table spans', async ({ page }) => {
+  await start(page, { site: 'https://etherscan.io/', html: `<header>Explorer
+    <div class="search-panel-container"><ul><li role="option" data-address="${address}">
+      <span style="display:none">${address}</span>
+      <a id="recent" class="nav-link" href="/address/${address}" style="display:block;width:100%"><h6 style="display:flex;margin:0"><i></i><div class="text-truncate">${address}</div></h6></a>
+    </li></ul></div></header><main>
     <a href="/address/${address}"><span id="ens" class="hash-tag">name.eth</span></a>
     <a id="fragment" href="/address/${address}">0xabab…abab</a>
     <a id="fee" data-highlight-value href="/address/${address}"><span title="${address}">Titan Builder</span></a>
@@ -272,9 +276,19 @@ test('explorer identities come from complete sources, including named fee recipi
     <span id="unknown" class="hash-tag">0xabab…abab</span>
     <a id="unresolved" class="hash-tag" href="/address/name.eth">name.eth</a>
     <nav><a class="hash-tag" href="/address/${address}">View address</a></nav>
-    </main>` });
-  for (const id of ['ens','fragment','fee','table']) await expect(page.locator('#'+id)).toHaveAttribute('data-0xlabel-address', address);
-  await expect(page.locator('[data-0xlabel-address]')).toHaveCount(4);
+    </main><script>
+    document.querySelector('#recent').onmousedown=event=>{event.preventDefault();window.nativeSearchSelection=event.currentTarget.getAttribute('href');};
+    document.querySelector('#recent').onclick=event=>event.preventDefault();
+    </script>` });
+  for (const id of ['recent','ens','fragment','fee','table']) await expect(page.locator('#'+id)).toHaveAttribute('data-0xlabel-address', address);
+  await expect(page.locator('[data-0xlabel-address]')).toHaveCount(5);
+  await page.locator('#recent + [data-0xlabel-edit]').getByRole('button').click();
+  await expect(shownAddress(page)).toHaveText(checksumAddress(address));
+  expect(await page.evaluate(() => window.nativeSearchSelection)).toBeUndefined();
+  await input(page).press('Escape');
+  await page.locator('#recent').click();
+  expect(await page.evaluate(() => window.nativeSearchSelection)).toBe('/address/' + address);
+  await expect(page.locator('#recent')).toHaveText(address);
   await page.locator('#fee span').evaluate(element => { element.dataset.bsOriginalTitle=element.title; element.removeAttribute('title'); });
   await page.locator('#fee + [data-0xlabel-edit]').getByRole('button').click();
   await expect(shownAddress(page)).toHaveText(checksumAddress(address));

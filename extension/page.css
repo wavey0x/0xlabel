@@ -20,3 +20,12 @@ a[data-0xlabel-label], span[data-0xlabel-label], code[data-0xlabel-label] {
   font-weight: 700;
   pointer-events: none;
 }
+/* Search suggestions keep their native link and a compact trailing action. */
+.search-panel-container li:has(> a[data-0xlabel-address] + [data-0xlabel-edit]) {
+  display: flex;
+  align-items: center;
+}
+.search-panel-container li > a[data-0xlabel-address] {
+  flex: 1;
+  min-width: 0;
+}

@@ -50,7 +50,7 @@ export async function createPageController({
     const slot = doc.createElement('span');
     slot.setAttribute('data-0xlabel-ui', '');
     slot.setAttribute('data-0xlabel-edit', '');
-    slot.style.cssText = 'display:inline-flex;vertical-align:middle;width:20px;height:20px;margin-inline-start:3px;';
+    slot.style.cssText = 'display:inline-flex;vertical-align:middle;flex-shrink:0;width:20px;height:20px;margin-inline-start:3px;';
     const root = slot.attachShadow({ mode: 'open' });
     root.adoptedStyleSheets = shadow.adoptedStyleSheets;
     const button = doc.createElement('button');
