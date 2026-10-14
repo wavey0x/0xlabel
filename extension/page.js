@@ -1,12 +1,11 @@
 import { adapters } from './adapters.js';
-import { indexBook, parseAddress, query, recordKey, normalizeScope, UNSAFE_HOST } from './shared.js';
+import { indexBook, parseAddress, query, recordKey, normalizeScope, UI, UI_ATTRIBUTE, UNSAFE_HOST } from './shared.js';
 import { createEditor } from './editor.js';
 import { createOverlay } from './overlay.js';
 import { LABEL_ICON } from './icons.js';
 
 const ADDRESS = 'data-0xlabel-address';
 const LABEL = 'data-0xlabel-label';
-const UI = '[data-0xlabel-ui]';
 
 export async function createPageController({
   url = () => new URL(location.href), state: initialState,
@@ -42,7 +41,7 @@ export async function createPageController({
 
   function addEditButton(target) {
     const slot = doc.createElement('span');
-    slot.setAttribute('data-0xlabel-ui', '');
+    slot.setAttribute(UI_ATTRIBUTE, '');
     slot.setAttribute('data-0xlabel-edit', '');
     slot.style.cssText = 'display:inline-flex;vertical-align:middle;flex-shrink:0;width:20px;height:20px;margin-inline-start:3px;';
     const root = slot.attachShadow({ mode: 'open' });

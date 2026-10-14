@@ -1,4 +1,4 @@
-import { parseAddress, query } from './shared.js';
+import { parseAddress, query, UI } from './shared.js';
 import { explorerNetwork, safeNetwork, scopeOf } from './networks.js';
 import { addressLink, addressText, collect } from './detect.js';
 
@@ -120,7 +120,7 @@ const genericAdapter = site({
     // shows the address is not our business; that it shows nothing else is.
     candidates: addressText,
     skip: element => element.matches('html,body,head') ||
-      [...element.children].some(child => !child.matches('[data-0xlabel-ui]')),
+      [...element.children].some(child => !child.matches(UI)),
   },
 });
 

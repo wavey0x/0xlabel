@@ -1,10 +1,15 @@
 export const MAX_LABELS = 32;
 export const MAX_NAME_LENGTH = 80;
 
+// Marks every element 0xlabel adds to a page. Nothing carrying it is website
+// content, so nothing carrying it is ever read as a wallet display.
+export const UI_ATTRIBUTE = 'data-0xlabel-ui';
+export const UI = `[${UI_ATTRIBUTE}]`;
+
 // Elements that are editable, interactive, or not a display surface. The
 // detection kernel and the controller's final check share this one list.
 export const UNSAFE_HOST = 'input,textarea,select,script,style,button,[role="button"],.sr-only,' +
-  '[aria-hidden="true"],[contenteditable]:not([contenteditable="false"]),[data-0xlabel-ui]';
+  `[aria-hidden="true"],[contenteditable]:not([contenteditable="false"]),${UI}`;
 
 export function parseAddress(value) {
   return typeof value === 'string' && /^0x[0-9a-f]{40}$/i.test(value) ? value.toLowerCase() : null;

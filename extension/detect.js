@@ -1,9 +1,9 @@
-import { parseAddress, query, UNSAFE_HOST } from './shared.js';
+import { parseAddress, query, UI, UNSAFE_HOST } from './shared.js';
 import { explorerNetwork, scopeOf } from './networks.js';
 
 // Evidence that names two different wallets. The element is disqualified;
 // the rest of the page is unaffected.
-export const AMBIGUOUS = 'contradictory-address-evidence';
+const AMBIGUOUS = 'contradictory-address-evidence';
 
 // Block explorers and wallet apps address a wallet the same way.
 const ADDRESS_PATH = /^\/address\/([^/]+)\/?$/;
@@ -27,7 +27,7 @@ export function addressText(root) {
       joined.add(parent);
       // Frameworks can split one display into adjacent text nodes. Read a
       // leaf's combined text once, without aggregating whole container trees.
-      if ([...parent.children].every(child => child.matches('[data-0xlabel-ui]')) &&
+      if ([...parent.children].every(child => child.matches(UI)) &&
           FULL_ADDRESS.test(parent.textContent)) found.add(parent);
     }
   }

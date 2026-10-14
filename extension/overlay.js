@@ -1,10 +1,11 @@
 import { editorStyles } from './editor.js';
+import { UI_ATTRIBUTE } from './shared.js';
 
 // Everything 0xlabel draws on a website, and where it sits. One UI root outside
 // website-owned component trees; shadow DOM isolates our styles from the site's.
 export async function createOverlay(doc, win) {
   const host = doc.createElement('div');
-  host.setAttribute('data-0xlabel-ui', '');
+  host.setAttribute(UI_ATTRIBUTE, '');
   host.style.cssText = 'position:absolute;left:0;top:0;z-index:2147483647;pointer-events:none;';
   const shadow = host.attachShadow({ mode: 'open' });
   await editorStyles(shadow);
@@ -15,7 +16,7 @@ export async function createOverlay(doc, win) {
   // Rules an adapter needs applied to the website's own elements, which the
   // shadow root cannot reach. Only the active adapter's styles are present.
   const siteStyles = doc.createElement('style');
-  siteStyles.setAttribute('data-0xlabel-ui', '');
+  siteStyles.setAttribute(UI_ATTRIBUTE, '');
   (doc.head || doc.documentElement).append(siteStyles);
   let anchor = null;
 
