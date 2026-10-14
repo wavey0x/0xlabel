@@ -34,7 +34,7 @@ export function normalizeAPI(value) {
 export function parseConnectLink(value) {
   let link;
   try { link = new URL(String(value).trim()); }
-  catch { throw new Error('That does not look like a link. Paste the whole line your server printed.'); }
+  catch { throw new Error('Invalid server link.'); }
   const key = new URLSearchParams(link.hash.slice(1)).get('key');
   if (!key) throw new Error('That link has no access key. Copy the whole line your server printed.');
   return { url: normalizeAPI(link.origin + link.pathname), token: key };

@@ -21,6 +21,7 @@ h2 { margin: 0; font-size: 16px; font-weight: 800; letter-spacing: -.3px; }
 .muted { color: var(--0xlabel-muted); font-size: 11px; }
 .eyebrow { display: block; color: var(--0xlabel-muted); font-size: 10px; font-weight: 600; margin-bottom: 4px; }
 .message { margin: 8px 0 0; font-size: 11px; color: var(--0xlabel-warning); overflow-wrap: anywhere; }
+.message[role="alert"] { color: var(--0xlabel-error); }
 .message:empty,[hidden] { display: none !important; }
 label { display: block; margin-bottom: 4px; font-size: 11px; font-weight: 650; }
 input,textarea { width: 100%; padding: 9px 10px; color: var(--0xlabel-ink); background: var(--0xlabel-soft); border: 1px solid var(--0xlabel-line); border-radius: 7px; }

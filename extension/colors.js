@@ -15,6 +15,7 @@ export const COLORS = Object.freeze({
   accent,
   onAccent: white,
   iconIdle: '#7e8794',
+  error: '#b91c1c',
   warning: '#b5760d',
   warningBadge: '#c88315',
   switchOff: '#777777',
@@ -40,6 +41,7 @@ export const THEMES = Object.freeze({
   dark: {
     accent: accentOnDark,
     onAccent: inkOnAccentDark,
+    error: '#f87171',
     canvas: '#101113', panel: '#18191c', ink: '#fafafa', muted: '#aaaaaa',
     glass: tint('#16171a', 60), soft: tint(white, 3.1), line: tint(white, 7.8),
     shadow: `0 10px 28px ${tint(black, 31.4)}, 0 2px 8px ${tint(black, 12.5)}`,
