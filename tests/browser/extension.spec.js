@@ -34,6 +34,15 @@ test('installed extension: authenticated HTTP/HTTPS books, source isolation, ala
     const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker');
     const id = worker.url().split('/')[2];
     const website = context.pages()[0]; await website.goto('http://127.0.0.1:8719/tests/fixtures/generic.html');
+    await website.evaluate(() => {
+      for (const [id, src] of [['embedded', '/tests/fixtures/frame.html'], ['external', 'http://localhost:8719/tests/fixtures/frame.html']]) {
+        const frame = document.createElement('iframe'); frame.id = id; frame.src = src; document.body.prepend(frame);
+      }
+    });
+    const embedded = website.frameLocator('#embedded');
+    const external = website.frameLocator('#external');
+    await expect(embedded.locator('#wallet')).toHaveText(address);
+    await expect(external.locator('#wallet')).toHaveText(address);
     const popup = await context.newPage(); await website.bringToFront();
     await popup.setViewportSize({width:380,height:600});
     await popup.goto(`chrome-extension://${id}/popup.html`);
@@ -64,18 +73,41 @@ test('installed extension: authenticated HTTP/HTTPS books, source isolation, ala
     await popup.locator('#site-toggle').click();
     await expect(siteSwitch).toBeChecked();
     await expect(website.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Local treasury');
+    await expect(embedded.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Local treasury');
+    await expect(external.locator('[data-0xlabel-address],[data-0xlabel-ui]')).toHaveCount(0);
     await expect(website.locator('[data-0xlabel-address]')).toHaveCount(500);
     const websiteTabId = (await popup.evaluate(() => chrome.tabs.query({url:'http://127.0.0.1:8719/*'})))[0].id;
-    const [content] = await worker.evaluate(async tabId => chrome.scripting.executeScript({ target:{tabId}, func:async () => {
+    const contents = await worker.evaluate(async tabId => chrome.scripting.executeScript({ target:{tabId, allFrames: true}, func:async () => {
       const state = await chrome.runtime.sendMessage({type:'State'});
       let storage;
       try { await chrome.storage.local.get(null); storage='accessible'; } catch { storage='restricted'; }
       const config = await chrome.runtime.sendMessage({type:'Select',url:'https://arbitrary.example'});
       return { state, storage, config };
     } }), websiteTabId);
-    expect(JSON.stringify(content.result.state)).not.toContain('test-only-token');
-    expect(content.result.storage).toBe('restricted');
-    expect(content.result.config.ok).toBe(false);
+    expect(contents).toHaveLength(2);
+    for (const content of contents) {
+      expect(content.result.state.result.enabled).toBe(true);
+      expect(JSON.stringify(content.result.state)).not.toContain('test-only-token');
+      expect(content.result.storage).toBe('restricted');
+      expect(content.result.config.ok).toBe(false);
+    }
+    // An enabled origin embedded by a different, disabled origin cannot read
+    // the book or start an editor, even when both hosts have API permissions.
+    const foreign = await context.newPage();
+    await foreign.goto(local + '/frame-parent');
+    await foreign.setContent('<iframe src="http://127.0.0.1:8719/tests/fixtures/frame.html"></iframe>');
+    await expect(foreign.frameLocator('iframe').locator('#wallet')).toHaveText(address);
+    const foreignTabId = (await popup.evaluate(url => chrome.tabs.query({ url }), local + '/frame-parent'))[0].id;
+    const rejected = await worker.evaluate(tabId => chrome.scripting.executeScript({ target: { tabId, allFrames: true }, func: async () => {
+      return { state: await chrome.runtime.sendMessage({ type: 'State' }), save: await chrome.runtime.sendMessage({ type: 'Save', draft: {} }) };
+    } }), foreignTabId);
+    expect(rejected).toHaveLength(2);
+    for (const frame of rejected) {
+      expect(frame.result.state.result).toEqual({ enabled: false });
+      expect(frame.result.save.ok).toBe(false);
+    }
+    await expect(foreign.frameLocator('iframe').locator('[data-0xlabel-address],[data-0xlabel-ui]')).toHaveCount(0);
+    await foreign.close(); await website.bringToFront();
 
     await addConnection({url:remote,token:'wrong-token',name:'Remote'});
     await popup.locator('#connect').click();
@@ -88,6 +120,7 @@ test('installed extension: authenticated HTTP/HTTPS books, source isolation, ala
     await expect(popup.locator('#settings')).toBeHidden();
     await expect(popup.locator('#connection')).toHaveText('Remote');
     await expect(website.locator('#wallet')).not.toHaveAttribute('data-0xlabel-label');
+    await expect(embedded.locator('#wallet')).not.toHaveAttribute('data-0xlabel-label');
     expect((await (await api.get(local+'/labels')).json()).records).toEqual([localRecord]);
     const caches = await worker.evaluate(async ({local,remote}) => {
       const result = await chrome.storage.local.get([`connection:${local}`, `connection:${remote}`]);
@@ -99,6 +132,7 @@ test('installed extension: authenticated HTTP/HTTPS books, source isolation, ala
     // Exercise the real alarm listener with an accelerated one-shot test alarm.
     await worker.evaluate(() => chrome.alarms.create('sync', { when:Date.now()+100 }));
     await expect(website.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Remote vault', { timeout:10000 });
+    await expect(embedded.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Remote vault');
     await api.put(`${remote}/labels/global/${address}`, { data:{labels:[],version:remoteRecord.version} });
     await worker.evaluate(() => chrome.alarms.create('sync', { when:Date.now()+100 }));
     await expect(website.locator('#wallet')).not.toHaveAttribute('data-0xlabel-label', /./, { timeout:10000 });
@@ -109,6 +143,17 @@ test('installed extension: authenticated HTTP/HTTPS books, source isolation, ala
     await website.getByRole('textbox',{name:'Label 1'}).fill('Local edited');
     await website.getByRole('textbox',{name:'Label 1'}).press('Enter');
     await expect(website.locator('#wallet')).toHaveAttribute('data-0xlabel-label','Local edited');
+    await expect(embedded.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Local edited');
+    await embedded.getByRole('button', { name: 'Edit wallet labels', exact: true }).click();
+    await embedded.getByRole('textbox', { name: 'Label 1' }).fill('Edited in embedded view');
+    await embedded.getByRole('textbox', { name: 'Label 1' }).press('Enter');
+    await expect(website.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Edited in embedded view');
+    await embedded.getByRole('button', { name: 'Edit wallet labels', exact: true }).click();
+    await embedded.getByRole('textbox', { name: 'Label 1' }).fill('Local edited');
+    await embedded.getByRole('textbox', { name: 'Label 1' }).press('Enter');
+    await expect(website.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Local edited');
+    await embedded.locator('#copy').click();
+    expect(await website.evaluate(() => navigator.clipboard.readText())).toBe(address);
     expect((await (await api.get(remote+'/labels')).json()).records).toEqual([]);
     await website.locator('#copy').click();
     expect(await website.evaluate(async address=>(await navigator.clipboard.readText())===address,address)).toBe(true);
@@ -116,6 +161,10 @@ test('installed extension: authenticated HTTP/HTTPS books, source isolation, ala
     const another = await context.newPage();
     await another.goto('http://127.0.0.1:8719/tests/fixtures/generic.html');
     await expect(another.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Local edited');
+    await another.evaluate(() => {
+      const frame = document.createElement('iframe'); frame.id = 'late-frame'; frame.src = '/tests/fixtures/frame.html'; document.body.append(frame);
+    });
+    await expect(another.frameLocator('#late-frame').locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Local edited');
     const savedBeforeReveal = (await (await api.get(local + '/labels')).json()).records;
     await website.getByRole('button', { name: 'Edit wallet labels', exact: true }).first().click();
     const addressSwitch = website.getByRole('switch', { name: 'Show my tags for this address', exact: true });
@@ -128,11 +177,17 @@ test('installed extension: authenticated HTTP/HTTPS books, source isolation, ala
     expect((await (await api.get(local + '/labels')).json()).records).toEqual(savedBeforeReveal);
     await website.reload();
     await expect(website.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Local edited');
+    await website.evaluate(() => {
+      const frame = document.createElement('iframe'); frame.id = 'embedded'; frame.src = '/tests/fixtures/frame.html'; document.body.prepend(frame);
+    });
+    await expect(embedded.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Local edited');
     await popup.locator('#site-toggle').click();
     await expect(siteSwitch).not.toBeChecked();
     await expect(popup.locator('#site-view')).toHaveText('Website originals');
     await expect(website.locator('[data-0xlabel-address],[data-0xlabel-label],[data-0xlabel-ui]')).toHaveCount(0);
     await expect(another.locator('[data-0xlabel-address],[data-0xlabel-label],[data-0xlabel-ui]')).toHaveCount(0);
+    await expect(embedded.locator('[data-0xlabel-address],[data-0xlabel-label],[data-0xlabel-ui]')).toHaveCount(0);
+    await expect(another.frameLocator('#late-frame').locator('[data-0xlabel-address],[data-0xlabel-label],[data-0xlabel-ui]')).toHaveCount(0);
     await expect(website.locator('#wallet')).toHaveText(address);
     await website.reload();
     await expect(website.locator('[data-0xlabel-address]')).toHaveCount(0);

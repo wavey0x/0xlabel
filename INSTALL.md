@@ -74,7 +74,7 @@ uv run 0xlabel --port 8713 --data-dir /path/to/book
 
 This is an unpacked development extension. After editing or pulling its code, reload 0xlabel on the extensions page and refresh enabled websites. Restart the helper when its Python code changes. Address-book sync is independent of code reloads.
 
-Displayed labels are part of the website's DOM and readable by that website. Credentials remain in trusted extension storage. Etherscan-family explorers and Safe have dedicated adapters; other enabled sites use full-address detection. Inputs, signing controls, unresolved abbreviations, and ambiguous addresses are skipped. An inconsistent site integration pauses labeling and offers Retry in the popup.
+Displayed labels are part of the website's DOM and readable by that website. Credentials remain in trusted extension storage. Etherscan-family explorers and Safe have dedicated adapters; other enabled sites use full-address detection. Embedded views on the enabled website's own origin are included, such as Etherscan's token-transfer tabs; frames from other origins remain untouched. Inputs, signing controls, unresolved abbreviations, and ambiguous addresses are skipped. An inconsistent site integration pauses labeling and offers Retry in the popup.
 
 ## Development checks
 

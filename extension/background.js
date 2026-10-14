@@ -18,7 +18,7 @@ async function register(origin) {
   const id = scriptId(origin);
   const script = {
     id, matches: [hostPermission(origin)], js: ['content.js'], css: ['colors.css', 'page.css'],
-    runAt: 'document_idle', allFrames: false, persistAcrossSessions: true,
+    runAt: 'document_idle', allFrames: true, persistAcrossSessions: true,
   };
   if ((await chrome.scripting.getRegisteredContentScripts({ ids: [id] })).length) {
     await chrome.scripting.updateContentScripts([script]);
@@ -43,8 +43,8 @@ async function initialize() {
   client.refresh().catch(() => {});
 }
 
-async function send(tabId, message) {
-  try { return await chrome.tabs.sendMessage(tabId, message, { frameId: 0 }); } catch { return null; }
+async function send(tabId, message, options = { frameId: 0 }) {
+  try { return await chrome.tabs.sendMessage(tabId, message, options); } catch { return null; }
 }
 async function updateAction(tabId, value) {
   if (value) health.set(tabId, value); else health.delete(tabId);
@@ -72,10 +72,17 @@ async function refreshAction(tabId) {
 }
 function broadcast(state) {
   chrome.runtime.sendMessage({ type: 'Updated', state }).catch(() => {});
-  chrome.tabs.query({}).then(tabs => Promise.allSettled(tabs.map(tab => send(tab.id, { type: 'Updated', state }))));
+  chrome.tabs.query({}).then(tabs => Promise.allSettled(tabs.map(tab => send(tab.id, { type: 'Updated', state }, {}))));
 }
-function authorizedPage(sender) {
-  try { return sender.id === chrome.runtime.id && sender.tab && sender.frameId === 0 && sites[siteOrigin(sender.url)]; }
+async function authorizedPage(sender) {
+  try {
+    const origin = siteOrigin(sender.url);
+    if (sender.id !== chrome.runtime.id || !sender.tab || !sites[origin] || sender.origin !== origin) return false;
+    // A website's embedded views share its permission. An enabled website
+    // embedded by another origin cannot receive the book or submit edits.
+    const tab = await chrome.tabs.get(sender.tab.id);
+    return siteOrigin(tab.url) === origin;
+  }
   catch { return false; }
 }
 function trustedView(sender) {
@@ -85,7 +92,7 @@ function trustedView(sender) {
 async function handle(message, sender) {
   await ready;
   const view = trustedView(sender);
-  const page = authorizedPage(sender);
+  const page = await authorizedPage(sender);
   if (message.type === 'State' && sender.id === chrome.runtime.id) {
     if (!view && !page) return { enabled: false };
     const tabId = view ? message.tabId : sender.tab.id;
@@ -96,6 +103,9 @@ async function handle(message, sender) {
   if (message.type === 'Save') return client.save(message.draft);
   if (message.type === 'Resume') { client.refresh().catch(() => {}); return {}; }
   if (message.type === 'Health' && page) {
+    // The toolbar describes the outer page. Embedded views cannot replace its
+    // adapter status (including unrelated contract and advertising frames).
+    if (sender.frameId !== 0) return {};
     const value = { adapter: String(message.adapter).slice(0, 40), status: message.status, origin: siteOrigin(sender.url) };
     const tab = await chrome.tabs.get(sender.tab.id);
     if (!tab.url || siteOrigin(tab.url) !== value.origin) return {};
@@ -126,16 +136,20 @@ async function handle(message, sender) {
     for (const other of await chrome.tabs.query({})) {
       if (other.url && /^https?:/.test(other.url) && siteOrigin(other.url) === origin) {
         if (message.enabled) {
-          await chrome.scripting.insertCSS({ target: { tabId: other.id }, files: ['colors.css', 'page.css'] });
-          await chrome.scripting.executeScript({ target: { tabId: other.id }, files: ['content.js'] });
+          const target = { tabId: other.id, allFrames: true };
+          await chrome.scripting.insertCSS({ target, files: ['colors.css', 'page.css'] });
+          await chrome.scripting.executeScript({ target, files: ['content.js'] });
         } else {
-          await send(other.id, { type: 'Disable' }); await updateAction(other.id, null);
+          await send(other.id, { type: 'Disable' }, {}); await updateAction(other.id, null);
         }
       }
     }
     return { sites };
   }
-  if (message.type === 'Retry') return send(message.tabId, { type: 'Retry' });
+  if (message.type === 'Retry') {
+    await send(message.tabId, { type: 'Retry' }, {});
+    return send(message.tabId, { type: 'Status' });
+  }
   throw new Error('Unknown extension action.');
 }
 
@@ -147,7 +161,7 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
 });
 chrome.alarms.onAlarm.addListener(alarm => { if (alarm.name === 'sync') ready.then(() => client.refresh()).catch(() => {}); });
 chrome.contextMenus.onClicked.addListener((info, tab) => {
-  ready.then(() => { if (tab?.id && sites[siteOrigin(tab.url)]) return send(tab.id, { type: 'OpenEditor', selection: info.selectionText, link: info.linkUrl }); }).catch(() => {});
+  ready.then(() => { if (tab?.id && sites[siteOrigin(tab.url)]) return send(tab.id, { type: 'OpenEditor', selection: info.selectionText, link: info.linkUrl }, { frameId: info.frameId || 0 }); }).catch(() => {});
 });
 chrome.tabs.onRemoved.addListener(tabId => health.delete(tabId));
 chrome.tabs.onUpdated.addListener((tabId, change) => {
@@ -163,7 +177,7 @@ chrome.permissions.onRemoved.addListener(() => {
     }
     await chrome.storage.local.set({ sites });
     for (const tab of await chrome.tabs.query({})) {
-      await send(tab.id, { type: 'Recheck' });
+      await send(tab.id, { type: 'Recheck' }, {});
       await refreshAction(tab.id);
     }
   }).catch(() => {});

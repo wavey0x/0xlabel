@@ -34,6 +34,10 @@ const etherscanAdapter = site({
       box-shadow: none !important;
       padding: 0 !important;
     }
+    .table-responsive td > a.d-flex:has([data-0xlabel-address]) {
+      display: inline-flex !important;
+      vertical-align: middle;
+    }
     .search-panel-container li:has(> a[data-0xlabel-address] + [data-0xlabel-edit]) {
       display: flex;
       align-items: center;
@@ -45,6 +49,13 @@ const etherscanAdapter = site({
   probe({ document, url }) {
     if (document.querySelector('#challenge-running,#challenge-stage,[name="cf-turnstile-response"]') || /^(Just a moment|Attention Required)/i.test(document.title)) return { status: 'waiting' };
     if (document.readyState === 'loading') return { status: 'waiting' };
+    // Address-page transfer tabs load standalone tables without the outer
+    // explorer's header or main element. Their rows supply the same identities.
+    if (/^\/address-(?:tokenpage|nft-transfers)$/.test(url.pathname)) {
+      return document.querySelector('.table-responsive table tbody')
+        ? { status: 'ready', network: scopeOf(explorerNetwork(url.hostname)) }
+        : { status: 'stale', reason: 'transfer-table-missing' };
+    }
     if (!document.querySelector('main') || !document.querySelector('header,nav')) return { status: 'stale', reason: 'explorer-landmarks-missing' };
     if (/^\/address\//.test(url.pathname) && !document.querySelector('#mainaddress')) return { status: 'stale', reason: 'main-address-missing' };
     return { status: 'ready', network: scopeOf(explorerNetwork(url.hostname)) };

@@ -88,6 +88,39 @@ for (const site of sites) {
   });
 }
 
+test.describe('Etherscan embedded transfers', () => {
+  const site = `https://etherscan.io/address-tokenpage?m=dark&a=${address}`;
+  const table = `<div class="table-responsive"><table><tbody><tr>
+    <td><a id="from" class="hash-tag" href="/address/${other}#tokentxns" target="_parent"
+      data-highlight-target="${other}" data-full-address="${other}">0xcdcd…cdcd</a></td>
+    <td><span id="to" class="hash-tag" data-highlight-target="${address}">BuilderNet</span></td>
+  </tr></tbody></table></div>`;
+
+  test('labels the headerless transfer table from canonical row identities and the explorer chain', async ({ page }) => {
+    await start(page, { site, html: table, records: [record,
+      { ...record, scope: 'eip155:1', labels: ['Ethereum treasury'] },
+      { ...record, address: other, labels: ['Sender'] },
+    ] });
+    expect(await reported(page)).toMatchObject({ adapter: 'Etherscan', status: 'ready', network: 'eip155:1' });
+    await expect(page.locator('#from')).toHaveAttribute('data-0xlabel-label', 'Sender');
+    await expect(page.locator('#from')).toHaveAttribute('href', `/address/${other}#tokentxns`);
+    await expect(page.locator('#from')).toHaveAttribute('target', '_parent');
+    await expect(page.locator('#from')).toHaveText('0xcdcd…cdcd');
+    await expect(page.locator('#to')).toHaveAttribute('data-0xlabel-address', address);
+    await expect(page.locator('#to')).toHaveAttribute('data-0xlabel-label', 'Ethereum treasury');
+    await expect(page.locator('#to')).toHaveText('BuilderNet');
+  });
+
+  test('a transfer URL still requires a table, and unrelated pages still require explorer landmarks', async ({ page }) => {
+    await start(page, { site, html: '<p>Unavailable</p>' });
+    await expect.poll(() => health(page)).toMatchObject({ status: 'stale' });
+    await expect(page.locator('[data-0xlabel-address]')).toHaveCount(0);
+    await start(page, { site: 'https://etherscan.io/accounts', html: table });
+    await expect.poll(() => health(page)).toMatchObject({ status: 'stale' });
+    await expect(page.locator('[data-0xlabel-address]')).toHaveCount(0);
+  });
+});
+
 test.describe('Generic address text', () => {
   test('recognizes whole addresses regardless of casing or adjacent text boundaries', async ({ page }) => {
     await start(page, { site: 'https://plain.example/wallets', html: `<main>
