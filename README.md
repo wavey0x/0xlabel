@@ -1,5 +1,5 @@
 <h1 align="center">0xlabel</h1>
-<p align="center"><strong>Your addresses. Familiar names.</strong><br>A small, self-hosted address book that brings your labels into the websites you use.</p>
+<p align="center"><strong>Your address book. Wherever you browse.</strong><br>Add tags in place. Recognize addresses at a glance. Keep your book on your own laptop or server.</p>
 <p align="center"><a href="#get-started">Get started</a> · <a href="INSTALL.md">Setup guide</a> · <a href="docs/architecture.md">How it works</a> · <a href="LICENSE">MIT</a></p>
 
 <picture>
@@ -8,10 +8,11 @@
   <img alt="A transfer list with recognizable labels such as Treasury, Payroll and Cold storage instead of abbreviated wallet addresses" src="docs/images/transfers-dark.png">
 </picture>
 
-Name a treasury, an exchange deposit, or a wallet you keep coming back to. Your labels replace the site's address or preset name, while its links and copy controls keep working.
+Build your own collection of address tags as you browse. Add a tag where you see an address, and see it again wherever that address appears. Your tags replace the site's address or preset name, while its links and copy controls keep working.
 
-- **Right there.** Edit names directly beside an address. Ranked aliases, checksummed copying, and a compact inline editor.
-- **Your laptop or your server.** Python, SQLite, and an authenticated API. Local and remote books stay separate.
+- **Easy to add.** Tag an address directly on the page with a compact inline editor.
+- **Easy to find.** See your tags in place and search your growing book from the popup.
+- **Your book, your storage.** Keep it on your laptop or connect to your own authenticated API. Local and remote books stay separate.
 - **Fast by default.** Cached lookups handle hundreds of addresses. A simple periodic pull keeps the selected book fresh.
 - **Easy to compare.** The eye reveals the website's original display. A per-site switch restores all website defaults.
 
