@@ -16,7 +16,8 @@ export function currentSnapshot(next, current) {
   return Number.isSafeInteger(next?.stateRevision) && next.stateRevision >= current.stateRevision;
 }
 export function syncText(state) {
-  if (state.bookKind === 'device') return 'Saved on this device';
+  // A book kept here is simply saved; only a book that travels has news.
+  if (state.bookKind === 'device') return '';
   if (state.error) return 'Using your saved copy';
   return state.syncedAt
     ? `Synced ${new Date(state.syncedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
@@ -96,8 +97,8 @@ export function newBookForm({ container, state, created, busy, error, visible = 
       <input id="book-name" maxlength="40" autocomplete="off" aria-label="Address book name" placeholder="Address book name">
       <fieldset class="choices">
         <legend>Where to keep it</legend>
-        <label><input type="radio" name="where" value="device" checked> On this device<small>Nothing leaves your computer.</small></label>
-        <label><input type="radio" name="where" value="server"> On a server<small>Share it between your devices.</small></label>
+        <label><input type="radio" name="where" value="device" checked><i class="kept">${DEVICE_ICON}</i><strong>On this device</strong><small>Nothing leaves your computer.</small></label>
+        <label><input type="radio" name="where" value="server"><i class="kept">${SERVER_ICON}</i><strong>On a server</strong><small>Share it between your devices.</small></label>
       </fieldset>
       <div id="server-fields">
         <label for="connect-link">Link from your server</label>

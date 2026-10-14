@@ -287,7 +287,6 @@ test('installed extension: a book that works with no setup, moving it to a serve
     await reopened.locator('#save-manage').click();
     await expect(reopened.locator('#location')).toHaveText('Local notebook');
     await reopened.locator('#book-settings').click();
-    await expect(reopened.locator('#book-where')).toContainText('127.0.0.1');
     await reopened.locator('#remove-book').click();
     await expect(reopened.locator('#remove-copy')).toContainText('keeps everything in it');
     await expect(reopened.locator('#confirm-remove')).toHaveText('Remove');

@@ -3,7 +3,7 @@ import { parseAddress, normalizeScope } from './shared.js';
 import { scopeName } from './networks.js';
 import { checksumAddress } from './checksum.js';
 import { createEditor, editorStyles } from './editor.js';
-import { COPY_ICON, confirmCopied } from './icons.js';
+import { COPY_ICON, TRASH_ICON, confirmCopied } from './icons.js';
 
 let state = emptyState;
 let busy = false;
@@ -95,14 +95,13 @@ const closeManage = () => { manage.close(); $('#remove-confirm').hidden = true; 
 dismissDialog(manage, closeManage);
 $('#close-manage').onclick = closeManage;
 $('#cancel-manage').onclick = closeManage;
+$('#remove-book').innerHTML = TRASH_ICON;
 $('#book-settings').onclick = () => {
   const current = state.books.find(item => item.id === state.activeBook);
   if (!current) return;
   $('#book-rename').value = current.name;
-  $('#book-where').textContent = current.where === 'On this device'
-    ? 'Kept on this device.' : `Kept on ${current.where}.`;
   $('#remove-book').disabled = state.books.length < 2;
-  $('#remove-book').title = state.books.length < 2 ? '0xlabel keeps at least one address book.' : '';
+  $('#remove-book').title = state.books.length < 2 ? '0xlabel keeps at least one address book.' : 'Remove this address book';
   $('#manage-error').textContent = '';
   $('#remove-confirm').hidden = true; $('#manage-form').hidden = false;
   manage.showModal(); $('#book-rename').focus(); $('#book-rename').select();

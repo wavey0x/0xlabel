@@ -17,7 +17,7 @@
       <div class="table-scroll"><table><thead><tr><th>Tags</th><th>Address</th><th><span class="sr-only">Copy address</span></th></tr></thead><tbody id="results"></tbody></table></div>
       <div id="empty"><p></p></div>
     </section>
-    <footer class="book-footer"><span id="sync" class="muted" role="status"></span><span class="muted">Your book. Your own API.</span></footer>
+    <footer class="book-footer"><span id="sync" class="muted" role="status"></span></footer>
     <p id="message" class="message" role="status"></p>
   </main>
   <dialog id="server" class="panel" aria-label="New address book"></dialog>
@@ -26,9 +26,8 @@
     <form id="manage-form" novalidate>
       <label for="book-rename">Name</label>
       <input id="book-rename" maxlength="40" autocomplete="off">
-      <p id="book-where" class="muted setup-note"></p>
       <p id="manage-error" class="message" role="alert"></p>
-      <footer class="form-actions"><button id="remove-book" type="button" class="quiet danger">Remove…</button><span class="spacer"></span><button id="cancel-manage" type="button" class="quiet">Cancel</button><button id="save-manage" type="submit" class="primary">Save</button></footer>
+      <footer class="form-actions"><button id="remove-book" type="button" class="quiet icon danger" aria-label="Remove this address book"></button><span class="spacer"></span><button id="cancel-manage" type="button" class="quiet">Cancel</button><button id="save-manage" type="submit" class="primary">Save</button></footer>
     </form>
     <div id="remove-confirm" hidden>
       <p id="remove-copy"></p>
