@@ -8,6 +8,7 @@ import { address, other, record, start, health, reported } from './controller.js
 //   canonical  a display whose identity is beyond doubt
 //   fragment   an abbreviated display with no canonical source behind it
 //   conflict   a display whose sources name two different wallets
+//   nested     a display wrapped in another candidate, where one must win
 const sites = [
   {
     id: 'Etherscan', url: 'https://etherscan.io/accounts', network: 'eip155:1',
@@ -15,6 +16,7 @@ const sites = [
     canonical: id => `<a id="${id}" href="/address/${address}">${address}</a>`,
     fragment: id => `<a id="${id}" href="/address/">0xabab…abab</a>`,
     conflict: id => `<a id="${id}" href="/address/${other}" data-full-address="${address}">${address}</a>`,
+    nested: id => `<a id="${id}" href="/address/${address}"><span class="hash-tag">Treasury wallet</span></a>`,
   },
   {
     id: 'Safe', url: `https://app.safe.global/home?safe=eth:${address}`, network: 'eip155:1',
@@ -22,6 +24,7 @@ const sites = [
     canonical: id => `<a id="${id}" href="/address/${address}">${address}</a>`,
     fragment: id => `<a id="${id}" href="/address/">0xabab…abab</a>`,
     conflict: id => `<a id="${id}" href="/address/${other}" data-address="${address}">${address}</a>`,
+    nested: id => `<a id="${id}" href="/address/${address}"><span>${address}</span></a>`,
   },
   {
     id: 'This site', url: 'https://plain.example/wallets', network: undefined,
@@ -29,6 +32,7 @@ const sites = [
     canonical: id => `<p id="${id}">${address}</p>`,
     fragment: id => `<p id="${id}">0xabab…abab</p>`,
     conflict: id => `<a id="${id}" href="/address/${other}">${address}</a>`,
+    nested: id => `<div id="${id}"><p>${address}</p></div>`,
   },
 ];
 
@@ -70,6 +74,20 @@ for (const site of sites) {
       }
       await expect(page.locator('#invalid')).toHaveAttribute('href', href);
       await expect(page.locator('#invalid')).toHaveText(address);
+    });
+
+    // The controller's invalidation depends on this: it finds an affected
+    // ancestor with a single closest(), so a nested pair would strand a label.
+    test('never annotates one element inside another, through re-rendering', async ({ page }) => {
+      await open(page, site.nested('subject'));
+      const survey = () => page.evaluate(() => {
+        const all = [...document.querySelectorAll('[data-0xlabel-address]')];
+        return { total: all.length, nested: all.filter(a => all.some(b => b !== a && b.contains(a))).length };
+      });
+      expect(await survey()).toEqual({ total: 1, nested: 0 });
+      // Re-render the row the way a live table does.
+      await page.locator('#subject').evaluate(element => element.append(document.createElement('i')));
+      await expect.poll(survey).toEqual({ total: 1, nested: 0 });
     });
 
     test('leaves editable and interactive content alone', async ({ page }) => {
