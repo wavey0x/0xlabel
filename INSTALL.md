@@ -70,6 +70,8 @@ uv run 0xlabel --port 8713 --data-dir /path/to/book
 
 `OXLABEL_DATA_DIR` sets the directory, and `OXLABEL_TOKEN` supplies a token instead of `token.txt`. Restart the helper after changing its token and update that connection in the popup. Keep credentials and books outside the checkout.
 
+In the browser, records live in the extension's IndexedDB database, keyed by book, network scope and address; the books themselves — their names, where each is kept, and any access keys — live in extension storage restricted to trusted contexts. The `unlimitedStorage` permission is what keeps that database exempt from being evicted under storage pressure, so do not remove it as redundant.
+
 **Export book** on the full-page view downloads the selected book's records without credentials. For a complete server backup, stop the helper and copy `labels.sqlite3` and `token.txt`. Restore them to that installation's data directory before restarting. Switching APIs does not transfer or merge data.
 
 ## Updates and privacy

@@ -1,27 +1,36 @@
-import { findRecord, normalizeLabels, normalizeScope, parseAddress, recordKey, sameLabels, sameRecords, validateSnapshot } from './shared.js';
-import { createDeviceBook, deviceKeys } from './stores/device.js';
+import { difference, findRecord, normalizeLabels, normalizeScope, parseAddress, recordKey, sameLabels, validateSnapshot } from './shared.js';
+import { createRecords } from './records.js';
 import { createServerBook } from './stores/server.js';
 
 const MAX_NAME = 40;
-const cacheKey = id => `cache:${id}`;
+const syncKey = id => `sync:${id}`;
 // How recently a book kept elsewhere has to have been asked about before asking
 // again is worth the round trip. Opening five tabs is not five syncs.
 const PULL_FLOOR = 60000;
+const erase = (address, scope) => ({ address, scope, labels: [] });
 
 // Books are named things people switch between. Where a book is kept is a
 // property of that book, chosen once when it is made, so nothing below ever
 // moves a book: switching is only ever switching.
-export function createStore({ storage, fetch: fetcher, notify = () => {}, now = Date.now, uuid = () => crypto.randomUUID() }) {
+//
+// Every book's records are held here, in one place: for a book kept on this
+// device that is the book, and for one kept on a server it is the copy that
+// keeps labeling working when the server cannot be reached. A write goes to the
+// server first, if there is one, and then to the copy, which stores exactly
+// what the server confirmed.
+export function createStore({ storage, fetch: fetcher, notify = () => {}, now = Date.now,
+  uuid = () => crypto.randomUUID(), indexedDB, keyRange }) {
+  const local = createRecords({ indexedDB, keyRange, now });
   let books = [];
   let active = null;
-  let book = null;
+  let remote = null;
   let records = [];
   let syncedAt = null;
   let error = null;
   let revision = 0;
   let needsRefresh = false;
-  // A book whose pages could not be read is never saved over: the save would
-  // write over names this worker never managed to see.
+  // A book that could not be read is never saved over: the save would write
+  // over names this worker never managed to see.
   let unreadable = false;
   // What the server last said this book was, and when we last asked.
   let mark = null;
@@ -39,9 +48,9 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
     const base = candidates[candidates.length - 1] || 'Address book';
     for (let suffix = 2; ; suffix += 1) if (!taken(`${base} ${suffix}`)) return `${base} ${suffix}`;
   }
-  const transport = item => item.storage.kind === 'server'
+  const server = item => item.storage.kind === 'server'
     ? createServerBook({ url: item.storage.url, token: item.storage.token, fetch: fetcher })
-    : createDeviceBook({ storage, book: item.id, now });
+    : null;
 
   function cleanName(value, fallback) {
     const name = String(value ?? '').trim().replace(/\s+/g, ' ').slice(0, MAX_NAME);
@@ -57,54 +66,47 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
       records, stateRevision: revision, syncedAt, error,
     };
   }
-  // The revision orders snapshots for every view that holds one. A service
-  // worker is torn down whenever it goes idle, so the count belongs to the
-  // books in storage: restarting it must not hand out numbers a page has
-  // already seen and would therefore discard.
-  // A change to one record is announced as that record. Everything else — a
-  // book switched, a file carried in, a sync that brought news — is the whole
-  // book, because that is genuinely what changed.
-  function changed(change = null) {
-    revision++;
-    storage.set({ stateRevision: revision }).catch(() => {});
-    notify(state(), change);
-  }
+  // The revision orders snapshots for every view that holds one, and it comes
+  // from the write that produced it: a view is never told about a change the
+  // records do not already have. A change to one record is announced as that
+  // record; everything else is the whole book, because that is what changed.
+  function changed(change = null) { notify(state(), change); }
   function serial(operation) {
     const result = queue.then(operation);
     queue = result.catch(() => {});
     return result;
   }
+  const replace = (held, address, scope, record) =>
+    [...held.filter(item => item.address !== address || item.scope !== scope), ...(record ? [record] : [])];
   async function saveBooks() { await storage.set({ books, activeBook: active }); }
-  async function cache() {
-    if (entry(active)?.storage.kind === 'server') await storage.set({ [cacheKey(active)]: { records, syncedAt, mark } });
+  async function saveSync() {
+    if (remote) await storage.set({ [syncKey(active)]: { mark, syncedAt } });
   }
 
   async function open(id) {
     const item = entry(id);
     active = id;
-    book = transport(item);
+    remote = server(item);
     error = null;
     needsRefresh = false;
     unreadable = false;
     mark = null;
     pulledAt = 0;
-    if (item.storage.kind === 'server') {
-      const saved = (await storage.get(cacheKey(id)))[cacheKey(id)];
-      try {
-        records = validateSnapshot({ records: saved?.records || [] });
-        syncedAt = saved?.syncedAt || null;
-        mark = typeof saved?.mark === 'string' ? saved.mark : null;
-      } catch { records = []; syncedAt = null; }
-    } else {
-      syncedAt = null;
-      try { records = (await book.load()).records; }
-      catch (failure) { records = []; error = failure.message; unreadable = true; }
+    syncedAt = null;
+    if (remote) {
+      const saved = (await storage.get(syncKey(id)))[syncKey(id)];
+      mark = typeof saved?.mark === 'string' ? saved.mark : null;
+      syncedAt = saved?.syncedAt || null;
     }
+    try {
+      const held = await local.load(id);
+      records = held.records;
+      revision = held.revision;
+    } catch (failure) { records = []; error = failure.message; unreadable = true; }
   }
 
   async function init() {
-    const saved = await storage.get(['books', 'activeBook', 'stateRevision']);
-    revision = Number.isSafeInteger(saved.stateRevision) ? saved.stateRevision : 0;
+    const saved = await storage.get(['books', 'activeBook']);
     books = Array.isArray(saved.books) ? saved.books.filter(item => item?.id && item?.name && item?.storage?.kind) : [];
     if (!books.length) {
       // Everyone starts with a book, so labeling works before anything is set up.
@@ -121,21 +123,25 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
     const promise = serial(async () => {
       if (active !== started) return state();
       try {
-        const answer = await book.load(mark);
+        const answer = remote ? await remote.load(mark) : await local.load(started);
         if (active !== started) return state();
         pulledAt = now();
-        mark = answer.mark ?? mark;
-        // A book that came back saying the same thing as the copy we hold is
-        // not news: no revision, no broadcast, no page repainted for nothing.
-        const news = Boolean(answer.records) && !sameRecords(records, answer.records);
+        if (remote) mark = answer.mark ?? mark;
+        // Only what differs is written, and a book that came back saying what
+        // the copy already says is not news: no revision, no broadcast, no page
+        // repainted for nothing.
+        const changes = answer.records ? difference(records, answer.records) : [];
+        if (changes.length) {
+          if (remote) ({ revision } = await local.write(started, changes));
+          else revision = answer.revision;
+          records = answer.records;
+        }
         const healed = error !== null || unreadable;
-        if (news) records = answer.records;
-        if (entry(active).storage.kind === 'server') syncedAt = now();
+        if (remote) { syncedAt = now(); await saveSync(); }
         error = null;
         needsRefresh = false;
         unreadable = false;
-        await cache();
-        if (!news && !healed) return state();
+        if (!changes.length && !healed) return state();
       } catch (failure) {
         error = failure.message;
       }
@@ -151,7 +157,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
   // so there is nothing to ask; a book we failed to read is always worth
   // another try. Its own alarm paces it.
   function heartbeat() {
-    if (unreadable || entry(active)?.storage.kind === 'server') return refresh();
+    if (unreadable || remote) return refresh();
     return Promise.resolve(state());
   }
 
@@ -187,27 +193,31 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
       if (chosen && taken(chosen)) throw new Error(`You already have an address book called ${chosen}.`);
       const host = where.kind === 'server' ? new URL(where.url) : null;
       const item = { id: uuid(), name: chosen || freeName(host ? [host.hostname, host.host] : ['Address book']), storage: where };
-      const candidate = transport(item);
-      const { records: found, mark: found_mark } = await candidate.load();
-      if (copyFrom && found.length) throw new Error('That server already holds a book, so nothing was copied into it.');
+      const candidate = server(item);
+      const answer = candidate ? await candidate.load() : { records: [], mark: null };
+      if (copyFrom && answer.records.length) throw new Error('That server already holds a book, so nothing was copied into it.');
+      let held = answer.records;
       if (copyFrom) {
         const source = entry(copyFrom);
         if (!source) throw new Error('There is nothing to copy.');
-        const taken = source.id === active ? records : (await transport(source).load()).records;
-        await candidate.putMany(taken.map(({ address, scope, labels }) => ({ address, scope, labels, version: null })));
+        const from = source.id === active ? records : (await local.load(source.id)).records;
+        // The receiving book issues its own versions, wherever it is kept.
+        const wanted = from.map(({ address, scope, labels }) => ({ address, scope, labels }));
+        held = candidate ? await candidate.putMany(wanted.map(record => ({ ...record, version: null }))) : wanted;
       }
+      if (held.length || !candidate) ({ records: held, revision } = await local.write(item.id, held));
       books = [...books, item];
       active = item.id;
-      book = candidate;
+      remote = candidate;
       error = null;
       needsRefresh = false;
       // The new book was just read to make it; reading it again proves nothing.
-      records = copyFrom ? (await candidate.load()).records : found;
-      mark = copyFrom ? null : found_mark;
+      records = held.filter(Boolean);
+      mark = copyFrom ? null : answer.mark;
       pulledAt = now();
-      syncedAt = item.storage.kind === 'server' ? now() : null;
+      syncedAt = candidate ? now() : null;
       await saveBooks();
-      await cache();
+      await saveSync();
       changed();
       return state();
     });
@@ -234,7 +244,8 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
       if (!item) throw new Error('That address book is gone.');
       if (books.length === 1) throw new Error('0xlabel keeps at least one address book.');
       books = books.filter(other => other.id !== id);
-      await storage.remove([...deviceKeys(id), cacheKey(id)]);
+      ({ revision } = await local.drop(id));
+      await storage.remove([syncKey(id)]);
       await saveBooks();
       if (active === id) await open(books[0].id);
       changed();
@@ -243,21 +254,28 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
   }
 
   // Addresses carried in from a file land in the book that is open, replacing
-  // any names already held for the same address on the same network.
+  // any names already held for the same address on the same network. One file
+  // is one decision, so it is one write: all of it lands or none of it does.
   async function merge(incoming) {
     const wanted = validateSnapshot({ records: incoming });
     return serial(async () => {
       if (unreadable) throw new Error('This address book could not be read, so nothing was added to it.');
       const index = new Map(records.map(item => [recordKey(item.address, item.scope), item]));
-      const drafts = wanted.map(want => ({ address: want.address, scope: want.scope, labels: want.labels,
-        version: index.get(recordKey(want.address, want.scope))?.version ?? null }));
-      const saved = await book.putMany(drafts);
+      // The receiving book issues its own versions, so a file cannot carry one in.
+      const drafts = wanted.map(({ address, scope, labels }) => ({ address, scope, labels }));
+      let saved;
+      if (remote) {
+        saved = await remote.putMany(drafts.map(draft => ({ ...draft,
+          version: index.get(recordKey(draft.address, draft.scope))?.version ?? null })));
+        ({ revision } = await local.write(active, saved));
+      } else {
+        ({ records: saved, revision } = await local.write(active, drafts));
+      }
       saved.forEach((record, at) => {
         const key = recordKey(drafts[at].address, drafts[at].scope);
         if (record) index.set(key, record); else index.delete(key);
       });
       records = [...index.values()];
-      await cache();
       changed();
       return { state: state(), added: wanted.length };
     });
@@ -276,19 +294,23 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
       if (active !== started) throw new Error('You switched address books before this was saved. Try again.');
       if (unreadable) throw new Error('This address book could not be read, so nothing was saved over it.');
       // A write that may already have landed is checked, never simply repeated.
-      if (book.uncertainWrites && needsRefresh) {
-        const answer = await book.load();
-        records = answer.records ?? records;
+      if (remote && needsRefresh) {
+        const answer = await remote.load();
+        const changes = answer.records ? difference(records, answer.records) : [];
+        if (changes.length) {
+          ({ revision } = await local.write(started, changes));
+          records = answer.records;
+        }
         mark = answer.mark ?? mark;
         syncedAt = now();
         pulledAt = now();
         needsRefresh = false;
-        await cache();
+        await saveSync();
         const latest = findRecord(records, address, scope);
         if ((latest?.version || null) !== version) {
           // The book already holds what this draft asks for, so the interrupted
           // write landed. Nothing is in dispute; say so instead of asking.
-          if (sameLabels(latest?.labels || [], labels)) { changed(); return { state: state() }; }
+          if (sameLabels(latest?.labels || [], labels)) { changed(); return {}; }
           const conflict = new Error('Saved elsewhere while you were editing.');
           conflict.current = latest;
           conflict.status = 409;
@@ -296,34 +318,43 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
           throw conflict;
         }
       }
-      if (book.uncertainWrites) { needsRefresh = true; await storage.set({ needsRefresh: true }); }
+      if (remote) { needsRefresh = true; await storage.set({ needsRefresh: true }); }
       let saved;
       try {
-        saved = await book.put({ address, scope, labels, version });
+        if (remote) {
+          saved = await remote.put({ address, scope, labels, version });
+          ({ revision } = await local.write(started, [saved || erase(address, scope)]));
+        } else {
+          ({ record: saved, revision } = await local.save(started, { address, scope, labels, version }));
+        }
       } catch (failure) {
         if (failure.status === 409) {
           if (failure.current && (failure.current.address !== address || failure.current.scope !== scope)) {
             throw new Error('A conflict came back for a different record. Refresh before trying again.');
           }
-          records = records.filter(item => item.address !== address || item.scope !== scope);
-          if (failure.current) records.push(failure.current);
+          const current = failure.current || null;
+          // A book kept here refused because the draft was old, not because the
+          // copy is: only a server can have been written behind our back.
+          const stale = (findRecord(records, address, scope)?.version ?? null) !== (current?.version ?? null);
+          if (stale) {
+            records = replace(records, address, scope, current);
+            if (remote) ({ revision } = await local.write(started, [current || erase(address, scope)]));
+            needsRefresh = false;
+            changed({ address, scope, record: current });
+          }
           needsRefresh = false;
-          await cache();
-          changed({ address, scope, record: failure.current || null });
           // Whoever got there first wrote the very names this draft carries, so
           // the book says what it was asked to say. A refused write that leaves
           // nothing to decide is a save, not a conflict.
-          if (sameLabels(failure.current?.labels || [], labels)) return { state: state() };
+          if (sameLabels(current?.labels || [], labels)) return {};
         } else if (failure.status && failure.status < 500) {
           needsRefresh = false;
         }
         throw failure;
       }
-      records = records.filter(item => item.address !== address || item.scope !== scope);
-      if (saved) records.push(saved);
+      records = replace(records, address, scope, saved);
       error = null;
       needsRefresh = false;
-      await cache();
       changed({ address, scope, record: saved });
       // The answer is that it is saved. What was saved reaches this view the
       // same way it reaches every other one, so the book travels once.

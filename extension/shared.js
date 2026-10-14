@@ -113,12 +113,17 @@ export function applyChange(state, message) {
     syncedAt: message.syncedAt ?? state.syncedAt };
 }
 
-// Whether two readings of a book say the same thing. A sync that learns
-// nothing should cost nothing downstream.
-export function sameRecords(left, right) {
-  if (left.length !== right.length) return false;
-  const index = new Map(left.map(item => [recordKey(item.address, item.scope), item.version]));
-  return right.every(item => index.get(recordKey(item.address, item.scope)) === item.version);
+// What it would take for `held` to say what `incoming` says: the records that
+// differ, and the ones that are gone, named with no labels because that is how
+// a removal is written everywhere else. An empty answer means a sync learned
+// nothing, which should then cost nothing downstream.
+export function difference(held, incoming) {
+  const before = new Map(held.map(record => [recordKey(record.address, record.scope), record]));
+  const after = new Map(incoming.map(record => [recordKey(record.address, record.scope), record]));
+  const changes = [];
+  for (const [key, record] of after) if (before.get(key)?.version !== record.version) changes.push(record);
+  for (const [key, record] of before) if (!after.has(key)) changes.push({ address: record.address, scope: record.scope, labels: [] });
+  return changes;
 }
 
 export function indexBook(records) {

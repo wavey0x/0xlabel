@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { IDBFactory, IDBKeyRange as FakeKeyRange } from 'fake-indexeddb';
 import { createStore } from '../extension/store.js';
 import { applyChange, normalizeAPI, parseConnectLink } from '../extension/shared.js';
 
@@ -20,6 +21,7 @@ function harness({ remote = [] } = {}) {
   let book = remote;
   let intercept;
   let counter = 0;
+  let clock = 100;
   const writes = [];
   const storage = {
     get: async keys => {
@@ -61,22 +63,40 @@ function harness({ remote = [] } = {}) {
     if (body.version !== (current?.version || null)) return response({ current }, 409, mark);
     return response({ record: apply({ address: at, scope, labels: body.labels }) }, 200, `"${revision}"`);
   };
-  const make = () => createStore({ storage, fetch, now: () => 100, uuid: () => `id-${++counter}` });
-  return { store: make(), make, saved, calls, storage, fetch, writes,
-    pages: id => Object.keys(saved).filter(key => key.startsWith(`book:${id}/`)),
+  // One database per harness, so a restart reopens the same books and a
+  // different test never sees them.
+  const indexedDB = new IDBFactory();
+  const make = () => createStore({ storage, fetch, indexedDB, keyRange: FakeKeyRange,
+    now: () => ++clock, uuid: () => `id-${++counter}` });
+  const corrupt = async (id, row) => {
+    const database = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('0xlabel', 1);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    await new Promise((resolve, reject) => {
+      const transaction = database.transaction('records', 'readwrite');
+      transaction.objectStore('records').put({ book: id, ...row });
+      transaction.oncomplete = resolve;
+      transaction.onerror = () => reject(transaction.error);
+    });
+    database.close();
+  };
+  return { store: make(), make, saved, calls, storage, fetch, writes, corrupt,
     remote: () => book, intercept: value => { intercept = value; } };
 }
 const write = (store, labels, { book = store.state().activeBook, at = address, version = null } = {}) =>
   store.save({ book, address: at, scope: 'global', labels, version });
 
 test('a book exists before anything is set up, and labeling needs no connection', async () => {
-  const { store, pages } = harness();
+  const { store, saved } = harness();
   await store.init();
   assert.equal(store.state().books.length, 1);
   assert.equal(store.state().books[0].where, 'On this device');
   await write(store, ['Treasury']);
   assert.deepEqual(store.state().records.map(entry => entry.labels[0]), ['Treasury']);
-  assert.equal(pages(store.state().activeBook).length, 1, 'the device book is the storage, not a cache of one');
+  // Settings and credentials live in extension storage; books do not.
+  assert.deepEqual(Object.keys(saved).sort(), ['activeBook', 'books']);
 });
 
 test('a device book survives a restart and removing every name deletes the record', async () => {
@@ -101,14 +121,15 @@ test('a stale version is refused rather than quietly overwriting the newer names
 });
 
 test('an unreadable device book is never presented, or saved over, as an empty one', async () => {
-  const { store, storage, make } = harness();
+  const { store, make, corrupt } = harness();
   await store.init();
-  await storage.set({ [`book:${store.state().activeBook}/ab`]: [{ address, scope: 'global', labels: [] }] });
+  await write(store, ['Treasury']);
+  await corrupt(store.state().activeBook, { address: other, scope: 'global', labels: [] });
   const resumed = make();
   await resumed.init();
   assert.equal(resumed.state().records.length, 0);
   assert.match(resumed.state().error, /record/i);
-  await assert.rejects(write(resumed, ['Treasury']));
+  await assert.rejects(write(resumed, ['Anything']), /could not be read/);
 });
 
 test('a connect link carries the key in the fragment, which is never sent to the server', () => {
@@ -179,7 +200,7 @@ test('an unreachable server costs freshness, not the book', async () => {
 });
 
 test('removing a device book takes its addresses; removing a server book only forgets it', async () => {
-  const { store, pages, remote } = harness({ remote: [] });
+  const { store, make, remote } = harness({ remote: [] });
   await store.init();
   const device = store.state().activeBook;
   await write(store, ['Mine']);
@@ -195,7 +216,10 @@ test('removing a device book takes its addresses; removing a server book only fo
   const second = store.state().activeBook;
   await write(store, ['Scratch']);
   await store.remove(second);
-  assert.deepEqual(pages(second), [], 'its addresses go with it');
+  const resumed = make();
+  await resumed.init();
+  await assert.rejects(resumed.use(second), /gone/);
+  assert.deepEqual(resumed.state().records.map(entry => entry.labels[0]), ['Mine'], 'its addresses went with it');
 });
 
 test('there is always an address book to label into', async () => {
@@ -262,71 +286,52 @@ test('an interrupted write that landed is answered by what the server now says',
   assert.deepEqual(remote().map(entry => entry.labels), [['Treasury']], 'the write is neither repeated nor disputed');
 });
 
-test('a save writes the page that holds the address, not the book', async () => {
-  const { store, writes, pages } = harness();
+test('a save is one write, and a file carried in is one write however many it holds', async () => {
+  const { store } = harness();
   await store.init();
-  const book = store.state().activeBook;
-  // Fill pages the save must not touch: the cost of a change belongs to the
-  // change, not to everything else the book holds.
-  await store.merge(Array.from({ length: 64 }, (_, index) => ({
-    address: '0x' + index.toString(16).padStart(2, '0') + 'cd'.repeat(19), scope: 'global',
-    labels: ['Name ' + index], version: 'from-file',
-  })));
-  assert.equal(pages(book).length, 64, 'one page per leading byte, and no more');
-
-  writes.length = 0;
+  const settled = store.state().stateRevision;
   await write(store, ['Treasury']);
-  assert.deepEqual(writes, [`book:${book}/ab`, 'stateRevision']);
-  assert.equal(store.state().records.length, 65);
-});
+  assert.equal(store.state().stateRevision, settled + 1, 'one save, one write');
 
-test('an import writes a page once however many records land in it', async () => {
-  const { store, writes } = harness();
-  await store.init();
-  const records = Array.from({ length: 500 }, (_, index) => ({
-    address: '0x' + 'ab' + index.toString(16).padStart(38, '0'), scope: 'global',
-    labels: ['Name ' + index], version: 'from-file',
-  }));
-  writes.length = 0;
-  const { added } = await store.merge(records);
+  const { added } = await store.merge(Array.from({ length: 500 }, (_, index) => ({
+    address: '0x' + index.toString(16).padStart(40, '0'), scope: 'global',
+    labels: ['Carried ' + index], version: 'from-file',
+  })));
   assert.equal(added, 500);
-  // Every one of them starts 0xab, so the whole file is one page, written once.
-  assert.deepEqual(writes.filter(key => key.startsWith('book:')), [`book:${store.state().activeBook}/ab`]);
-  assert.equal(store.state().records.length, 500);
+  assert.equal(store.state().stateRevision, settled + 2, 'five hundred addresses, still one write');
+  assert.equal(store.state().records.length, 501);
 });
 
-test('a book spread across pages is read back whole, and emptying a page takes it away', async () => {
-  const { store, make, pages } = harness();
+test('a refused save writes nothing at all', async () => {
+  const { store } = harness();
   await store.init();
-  const book = store.state().activeBook;
-  const first = '0x' + '11'.repeat(20);
-  const second = '0x' + 'ee'.repeat(20);
-  await write(store, ['First'], { at: first });
-  await write(store, ['Second'], { at: second });
-  assert.deepEqual(pages(book).sort(), [`book:${book}/11`, `book:${book}/ee`]);
+  await write(store, ['First']);
+  const settled = store.state().stateRevision;
+  await assert.rejects(write(store, ['Second']), error => error.status === 409);
+  assert.equal(store.state().stateRevision, settled, 'the record and the count moved together, or not at all');
+  assert.deepEqual(store.state().records.map(entry => entry.labels[0]), ['First']);
+});
+
+test('a book is read back whole, and removing another one leaves it alone', async () => {
+  const { store, make } = harness();
+  await store.init();
+  const first = store.state().activeBook;
+  await write(store, ['First'], { at: '0x' + '11'.repeat(20) });
+  await write(store, ['Second'], { at: '0x' + 'ee'.repeat(20) });
+  await store.add({ name: 'Other', storage: { kind: 'device' } });
+  await write(store, ['Elsewhere']);
 
   const resumed = make();
   await resumed.init();
+  assert.deepEqual(resumed.state().records.map(entry => entry.labels[0]), ['Elsewhere']);
+  await resumed.use(first);
+  assert.deepEqual(resumed.state().records.map(entry => entry.labels[0]).sort(), ['First', 'Second']);
+  await resumed.remove(resumed.state().books.find(item => item.name === 'Other').id);
   assert.deepEqual(resumed.state().records.map(entry => entry.labels[0]).sort(), ['First', 'Second']);
 
-  const held = resumed.state().records.find(entry => entry.address === first);
-  await write(resumed, [], { at: first, version: held.version });
-  assert.deepEqual(pages(book), [`book:${book}/ee`], 'a page with nothing in it is not kept');
-  assert.equal(resumed.state().records.length, 1);
-});
-
-test('one address held in two pages is refused, not quietly shown twice', async () => {
-  const { store, storage, make } = harness();
-  await store.init();
-  const book = store.state().activeBook;
-  await write(store, ['Treasury']);
-  const copy = store.state().records[0];
-  await storage.set({ [`book:${book}/ff`]: [copy] });
-  const resumed = make();
-  await resumed.init();
-  assert.equal(resumed.state().records.length, 0);
-  assert.match(resumed.state().error, /book/i);
-  await assert.rejects(write(resumed, ['Anything']), /could not be read/);
+  const again = make();
+  await again.init();
+  assert.deepEqual(again.state().records.map(entry => entry.labels[0]).sort(), ['First', 'Second']);
 });
 
 test('a book carried in from a file joins the one that is open, replacing matching names', async () => {

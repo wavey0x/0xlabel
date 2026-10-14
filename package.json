@@ -9,5 +9,8 @@
     "test:browser": "playwright test",
     "screenshots": "playwright test --config=playwright.screenshots.config.js"
   },
-  "devDependencies": { "@playwright/test": "^1.56.0" }
+  "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "fake-indexeddb": "^6.2.5"
+  }
 }
