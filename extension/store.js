@@ -117,11 +117,13 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
     await open(entry(saved.activeBook) ? saved.activeBook : books[0].id);
   }
 
+  // A pull answers with the time it got, which is the one thing a view that
+  // asked for it cannot learn from an announcement that never comes.
   function refresh() {
     const started = active;
     if (pull && pull.book === started) return pull.promise;
     const promise = serial(async () => {
-      if (active !== started) return state();
+      if (active !== started) return { syncedAt };
       try {
         const answer = remote ? await remote.load(mark) : await local.load(started);
         if (active !== started) return state();
@@ -141,12 +143,12 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
         error = null;
         needsRefresh = false;
         unreadable = false;
-        if (!changes.length && !healed) return state();
+        if (!changes.length && !healed) return { syncedAt };
       } catch (failure) {
         error = failure.message;
       }
       changed();
-      return state();
+      return { syncedAt };
     });
     pull = { book: started, promise };
     promise.finally(() => { if (pull?.promise === promise) pull = null; }).catch(() => {});
@@ -158,14 +160,14 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
   // another try. Its own alarm paces it.
   function heartbeat() {
     if (unreadable || remote) return refresh();
-    return Promise.resolve(state());
+    return Promise.resolve({ syncedAt });
   }
 
   // Asked for wherever someone is about to look at a book: a popup opening, a
   // page coming back to the front, an editor opening. Five tabs waking at once
   // is one pull, not five.
   function sync() {
-    if (pulledAt && now() - pulledAt < PULL_FLOOR && !unreadable) return Promise.resolve(state());
+    if (pulledAt && now() - pulledAt < PULL_FLOOR && !unreadable) return Promise.resolve({ syncedAt });
     return heartbeat();
   }
 
@@ -175,7 +177,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
       await open(id);
       await saveBooks();
       changed();
-      return state();
+      return {};
     });
   }
 
@@ -219,7 +221,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
       await saveBooks();
       await saveSync();
       changed();
-      return state();
+      return {};
     });
   }
 
@@ -232,7 +234,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
       item.name = chosen;
       await saveBooks();
       changed();
-      return state();
+      return {};
     });
   }
 
@@ -249,7 +251,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
       await saveBooks();
       if (active === id) await open(books[0].id);
       changed();
-      return state();
+      return {};
     });
   }
 
@@ -277,7 +279,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
       });
       records = [...index.values()];
       changed();
-      return { state: state(), added: wanted.length };
+      return { added: wanted.length };
     });
   }
 

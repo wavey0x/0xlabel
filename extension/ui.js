@@ -251,8 +251,9 @@ export function newBookForm({ container, state, created, busy, error, visible = 
     form.querySelectorAll('input').forEach(input => { input.disabled = true; });
     try {
       if (!await permission) throw new Error('Access to that server was not granted.');
-      created(await rpc({ type: 'AddBook', name: get('#book-name').value, storage: where,
-        copyFrom: get('#copy-current').checked && !get('#copy-row').hidden ? state().activeBook : null }));
+      await rpc({ type: 'AddBook', name: get('#book-name').value, storage: where,
+        copyFrom: get('#copy-current').checked && !get('#copy-row').hidden ? state().activeBook : null });
+      created();
       if (opened()) close();
     } catch (failure) {
       if (opened()) get('#server-error').textContent = failure.message; else error(failure);

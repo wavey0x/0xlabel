@@ -15,10 +15,10 @@ const setup = newBookForm({ container: $('#server'), state: () => state, created
 const picker = bookPicker({
   add: () => setup.open(),
   choose: async book => {
-    try { render(await rpc({ type: 'Use', book })); tell(''); } catch (error) { tell(error); }
+    try { await rpc({ type: 'Use', book }); tell(''); } catch (error) { tell(error); }
   },
   // A refused name is reported in the row being typed in, so the picker keeps it.
-  rename: async (book, name) => { render(await rpc({ type: 'RenameBook', book, name })); tell(''); },
+  rename: async (book, name) => { await rpc({ type: 'RenameBook', book, name }); tell(''); },
 });
 function render(next = state) {
   if (!currentSnapshot(next, state)) return;
@@ -81,7 +81,7 @@ try {
   // The popup is only ever open for a moment, so ask while it is, rather than
   // waiting for a button press to make the time above it true. The ask is
   // conditional and rate limited, so opening the popup repeatedly costs little.
-  rpc({ type: 'Sync' }).then(render).catch(() => {});
+  rpc({ type: 'Sync' }).then(result => render({ ...state, syncedAt: result?.syncedAt ?? state.syncedAt })).catch(() => {});
   if (result.health?.status === 'stale' && sites[siteURL?.origin]) {
     $('#adapter-warning p').textContent = `${result.health.adapter} labeling paused. Your book is safe.`;
     $('#adapter-warning').hidden = false;

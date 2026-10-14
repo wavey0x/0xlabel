@@ -23,10 +23,10 @@ const setup = newBookForm({ container: $('#server'), state: () => state, created
 const picker = bookPicker({
   add: () => setup.open(),
   choose: async book => {
-    try { render(await rpc({ type: 'Use', book })); tell(''); } catch (error) { tell(error); }
+    try { await rpc({ type: 'Use', book }); tell(''); } catch (error) { tell(error); }
   },
   // A refused name is reported in the row being typed in, so the picker keeps it.
-  rename: async (book, name) => { render(await rpc({ type: 'RenameBook', book, name })); tell(''); },
+  rename: async (book, name) => { await rpc({ type: 'RenameBook', book, name }); tell(''); },
 });
 function render(next = state) {
   if (!currentSnapshot(next, state)) return;
@@ -136,7 +136,7 @@ $('#remove-book').onclick = () => {
   (here ? $('#remove-name') : $('#confirm-remove')).focus();
 };
 $('#confirm-remove').onclick = async () => {
-  try { render(await rpc({ type: 'RemoveBook', book: state.activeBook })); closeRemove(); }
+  try { await rpc({ type: 'RemoveBook', book: state.activeBook }); closeRemove(); }
   catch (error) { $('#remove-error').textContent = error.message; }
 };
 const addDialog = $('#add-dialog');
@@ -160,7 +160,11 @@ $('#manual-form').onsubmit = event => {
 };
 $('#refresh').onclick = async () => {
   $('#refresh').disabled = true; $('#refresh').setAttribute('aria-busy', 'true');
-  try { render(await rpc({ type: 'Refresh' })); tell(''); } catch (error) { tell(error); }
+  try {
+    const result = await rpc({ type: 'Refresh' });
+    render({ ...state, syncedAt: result?.syncedAt ?? state.syncedAt });
+    tell('');
+  } catch (error) { tell(error); }
   finally { $('#refresh').removeAttribute('aria-busy'); render(); }
 };
 $('#import').onclick = () => $('#import-file').click();
@@ -171,7 +175,6 @@ $('#import-file').onchange = async event => {
   try {
     const parsed = JSON.parse(await file.text());
     const result = await rpc({ type: 'Import', records: parsed.records ?? parsed });
-    render(result.state);
     tell(`Added ${result.added} address${result.added === 1 ? '' : 'es'} to ${state.bookName}.`);
   } catch (error) {
     tell(error instanceof SyntaxError ? 'That file is not a 0xlabel export.' : error);
