@@ -1,5 +1,5 @@
 import { adapters } from './adapters.js';
-import { indexBook, parseAddress, recordKey, normalizeScope, UNSAFE_HOST } from './shared.js';
+import { indexBook, parseAddress, query, recordKey, normalizeScope, UNSAFE_HOST } from './shared.js';
 import { createEditor } from './editor.js';
 import { createOverlay } from './overlay.js';
 import { LABEL_ICON } from './icons.js';
@@ -230,11 +230,15 @@ export async function createPageController({
          ['title', 'aria-label'].includes(change.attributeName) &&
          (!parseAddress(element.getAttribute(change.attributeName)) || parseAddress(element.getAttribute(change.attributeName)) === targets.get(existing)?.address));
       if (!presentation) {
-        for (const target of [...targets.values()]) {
-          const affected = change.type === 'childList' ?
-            target.element.contains(element) || [...change.removedNodes].some(node => node.contains(target.element)) :
-            (existing && existing.contains(target.element)) || element.contains(target.element);
-          if (affected) remove(target.element);
+        // Targets are never nested, so the annotation attribute is their index.
+        // An ancestor is found by one lookup; descendants by a scoped query.
+        if (existing) remove(existing);
+        if (change.type === 'childList') {
+          for (const node of change.removedNodes) {
+            if (node.nodeType === 1) for (const gone of query(node, `[${ADDRESS}]`)) remove(gone);
+          }
+        } else if (!existing) {
+          for (const inside of query(element, `[${ADDRESS}]`)) remove(inside);
         }
       }
       // A tooltip added to the page root needs only its own branch scanned.
