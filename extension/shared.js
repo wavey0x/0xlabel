@@ -100,6 +100,19 @@ export function findRecord(records, address, scope) {
   return records.find(item => item.address === address && item.scope === scope) || null;
 }
 
+// One record, applied to the copy a view already holds. Anything other than
+// the very next revision of the same book means this view has missed
+// something, and the answer to that is to ask for the whole book again.
+export function applyChange(state, message) {
+  if (!message?.change || message.activeBook !== state.activeBook) return null;
+  if (message.stateRevision !== state.stateRevision + 1) return null;
+  const { address, scope, record } = message.change;
+  const records = state.records.filter(item => item.address !== address || item.scope !== scope);
+  if (record) records.push(record);
+  return { ...state, records, stateRevision: message.stateRevision,
+    syncedAt: message.syncedAt ?? state.syncedAt };
+}
+
 // Whether two readings of a book say the same thing. A sync that learns
 // nothing should cost nothing downstream.
 export function sameRecords(left, right) {

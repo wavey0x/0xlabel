@@ -1,5 +1,5 @@
 import { hostPermission } from './shared.js';
-import { $, rpc, emptyState, currentSnapshot, syncText, bookPicker, newBookForm } from './ui.js';
+import { $, rpc, emptyState, currentSnapshot, syncText, bookPicker, newBookForm, watchBook } from './ui.js';
 
 let state = emptyState;
 let sites = {};
@@ -70,7 +70,7 @@ $('#open-book').onclick = async () => {
   } catch (error) { tell(error); }
   finally { button.disabled = false; }
 };
-chrome.runtime.onMessage.addListener(message => { if (message.type === 'Updated') render(message.state); });
+watchBook(() => state, render);
 render();
 try {
   [tab] = await chrome.tabs.query({ active: true, currentWindow: true });

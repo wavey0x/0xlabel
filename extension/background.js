@@ -72,9 +72,20 @@ async function refreshAction(tabId) {
     await updateAction(tabId, { adapter: result.health.adapter || 'This site', ...result.health, origin });
   }
 }
-function broadcast(state) {
-  chrome.runtime.sendMessage({ type: 'Updated', state }).catch(() => {});
-  chrome.tabs.query({}).then(tabs => Promise.allSettled(tabs.map(tab => send(tab.id, { type: 'Updated', state }, {}))));
+function broadcast(state, change) {
+  // One record costs the same to send however large the book is; the whole
+  // book costs the whole book, to every tab, every time.
+  const message = change
+    ? { type: 'Updated', change, activeBook: state.activeBook, stateRevision: state.stateRevision, syncedAt: state.syncedAt }
+    : { type: 'Updated', state };
+  // The popup and the book page hear this on the runtime channel. Sending it
+  // to every tab as well delivered it to them twice, and to tabs that have
+  // nothing of ours in them at all: a website only has a content script where
+  // we were granted the host, which is the same place its URL is visible.
+  chrome.runtime.sendMessage(message).catch(() => {});
+  chrome.tabs.query({}).then(tabs => Promise.allSettled(tabs
+    .filter(tab => tab.url && /^https?:/.test(tab.url))
+    .map(tab => send(tab.id, message, {}))));
 }
 async function authorizedPage(sender) {
   try {

@@ -1,5 +1,5 @@
 import { adapters } from './adapters.js';
-import { indexBook, parseAddress, query, recordKey, normalizeScope, UI, UI_ATTRIBUTE, UNSAFE_HOST } from './shared.js';
+import { applyChange, indexBook, parseAddress, query, recordKey, normalizeScope, UI, UI_ATTRIBUTE, UNSAFE_HOST } from './shared.js';
 import { createEditor } from './editor.js';
 import { createOverlay } from './overlay.js';
 import { LABEL_ICON } from './icons.js';
@@ -334,7 +334,6 @@ export async function createPageController({
         position();
       },
       onLayout: position,
-      onSaved: updateState,
       close: () => {
         editor = null;
         editorTarget = null;
@@ -374,6 +373,22 @@ export async function createPageController({
     if (switched) { clear(); schedule(); }
     else if (!paused && health.status === 'ready') for (const target of targets.values()) paint(target);
   }
+  // One record, applied to the index this page already holds: no book to rebuild
+  // and only the addresses it names to repaint. A view that has fallen behind
+  // says so, and the caller asks for the whole book instead.
+  function patch(message) {
+    const next = applyChange(state, message);
+    if (!next) return false;
+    state = next;
+    const { address, scope, record } = message.change;
+    const key = recordKey(address, scope);
+    if (record) book.set(key, record); else book.delete(key);
+    if (editor) editor.updateState(state);
+    if (!paused && health.status === 'ready') {
+      for (const target of targets.values()) if (target.address === address) paint(target);
+    }
+    return true;
+  }
   function stop() {
     stopped = true;
     clearTimeout(timer); clearTimeout(grace);
@@ -385,7 +400,7 @@ export async function createPageController({
   dirty.add(doc);
   run();
   return {
-    updateState, stop,
+    updateState, patch, stop,
     retry() { dirty.add(doc); run(true); },
     openEditor(info = {}) {
       if (contextTarget) {
@@ -409,9 +424,17 @@ export async function startPage() {
   if (!initial.enabled) { globalThis.__oxlabelStarting = false; return; }
   let controller;
   let latest;
+  let missed = false;
   let disabled = false;
+  const resync = () => rpc({ type: 'State' })
+    .then(result => { if (result?.state) controller?.updateState(result.state); })
+    .catch(() => {});
   function message(value, _sender, reply) {
-    if (value.type === 'Updated') { latest = value.state; controller?.updateState(value.state); }
+    if (value.type === 'Updated') {
+      if (value.state) { latest = value.state; controller?.updateState(value.state); }
+      else if (!controller) missed = true;
+      else if (!controller.patch(value)) resync();
+    }
     if (value.type === 'Status') reply?.({ health: controller?.health });
     if (value.type === 'Retry') { controller?.retry(); reply?.({ health: controller?.health }); }
     if (value.type === 'OpenEditor') controller?.openEditor(value);
@@ -427,6 +450,7 @@ export async function startPage() {
     resume: () => rpc({ type: 'Resume' }).catch(() => {}),
   });
   if (latest) controller.updateState(latest);
+  if (missed) await resync();
   if (disabled) controller.stop();
   else rpc({ type: 'Resume' }).catch(() => {});
 }

@@ -18,7 +18,7 @@ export async function editorStyles(root) {
 }
 
 // Shared by the page popover and book. The draft never follows a recycled row.
-export function createEditor(container, { address, scope = 'global', state, save, close, onSaved = () => {}, onLayout = () => {}, visibility, toggleVisibility, modal = false }) {
+export function createEditor(container, { address, scope = 'global', state, save, close, onLayout = () => {}, visibility, toggleVisibility, modal = false }) {
   const book = state.activeBook;
   // Which book a save goes to only matters once there is more than one.
   const bookName = state.books.length > 1 ? state.bookName : '';
@@ -178,11 +178,10 @@ export function createEditor(container, { address, scope = 'global', state, save
     phase = 'saving';
     guard();
     try {
-      const result = await save({ book, address, scope, labels, version: draft.version });
+      await save({ book, address, scope, labels, version: draft.version });
       if (closed) return;
       phase = 'saved';
       guard();
-      onSaved(result.state);
       // Confirm the write first; a small local animation never determines
       // whether a save succeeded. Keep the button locked until it closes.
       const frames = matchMedia('(prefers-reduced-motion: reduce)').matches ? [{ opacity: 1 }, { opacity: 1 }] : [

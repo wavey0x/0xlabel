@@ -1,4 +1,4 @@
-import { $, rpc, emptyState, currentSnapshot, syncText, bookPicker, newBookForm, dismissDialog } from './ui.js';
+import { $, rpc, emptyState, currentSnapshot, syncText, bookPicker, newBookForm, watchBook, dismissDialog } from './ui.js';
 import { parseAddress, normalizeScope } from './shared.js';
 import { scopeName } from './networks.js';
 import { checksumAddress } from './checksum.js';
@@ -57,7 +57,7 @@ function render(next = state) {
 function edit(address, scope = 'global') {
   if (editor && !editor.closeIfUnchanged()) return;
   editor = createEditor(shadow, { address, scope, state, modal: true,
-    save: draft => rpc({ type: 'Save', draft }), onSaved: render,
+    save: draft => rpc({ type: 'Save', draft }),
     close: () => { editor = null; shadow.replaceChildren(); $('#search').focus(); },
   });
 }
@@ -183,7 +183,7 @@ $('#export').onclick = () => {
   const link = document.createElement('a'); link.href = url; link.download = '0xlabel-book.json'; link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
-chrome.runtime.onMessage.addListener(message => { if (message.type === 'Updated') render(message.state); });
+watchBook(() => state, render);
 try {
   const [, response] = await ready;
   render(response.state);

@@ -1,4 +1,4 @@
-import { hostPermission, parseConnectLink } from './shared.js';
+import { applyChange, hostPermission, parseConnectLink } from './shared.js';
 import { COPIED_ICON, DEVICE_ICON, PENCIL_ICON, SERVER_ICON } from './icons.js';
 
 export const emptyState = { books: [], activeBook: null, bookName: '', bookKind: 'device', records: [], stateRevision: -1, syncedAt: null, error: null };
@@ -12,6 +12,18 @@ export async function rpc(message) {
   }
   return response.result;
 }
+// An update arrives either whole or as one record. A view that is not exactly
+// one revision behind the same book has missed something and asks for the rest.
+export function watchBook(held, render) {
+  chrome.runtime.onMessage.addListener(message => {
+    if (message?.type !== 'Updated') return;
+    if (message.state) { render(message.state); return; }
+    const next = applyChange(held(), message);
+    if (next) render(next);
+    else rpc({ type: 'State' }).then(result => render(result.state)).catch(() => {});
+  });
+}
+
 export function currentSnapshot(next, current) {
   return Number.isSafeInteger(next?.stateRevision) && next.stateRevision >= current.stateRevision;
 }

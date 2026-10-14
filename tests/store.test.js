@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createStore } from '../extension/store.js';
-import { normalizeAPI, parseConnectLink } from '../extension/shared.js';
+import { applyChange, normalizeAPI, parseConnectLink } from '../extension/shared.js';
 
 const address = '0x' + 'ab'.repeat(20);
 const other = '0x' + 'cd'.repeat(20);
@@ -350,6 +350,31 @@ test('a file that is not a book is refused before anything is written', async ()
   await write(store, ['Treasury']);
   await assert.rejects(store.merge([{ address, scope: 'global', labels: [] }]));
   assert.deepEqual(store.state().records.map(entry => entry.labels[0]), ['Treasury']);
+});
+
+test('a view applies one record, and asks for the book when it has missed one', () => {
+  const held = { activeBook: 'book-1', stateRevision: 7, syncedAt: null,
+    records: [{ address, scope: 'global', labels: ['Treasury'], version: 'one' }] };
+  const announce = (change, revision = 8, book = 'book-1') =>
+    ({ type: 'Updated', change, activeBook: book, stateRevision: revision, syncedAt: 100 });
+
+  const renamed = { address, scope: 'global', labels: ['Renamed'], version: 'two' };
+  const after = applyChange(held, announce({ address, scope: 'global', record: renamed }));
+  assert.deepEqual(after.records, [renamed]);
+  assert.equal(after.stateRevision, 8);
+  assert.equal(after.syncedAt, 100);
+  assert.deepEqual(held.records.map(entry => entry.labels[0]), ['Treasury'], 'the copy it was given is left alone');
+
+  const added = applyChange(held, announce({ address: other, scope: 'eip155:8453',
+    record: { address: other, scope: 'eip155:8453', labels: ['Payroll'], version: 'two' } }));
+  assert.equal(added.records.length, 2);
+  assert.deepEqual(applyChange(held, announce({ address, scope: 'global', record: null })).records, []);
+
+  // A gap, another book, or a whole-book update: this view cannot patch it.
+  assert.equal(applyChange(held, announce({ address, scope: 'global', record: renamed }, 9)), null);
+  assert.equal(applyChange(held, announce({ address, scope: 'global', record: renamed }, 7)), null);
+  assert.equal(applyChange(held, announce({ address, scope: 'global', record: renamed }, 8, 'book-2')), null);
+  assert.equal(applyChange(held, { type: 'Updated', state: held }), null);
 });
 
 test('a sync that learns nothing costs nothing, and a book kept here is never asked', async () => {

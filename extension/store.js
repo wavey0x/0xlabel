@@ -61,10 +61,13 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
   // worker is torn down whenever it goes idle, so the count belongs to the
   // books in storage: restarting it must not hand out numbers a page has
   // already seen and would therefore discard.
-  function changed() {
+  // A change to one record is announced as that record. Everything else — a
+  // book switched, a file carried in, a sync that brought news — is the whole
+  // book, because that is genuinely what changed.
+  function changed(change = null) {
     revision++;
     storage.set({ stateRevision: revision }).catch(() => {});
-    notify(state());
+    notify(state(), change);
   }
   function serial(operation) {
     const result = queue.then(operation);
@@ -306,7 +309,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
           if (failure.current) records.push(failure.current);
           needsRefresh = false;
           await cache();
-          changed();
+          changed({ address, scope, record: failure.current || null });
           // Whoever got there first wrote the very names this draft carries, so
           // the book says what it was asked to say. A refused write that leaves
           // nothing to decide is a save, not a conflict.
@@ -321,8 +324,10 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
       error = null;
       needsRefresh = false;
       await cache();
-      changed();
-      return { state: state() };
+      changed({ address, scope, record: saved });
+      // The answer is that it is saved. What was saved reaches this view the
+      // same way it reaches every other one, so the book travels once.
+      return {};
     });
   }
 

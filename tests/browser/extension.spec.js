@@ -64,11 +64,19 @@ test('installed extension: a book that works with no setup, moving it to a serve
     await popup.locator('#site-toggle').click();
     await expect(siteSwitch).toBeChecked();
     await expect.poll(toolbar).toEqual({ icon: 'icons/mark-16.png', title: '0xlabel · Active on this page' });
-    // Label an address with no server anywhere in the picture.
+    // Label an address with no server anywhere in the picture. One name changing
+    // is announced as that name: the book is not sent to every tab again.
+    await popup.evaluate(() => {
+      window.heard = [];
+      chrome.runtime.onMessage.addListener(message => {
+        if (message?.type === 'Updated') window.heard.push(message.state ? 'book' : 'record');
+      });
+    });
     await website.getByRole('button', { name: 'Edit wallet labels', exact: true }).first().click();
     await website.getByRole('textbox', { name: 'Label 1' }).fill('Kept on this device');
     await website.getByRole('textbox', { name: 'Label 1' }).press('Enter');
     await expect(website.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Kept on this device');
+    expect(await popup.evaluate(() => window.heard)).toEqual(['record']);
 
     // Moving the book onto a server takes one pasted line and nothing else.
     const addBook = async (url, key, name) => {

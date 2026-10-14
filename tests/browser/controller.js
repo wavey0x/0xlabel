@@ -33,8 +33,17 @@ export async function start(page, { html = wallets, site = 'https://etherscan.io
         }
         const entry = draft.labels.length ? { ...draft, version: 'saved' } : null;
         window.state.records = [...window.state.records.filter(item => item.address !== draft.address || item.scope !== draft.scope), ...(entry ? [entry] : [])];
+        window.state.stateRevision += 1;
         window.saveCompleted = true;
-        return { state: structuredClone(window.state) };
+        // The worker answers the save, then tells every page what changed —
+        // including this one, which is how its own labels come to be repainted.
+        const announced = { type: 'Updated', activeBook: window.state.activeBook,
+          stateRevision: window.state.stateRevision, syncedAt: null,
+          change: { address: draft.address, scope: draft.scope, record: entry } };
+        // A page that cannot place the record asks for the book, as it does
+        // against the real worker.
+        if (!window.controller.patch(announced)) window.controller.updateState(structuredClone(window.state));
+        return {};
       },
     });
   }, { site, records });
