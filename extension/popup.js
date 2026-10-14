@@ -21,7 +21,6 @@ function render(next = state) {
   picker(state);
   $('#connection').disabled = busy;
   $('#settings-toggle').disabled = busy;
-  $('#refresh').disabled = !state.connectionKey || busy || $('#refresh').hasAttribute('aria-busy');
   $('#sync').textContent = busy ? 'Connecting…' : syncText(state);
   $('#sync').title = state.error || '';
   $('#sync').dataset.offline = String(Boolean(state.error));
@@ -35,12 +34,6 @@ function render(next = state) {
     : enabled ? 'Show the website originals again' : 'Show my tags on this website';
 }
 $('#settings-toggle').onclick = () => setup.open(Boolean(state.connectionKey));
-$('#refresh').onclick = async () => {
-  if (busy) return;
-  $('#refresh').disabled = true; $('#refresh').setAttribute('aria-busy', 'true');
-  try { render(await rpc({ type: 'Refresh' })); tell(''); } catch (error) { tell(error); }
-  finally { $('#refresh').removeAttribute('aria-busy'); render(); }
-};
 async function enable(enabled) {
   siteBusy = true; render();
   try {
@@ -83,6 +76,9 @@ try {
   $('#site-name').textContent = siteURL?.hostname || 'No website open';
   const result = await rpc({ type: 'State', tabId: tab?.id });
   sites = result.sites; render(result.state);
+  // The popup is only ever open for a moment, so sync while it is, rather than
+  // asking for a button press to make the time above it true.
+  rpc({ type: 'Refresh' }).then(render).catch(() => {});
   if (result.health?.status === 'stale' && sites[siteURL?.origin]) {
     $('#adapter-warning p').textContent = `${result.health.adapter} labeling paused. Your book is safe.`;
     $('#adapter-warning').hidden = false;
