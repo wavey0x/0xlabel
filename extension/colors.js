@@ -7,6 +7,9 @@ const accent = '#5b21b6';
 // Deep purple reads at 2.1:1 on a dark surface, far short of the 4.5:1 a
 // label needs. Lightened for dark websites only; the tints stay as they are.
 const accentOnDark = '#a78bfa';
+// The accent is both a text colour and a fill, so whatever sits on top of it
+// has to be themed with it: white on the lightened purple is only 2.72:1.
+const inkOnAccentDark = '#101113';
 
 export const COLORS = Object.freeze({
   accent,
@@ -29,12 +32,14 @@ export const COLORS = Object.freeze({
 export const THEMES = Object.freeze({
   light: {
     accent,
+    onAccent: white,
     canvas: '#f6f7fa', panel: white, ink: '#111111', muted: '#666666',
     glass: tint(white, 72), soft: tint(black, 2.75), line: tint(black, 6.25),
     shadow: `0 10px 28px ${tint(black, 12.5)}, 0 2px 8px ${tint(black, 4.7)}`,
   },
   dark: {
     accent: accentOnDark,
+    onAccent: inkOnAccentDark,
     canvas: '#101113', panel: '#18191c', ink: '#fafafa', muted: '#aaaaaa',
     glass: tint('#16171a', 60), soft: tint(white, 3.1), line: tint(white, 7.8),
     shadow: `0 10px 28px ${tint(black, 31.4)}, 0 2px 8px ${tint(black, 12.5)}`,
