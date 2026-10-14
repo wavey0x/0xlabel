@@ -1,6 +1,10 @@
 import { parseAddress, query, UNSAFE_HOST } from './shared.js';
 import { explorerNetwork, scopeOf } from './networks.js';
 
+// Evidence that names two different wallets. The element is disqualified;
+// the rest of the page is unaffected.
+export const AMBIGUOUS = 'contradictory-address-evidence';
+
 // Block explorers and wallet apps address a wallet the same way.
 const ADDRESS_PATH = /^\/address\/([^/]+)\/?$/;
 const FRAGMENT = /^(?:[a-z]+:)?(0x[0-9a-f]+)[.…]+([0-9a-f]+)$/;
@@ -35,7 +39,7 @@ export function identify(element, url, { attributes = [], identifies = [], ancho
     for (const key of attributes) values.push(parseAddress(host.getAttribute(key)));
   }
   const found = [...new Set(values.filter(Boolean))];
-  if (found.length > 1) throw new Error('contradictory-address-evidence');
+  if (found.length > 1) throw new Error(AMBIGUOUS);
   const address = found[0];
   if (!address) return null;
   const fragment = shown.match(FRAGMENT);
@@ -54,7 +58,16 @@ export function identify(element, url, { attributes = [], identifies = [], ancho
 export function collect(root, url, { targets, skip, sources = () => [], ...rules }) {
   return query(root, targets).flatMap(element => {
     if (skip?.(element)) return [];
-    const identity = identify(element, url, { ...rules, sources: sources(element, url).filter(Boolean) });
+    let identity;
+    try {
+      identity = identify(element, url, { ...rules, sources: sources(element, url).filter(Boolean) });
+    } catch (error) {
+      // Not labeling is as safe as labeling, so disagreement about one element
+      // skips it. A changed fragment means the adapter no longer reads this
+      // site correctly, which the controller handles by pausing the page.
+      if (error.message !== AMBIGUOUS) throw error;
+      return [];
+    }
     return identity ? [{ element, ...identity }] : [];
   });
 }

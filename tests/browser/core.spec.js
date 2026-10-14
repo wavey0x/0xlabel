@@ -14,6 +14,7 @@ const wallets = `<header>Explorer <input id="native-input"></header><main>
 async function start(page, { html = wallets, site = 'https://etherscan.io/accounts', records = [record] } = {}) {
   await page.goto('/tests/fixtures/page.html');
   await page.setContent(html);
+  await page.addStyleTag({ url: '/extension/colors.css' });
   await page.addStyleTag({ url: '/extension/page.css' });
   await page.evaluate(async ({ site, records }) => {
     const { createPageController } = await import('/extension/page.js');
@@ -326,16 +327,17 @@ test('explorer identities come from complete sources, including search suggestio
   await expect(page.locator('#table')).toHaveText('Preset name');
 });
 
-test('contradictory address evidence pauses labeling; generic detection skips fragments and editable or interactive content', async ({ page }) => {
-  for (const html of [
-    `<header></header><main><a href="/address/${other}" data-full-address="${address}">${address}</a></main>`,
-    `<header></header><main><div class="search-panel-container"><li role="option"><span>${other}</span><a href="/address/name.eth"><h6>name.eth</h6><span>${address}</span></a></li></div></main>`,
+test('contradictory address evidence disqualifies only that element; generic detection skips fragments and editable or interactive content', async ({ page }) => {
+  const sound = `<a id="sound" href="/address/${address}">${address}</a>`;
+  for (const conflict of [
+    `<a id="conflict" href="/address/${other}" data-full-address="${address}">${address}</a>`,
+    `<div class="search-panel-container"><li role="option"><span>${other}</span><a id="conflict" href="/address/name.eth"><h6>name.eth</h6><span>${address}</span></a></li></div>`,
   ]) {
-    await start(page, { html });
-    expect(await page.evaluate(() => window.controller.health.status)).toBe('stale');
-    await expect(page.locator('[data-0xlabel-address],[data-0xlabel-label]')).toHaveCount(0);
-    await page.evaluate(() => window.controller.retry());
-    expect(await page.evaluate(() => window.controller.health.status)).toBe('stale');
+    // One element's disagreement must never cost the rest of the page its tags.
+    await start(page, { html: `<header></header><main>${conflict}${sound}</main>` });
+    expect(await page.evaluate(() => window.controller.health.status)).toBe('ready');
+    await expect(page.locator('#conflict')).not.toHaveAttribute('data-0xlabel-address');
+    await expect(page.locator('#sound')).toHaveAttribute('data-0xlabel-label', 'Treasury');
   }
   await start(page, { site: 'https://plain.example', html: `<main><p id="wallet">${address}</p><p>0xabab…abab</p>
     <button>${address}</button><input value="${address}"><div contenteditable="true">${address}</div></main>` });
