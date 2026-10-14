@@ -223,6 +223,47 @@ test('failed and conflicting saves retain the draft; replacing a newer record re
   expect(await page.evaluate(() => window.saves.at(-1))).toMatchObject({ address, labels: ['My edit', 'Operations'], version: 'newer' });
 });
 
+test('editing a search suggestion survives native blur dismissal without selecting the result', async ({ page }) => {
+  await start(page, { site: 'https://etherscan.io/', html: `<header>Explorer
+    <div class="search-panel-container"><input id="search" aria-label="Search explorer">
+    <ul id="suggestions" hidden><li role="option"><span hidden>${address}</span>
+      <a id="suggestion" href="/address/${address}">Website name</a>
+    </li></ul></div></header><main><button id="outside">Outside</button></main><script>
+    const search=document.querySelector('#search'), suggestions=document.querySelector('#suggestions');
+    search.onfocus=()=>{suggestions.hidden=false;};
+    // Etherscan closes empty-search suggestions after the search input blurs.
+    search.onblur=()=>{setTimeout(()=>{suggestions.hidden=true;});};
+    document.querySelector('#suggestion').onmousedown=event=>{
+      event.preventDefault();window.nativeSearchSelection=event.currentTarget.getAttribute('href');
+    };
+    document.querySelector('#suggestion').onclick=event=>event.preventDefault();
+    </script>` });
+  const search = page.getByRole('textbox', { name: 'Search explorer' });
+  await search.click();
+  const button = page.locator('#suggestion + [data-0xlabel-edit]').getByRole('button');
+  await button.hover();
+  await page.mouse.down();
+  await expect(search).toBeFocused();
+  await expect(page.locator('#suggestions')).toBeVisible();
+  await page.mouse.up();
+  await expect(input(page)).toBeFocused();
+  await expect(shownAddress(page)).toHaveText(checksumAddress(address));
+  await expect(page.locator('#suggestions')).toBeHidden();
+  expect(await page.evaluate(() => window.nativeSearchSelection)).toBeUndefined();
+  await input(page).fill('Search tag');
+  await save(page).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(await page.evaluate(() => window.saves[0])).toMatchObject({ address, labels: ['Search tag', 'Operations'] });
+  await search.click();
+  await page.locator('#suggestion').click();
+  expect(await page.evaluate(() => window.nativeSearchSelection)).toBe('/address/' + address);
+  await search.click();
+  await button.click();
+  await page.getByRole('button', { name: 'Outside', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(await page.evaluate(() => window.saves)).toHaveLength(1);
+});
+
 test('explorer identities come from complete sources, including search suggestions, named fee recipients and transaction-table spans', async ({ page }) => {
   await start(page, { site: 'https://etherscan.io/', html: `<header>Explorer
     <div class="search-panel-container"><ul><li role="option" data-address="${address}">

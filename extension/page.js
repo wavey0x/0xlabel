@@ -51,6 +51,9 @@ export async function createPageController({
     button.type = 'button'; button.className = 'inline-label';
     button.setAttribute('aria-label', 'Edit wallet labels'); button.title = 'Edit labels';
     button.innerHTML = LABEL_ICON;
+    // Keep a suggestion's search field focused until activation. Otherwise its
+    // blur handler can hide this button before the browser delivers the click.
+    button.onpointerdown = event => { event.preventDefault(); event.stopPropagation(); };
     button.onclick = event => { event.preventDefault(); event.stopPropagation(); open(targets.get(target.element)); };
     root.append(button);
     // Keep edit buttons outside native links. Block displays keep the glyph on
@@ -199,7 +202,9 @@ export async function createPageController({
       if (editorTarget) {
         const live = targets.get(editorTarget.element);
         if (!live || live.address !== editorTarget.address || live.network !== editorTarget.network) {
-          editorTarget = null; editor.detach('This row changed. Your draft still belongs to the address above.');
+          const hidden = editorTarget.element?.isConnected && !editorTarget.element.getClientRects().length;
+          editorTarget = null;
+          editor.detach(hidden ? '' : 'This row changed. Your draft still belongs to the address above.');
         }
       }
       editor?.updateVisibility();
