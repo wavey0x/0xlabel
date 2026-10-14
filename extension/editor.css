@@ -54,7 +54,12 @@ dialog.editor::backdrop { background: var(--0xlabel-backdrop); backdrop-filter: 
 .conflict button { padding: 4px 0; font-size: 11px; color: var(--0xlabel-accent); }
 footer { margin-top: 8px; }
 /* Inline with the address, like the site's native copy control. */
-.inline-label { display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 3px; border-radius: 4px; color: var(--0xlabel-accent); background: transparent; }
+.inline-label { display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 3px; border-radius: 4px; color: var(--0xlabel-accent); background: transparent; transition: transform 180ms cubic-bezier(.2,.9,.25,1.4), background-color 120ms ease; }
+/* The one piece of motion in 0xlabel: a press that gives, then springs
+   back past where it started. It answers the click on the website's own
+   line, before the editor has had time to open. */
+.inline-label:active { transform: scale(.82); transition-duration: 70ms; }
+@media (prefers-reduced-motion: reduce) { .inline-label { transition: none; } .inline-label:active { transform: none; } }
 .inline-label:hover,.inline-label:focus-visible { background: var(--0xlabel-accent-hover); }
 .inline-label svg { width: 14px; height: 14px; pointer-events: none; }
 .inline-label:hover svg,.inline-label:focus-visible svg { filter: drop-shadow(0 0 3px var(--0xlabel-accent-glow)); }
