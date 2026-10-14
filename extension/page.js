@@ -16,6 +16,7 @@ export async function createPageController({
   let state = initialState;
   let book = indexBook(state.records);
   let adapter;
+  let observed;
   let health = { status: 'waiting' };
   let href = '';
   let stopped = false;
@@ -43,6 +44,11 @@ export async function createPageController({
   editorBox.style.cssText = 'position:fixed;pointer-events:auto;display:none;';
   shadow.append(editorBox);
   doc.documentElement.append(host);
+  // Rules an adapter needs applied to the website's own elements, which the
+  // shadow root cannot reach. Only the active adapter's styles are present.
+  const siteStyles = doc.createElement('style');
+  siteStyles.setAttribute('data-0xlabel-ui', '');
+  (doc.head || doc.documentElement).append(siteStyles);
   const abort = new AbortController();
   const listen = (target, type, callback, options = {}) => target.addEventListener(type, callback, { ...options, signal: abort.signal });
 
@@ -163,7 +169,8 @@ export async function createPageController({
       clear();
       if (editor) { editorTarget = null; editor.detach(); }
       href = nextURL.href;
-      adapter = adapters.find(candidate => candidate.matches(nextURL));
+      adapter = adapters.find(candidate => candidate.matches(nextURL)) || adapters.at(-1);
+      if (adapter !== observed) { observed = adapter; observe(); siteStyles.textContent = adapter.styles || ''; }
       reported = false;
       paused = false;
       probing = false;
@@ -246,8 +253,14 @@ export async function createPageController({
       } else schedule(existing || element);
     }
   });
-  observer.observe(doc.documentElement, { subtree: true, childList: true, characterData: true, attributes: true, attributeOldValue: true,
-    attributeFilter: ['href', 'title', 'aria-label', 'data-address', 'data-full-address', 'data-highlight-target', 'data-highlight-value', 'class', 'hidden', 'style'] });
+  // Links and presentation always matter; the active adapter adds the
+  // attributes its own site keeps address evidence in.
+  const WATCHED = ['href', 'class', 'hidden', 'style'];
+  function observe() {
+    observer.observe(doc.documentElement, { subtree: true, childList: true, characterData: true, attributes: true, attributeOldValue: true,
+      attributeFilter: [...new Set([...WATCHED, ...(adapter?.watch || [])])] });
+  }
+  observe();
 
   function theme() {
     const style = win.getComputedStyle(doc.body);
@@ -361,6 +374,7 @@ export async function createPageController({
     observer.disconnect(); abort.abort(); clear();
     if (editor) editor.close();
     host.remove();
+    siteStyles.remove();
   }
   dirty.add(doc);
   run();

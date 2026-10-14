@@ -8,16 +8,32 @@ import { addressLink, collect } from './detect.js';
 //   matches  claims a URL; the first match in `adapters` wins
 //   probe    whether the page is ready, still loading, or no longer recognized
 //   rules    where this site keeps address evidence (see detect.js)
+//   styles   CSS the site's own elements need while this adapter is active
+//   watch    extra attributes whose changes should trigger a rescan
 //
 // Everything below is data about a site. Add a website by adding an entry;
 // no core file needs to know it exists.
-const site = ({ rules, ...adapter }) => ({ ...adapter, scan: (root, { url }) => collect(root, url, rules) });
+const site = ({ rules, watch = [], ...adapter }) => ({
+  ...adapter,
+  watch: [...new Set([...(rules.attributes || []), ...(rules.identifies || []), ...watch])],
+  scan: (root, { url }) => collect(root, url, rules),
+});
 
 const SEARCH_ROW = '.search-panel-container li[role="option"] > a[href]';
 
 const etherscanAdapter = site({
   id: 'Etherscan',
   matches: url => Boolean(explorerNetwork(url.hostname)),
+  watch: ['data-highlight-value'],
+  // Search suggestions keep their native link and a compact trailing action.
+  styles: `.search-panel-container li:has(> a[data-0xlabel-address] + [data-0xlabel-edit]) {
+      display: flex;
+      align-items: center;
+    }
+    .search-panel-container li > a[data-0xlabel-address] {
+      flex: 1;
+      min-width: 0;
+    }`,
   probe({ document, url }) {
     if (document.querySelector('#challenge-running,#challenge-stage,[name="cf-turnstile-response"]') || /^(Just a moment|Attention Required)/i.test(document.title)) return { status: 'waiting' };
     if (document.readyState === 'loading') return { status: 'waiting' };
