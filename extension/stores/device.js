@@ -16,7 +16,7 @@ export function createDeviceBook({ storage, key, now = Date.now }) {
       const records = await read();
       const existing = findRecord(records, address, scope);
       if ((existing?.version ?? null) !== version) {
-        const conflict = new Error('This address changed since you opened it. Review the current names before saving.');
+        const conflict = new Error('Saved elsewhere while you were editing.');
         conflict.status = 409;
         conflict.current = existing;
         throw conflict;

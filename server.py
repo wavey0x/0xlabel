@@ -129,7 +129,7 @@ def create_app(database: str | Path, token: str) -> FastAPI:
                 current_version = current["version"] if current else None
                 if change.version != current_version:
                     return JSONResponse(status_code=409, content={
-                        "detail": "This list changed. Review the latest saved names before trying again.",
+                        "detail": "Saved elsewhere while you were editing.",
                         "current": record(current),
                     })
                 if not change.labels:

@@ -1,4 +1,4 @@
-import { findRecord, MAX_LABELS, MAX_NAME_LENGTH, normalizeLabels } from './shared.js';
+import { findRecord, MAX_LABELS, MAX_NAME_LENGTH, normalizeLabels, sameLabels } from './shared.js';
 import { checksumAddress } from './checksum.js';
 import { BRAND_MARK, COPY_ICON, COPIED_ICON, confirmCopied } from './icons.js';
 
@@ -24,8 +24,21 @@ export function createEditor(container, { address, scope = 'global', state, save
   const bookName = state.books.length > 1 ? state.bookName : '';
   const displayAddress = checksumAddress(address);
   const own = findRecord(state.records, address, scope);
-  const initial = own || (scope !== 'global' && findRecord(state.records, address, 'global'));
-  const draft = { labels: [...(initial?.labels || [''])], version: own?.version || null };
+  // What the book says about this address, and the version a save must match.
+  // A scope with no record of its own starts from the names shown everywhere.
+  const reading = from => {
+    const mine = findRecord(from.records, address, scope);
+    const shown = mine || (scope !== 'global' && findRecord(from.records, address, 'global'));
+    return { labels: shown?.labels || [], version: mine?.version || null };
+  };
+  let loaded = reading(state);
+  const draft = { labels: [...(loaded.labels.length ? loaded.labels : [''])], version: loaded.version };
+  const edited = () => !sameLabels(draft.labels.filter(name => name.trim()), loaded.labels);
+  const adopt = next => {
+    loaded = next;
+    draft.labels = [...(next.labels.length ? next.labels : [''])];
+    draft.version = next.version;
+  };
   let phase = 'idle';
   let closed = false;
   let activeState = state;
@@ -150,6 +163,7 @@ export function createEditor(container, { address, scope = 'global', state, save
     });
     updateControls();
     preview();
+    if (focus === null) return;
     const input = rows.querySelectorAll('input')[focus];
     if (input) { input.focus(); input.select(); }
     else get('.add').focus();
@@ -181,18 +195,17 @@ export function createEditor(container, { address, scope = 'global', state, save
     } catch (error) {
       if (closed) return;
       get('.notice').textContent = error.message;
+      // A refusal only ever means the book now says something else. Show what
+      // it says and offer the two answers, each of them one click.
       if (error.status === 409) {
-        const conflict = error.current;
+        const theirs = { labels: error.current?.labels || [], version: error.current?.version || null };
         const box = get('.conflict');
         box.hidden = false;
-        box.replaceChildren(element('p', `Currently saved: ${conflict?.labels.join(' · ') || 'No names'}`));
-        const review = element('button', 'Keep my labels', { type: 'button', class: 'quiet' });
-        review.onclick = () => {
-          draft.version = conflict?.version || null;
-          box.hidden = true;
-          get('.notice').textContent = 'Review your labels, then Save to replace the current list.';
-        };
-        box.append(review);
+        const take = element('button', 'Use these', { type: 'button', class: 'quiet' });
+        take.onclick = () => { adopt(theirs); box.hidden = true; get('.notice').textContent = ''; renderRows(); };
+        const keep = element('button', 'Keep mine', { type: 'button', class: 'quiet' });
+        keep.onclick = () => { draft.version = theirs.version; box.hidden = true; get('.notice').textContent = ''; submit(); };
+        box.replaceChildren(element('p', theirs.labels.join(' · ') || 'No names'), take, keep);
       }
     } finally {
       phase = 'idle';
@@ -213,11 +226,7 @@ export function createEditor(container, { address, scope = 'global', state, save
   return {
     focus, updateVisibility,
     closeIfUnchanged() {
-      const names = initial?.labels || [];
-      const entered = draft.labels.filter(name => name.trim());
-      const changed = draft.version !== (own?.version || null) || entered.length !== names.length ||
-        entered.some((name, index) => name !== names[index]);
-      if (phase !== 'idle' || changed) {
+      if (phase !== 'idle' || edited()) {
         pageNotice = 'Save or close this draft to edit another address.';
         guard(); focus();
         return false;
@@ -225,7 +234,22 @@ export function createEditor(container, { address, scope = 'global', state, save
       finish();
       return true;
     },
-    updateState(next) { activeState = next; guard(); },
+    // A draft nobody has touched follows the book, so a name saved in another
+    // tab or window is simply what you see rather than a conflict waiting to
+    // happen. A draft with typing in it is never overwritten.
+    updateState(next) {
+      activeState = next;
+      if (phase === 'idle' && !edited()) {
+        const fresh = reading(next);
+        if (fresh.version !== loaded.version || !sameLabels(fresh.labels, loaded.labels)) {
+          adopt(fresh);
+          const inputs = [...panel.querySelectorAll('.row input')];
+          const here = inputs.indexOf(panel.getRootNode().activeElement);
+          renderRows(here >= 0 ? here : null);
+        }
+      }
+      guard();
+    },
     detach(message = 'The page integration paused. Your draft is still safe to save to the book.') { pageNotice = message; guard(); },
     close: finish,
   };

@@ -52,6 +52,7 @@ dialog.editor::backdrop { background: var(--0xlabel-backdrop); backdrop-filter: 
 .conflict { margin-top: 8px; padding: 8px; border-radius: 7px; background: var(--0xlabel-soft); font-size: 11px; }
 .conflict p { margin: 0 0 5px; }
 .conflict button { padding: 4px 0; font-size: 11px; color: var(--0xlabel-accent); }
+.conflict button + button { margin-left: 14px; }
 footer { margin-top: 8px; }
 /* Inline with the address, like the site's native copy control. */
 .inline-label { position: relative; display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 3px; border-radius: 4px; color: var(--0xlabel-accent); background: transparent; transition: transform 180ms cubic-bezier(.2,.9,.25,1.4), background-color 120ms ease; }

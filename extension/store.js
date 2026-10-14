@@ -1,4 +1,4 @@
-import { findRecord, normalizeLabels, normalizeScope, parseAddress, validateSnapshot } from './shared.js';
+import { findRecord, normalizeLabels, normalizeScope, parseAddress, sameLabels, validateSnapshot } from './shared.js';
 import { createDeviceBook } from './stores/device.js';
 import { createServerBook } from './stores/server.js';
 
@@ -49,7 +49,15 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
       records, stateRevision: revision, syncedAt, error,
     };
   }
-  function changed() { revision++; notify(state()); }
+  // The revision orders snapshots for every view that holds one. A service
+  // worker is torn down whenever it goes idle, so the count belongs to the
+  // books in storage: restarting it must not hand out numbers a page has
+  // already seen and would therefore discard.
+  function changed() {
+    revision++;
+    storage.set({ stateRevision: revision }).catch(() => {});
+    notify(state());
+  }
   function serial(operation) {
     const result = queue.then(operation);
     queue = result.catch(() => {});
@@ -79,7 +87,8 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
   }
 
   async function init() {
-    const saved = await storage.get(['books', 'activeBook']);
+    const saved = await storage.get(['books', 'activeBook', 'stateRevision']);
+    revision = Number.isSafeInteger(saved.stateRevision) ? saved.stateRevision : 0;
     books = Array.isArray(saved.books) ? saved.books.filter(item => item?.id && item?.name && item?.storage?.kind) : [];
     if (!books.length) {
       // Everyone starts with a book, so labeling works before anything is set up.
@@ -88,7 +97,6 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
       await saveBooks();
     }
     await open(entry(saved.activeBook) ? saved.activeBook : books[0].id);
-    revision++;
   }
 
   function refresh() {
@@ -229,7 +237,10 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
         await cache();
         const latest = findRecord(records, address, scope);
         if ((latest?.version || null) !== version) {
-          const conflict = new Error('The previous save may have completed. Review the current list before saving again.');
+          // The book already holds what this draft asks for, so the interrupted
+          // write landed. Nothing is in dispute; say so instead of asking.
+          if (sameLabels(latest?.labels || [], labels)) { changed(); return { state: state() }; }
+          const conflict = new Error('Saved elsewhere while you were editing.');
           conflict.current = latest;
           conflict.status = 409;
           changed();
@@ -250,6 +261,10 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
           needsRefresh = false;
           await cache();
           changed();
+          // Whoever got there first wrote the very names this draft carries, so
+          // the book says what it was asked to say. A refused write that leaves
+          // nothing to decide is a save, not a conflict.
+          if (sameLabels(failure.current?.labels || [], labels)) return { state: state() };
         } else if (failure.status && failure.status < 500) {
           needsRefresh = false;
         }

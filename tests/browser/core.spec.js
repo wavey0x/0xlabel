@@ -208,7 +208,7 @@ test('an inconsistent integration clears annotations but preserves its draft; re
   await expect(page.locator('#first')).toHaveAttribute('data-0xlabel-label', 'Still safe');
 });
 
-test('failed and conflicting saves retain the draft; replacing a newer record requires explicit review', async ({ page }) => {
+test('failed and conflicting saves retain the draft; a refusal offers both answers in one click', async ({ page }) => {
   await start(page);
   await edit(page).click();
   await input(page).fill('My edit');
@@ -219,10 +219,40 @@ test('failed and conflicting saves retain the draft; replacing a newer record re
   await page.evaluate(({ record }) => { window.saveError='Conflict'; window.conflict={ ...record, labels:['Newer name'], version:'newer' }; }, { record });
   await save(page).click();
   await expect(input(page)).toHaveValue('My edit');
-  await page.getByRole('button', { name: 'Keep my labels' }).click();
+  // What the book now says, with both answers to it one click away.
+  await expect(page.locator('.conflict')).toContainText('Newer name');
+  await page.getByRole('button', { name: 'Keep mine' }).click();
+  expect(await page.evaluate(() => window.saves.at(-1))).toMatchObject({ address, labels: ['My edit', 'Operations'], version: 'newer' });
+  await page.getByRole('button', { name: 'Use these' }).click();
+  await expect(input(page)).toHaveValue('Newer name');
+  await expect(page.locator('.conflict')).toBeHidden();
   await page.evaluate(() => { window.saveError=null; });
   await save(page).click();
-  expect(await page.evaluate(() => window.saves.at(-1))).toMatchObject({ address, labels: ['My edit', 'Operations'], version: 'newer' });
+  expect(await page.evaluate(() => window.saves.at(-1))).toMatchObject({ address, labels: ['Newer name'], version: 'newer' });
+});
+
+test('a draft nobody has touched follows the book; one with typing in it is never overwritten', async ({ page }) => {
+  await start(page);
+  const elsewhere = labels => page.evaluate(({ address, labels }) => window.controller.updateState({
+    ...window.state, stateRevision: window.state.stateRevision + 5,
+    records: [{ address, scope: 'global', labels, version: 'from-elsewhere-' + labels.join('-') }],
+  }), { address, labels });
+
+  await edit(page).click();
+  await expect(input(page)).toHaveValue('Treasury');
+  await elsewhere(['Saved in another tab']);
+  await expect(input(page)).toHaveValue('Saved in another tab');
+  await expect(page.locator('#first')).toHaveAttribute('data-0xlabel-label', 'Saved in another tab');
+  // Saving the followed draft carries that record's version, so a book written
+  // elsewhere is not asked to resolve a conflict that no longer exists.
+  await save(page).click();
+  expect(await page.evaluate(() => window.saves.at(-1))).toMatchObject({ labels: ['Saved in another tab'], version: 'from-elsewhere-Saved in another tab' });
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  await edit(page).click();
+  await input(page).fill('Still mine');
+  await elsewhere(['Saved again elsewhere']);
+  await expect(input(page)).toHaveValue('Still mine');
 });
 
 test('editing a search suggestion survives native blur dismissal without selecting the result', async ({ page }) => {

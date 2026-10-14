@@ -204,6 +204,42 @@ test('an interrupted write is checked before it is retried', async () => {
   assert.equal(remote().length, 1, 'the write is not repeated');
 });
 
+test('a view open before the worker restarted is not left behind by the book', async () => {
+  const { store, make } = harness();
+  await store.init();
+  await write(store, ['Treasury']);
+  // The service worker is torn down whenever it goes idle. A page still holding
+  // the last snapshot ignores anything numbered below it, so the count has to
+  // belong to the books rather than to this run of the worker.
+  const seen = store.state().stateRevision;
+  const resumed = make();
+  await resumed.init();
+  await write(resumed, ['Renamed'], { version: resumed.state().records[0].version });
+  assert.ok(resumed.state().stateRevision > seen, `a restart handed out ${resumed.state().stateRevision} again`);
+});
+
+test('saving the names a book already holds is a save, not a conflict', async () => {
+  const { store } = harness();
+  await store.init();
+  await write(store, ['Treasury']);
+  // The same edit arrives twice: from a view that had not heard about the first.
+  await write(store, ['Treasury']);
+  assert.deepEqual(store.state().records.map(entry => entry.labels), [['Treasury']]);
+  await assert.rejects(write(store, ['Something else']), error => error.status === 409);
+});
+
+test('an interrupted write that landed is answered by what the server now says', async () => {
+  const { store, storage, make, remote } = harness();
+  await store.init();
+  await store.add({ name: 'Team', storage: onServer });
+  await write(store, ['Treasury']);
+  await storage.set({ needsRefresh: true });
+  const resumed = make();
+  await resumed.init();
+  await write(resumed, ['Treasury']);
+  assert.deepEqual(remote().map(entry => entry.labels), [['Treasury']], 'the write is neither repeated nor disputed');
+});
+
 test('a book carried in from a file joins the one that is open, replacing matching names', async () => {
   const { store } = harness();
   await store.init();

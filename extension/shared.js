@@ -90,6 +90,12 @@ export function validateSnapshot(value) {
   });
 }
 
+// Two label lists mean the same thing only in the same order: the first name
+// is the one a website shows.
+export function sameLabels(left, right) {
+  return left.length === right.length && left.every((name, index) => name === right[index]);
+}
+
 export function findRecord(records, address, scope) {
   return records.find(item => item.address === address && item.scope === scope) || null;
 }
