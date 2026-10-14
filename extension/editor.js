@@ -1,6 +1,6 @@
 import { findRecord, MAX_LABELS, MAX_NAME_LENGTH, normalizeLabels } from './shared.js';
 import { checksumAddress } from './checksum.js';
-import { BRAND_MARK, COPY_ICON, COPIED_ICON } from './icons.js';
+import { BRAND_MARK, COPY_ICON, COPIED_ICON, confirmCopied } from './icons.js';
 
 const element = (tag, text, attrs = {}) => {
   const node = document.createElement(tag);
@@ -81,8 +81,7 @@ export function createEditor(container, { address, scope = 'global', state, save
   get('.copy').onclick = async () => {
     try {
       await navigator.clipboard.writeText(displayAddress);
-      get('.copy').innerHTML = COPIED_ICON;
-      get('.copy').setAttribute('aria-label', 'Copied'); get('.copy').title = 'Copied';
+      confirmCopied(get('.copy'));
     }
     catch { get('.notice').textContent = 'Select the full address above to copy it.'; queueMicrotask(onLayout); }
   };

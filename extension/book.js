@@ -3,7 +3,7 @@ import { parseAddress, normalizeScope } from './shared.js';
 import { scopeName } from './networks.js';
 import { checksumAddress } from './checksum.js';
 import { createEditor, editorStyles } from './editor.js';
-import { COPY_ICON, COPIED_ICON } from './icons.js';
+import { COPY_ICON, confirmCopied } from './icons.js';
 
 let state = emptyState;
 let busy = false;
@@ -62,8 +62,8 @@ function bookRow(record) {
   copy.setAttribute('aria-label', `Copy ${displayAddress}`); copy.title = `Copy ${displayAddress}`;
   copy.onclick = async () => {
     try {
-      await navigator.clipboard.writeText(displayAddress); copy.innerHTML = COPIED_ICON;
-      copy.setAttribute('aria-label', `Copied ${displayAddress}`); copy.title = 'Copied';
+      await navigator.clipboard.writeText(displayAddress);
+      confirmCopied(copy, `Copied ${displayAddress}`);
     } catch {
       const range = document.createRange(); range.selectNodeContents(row.querySelector('code'));
       getSelection().removeAllRanges(); getSelection().addRange(range);
