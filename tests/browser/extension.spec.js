@@ -56,6 +56,11 @@ test('installed extension: authenticated HTTP/HTTPS books, source isolation, ala
     const popup = await context.newPage(); await website.bringToFront();
     await popup.setViewportSize({width:380,height:600});
     await popup.goto(`chrome-extension://${id}/popup.html`);
+    // Before any book exists the switch must still answer a click. Silently
+    // ignoring it is indistinguishable, to the person clicking, from a break.
+    await expect(popup.locator('#site-name')).toHaveText('127.0.0.1');
+    await popup.getByRole('switch', { name: 'Show my tags on this website' }).click();
+    await expect(popup.locator('#message')).toHaveText('Connect a book before turning on this website.');
     const addConnection = async data => {
       await popup.locator('#connection').click();
       await popup.getByRole('menuitem', { name: '+ Add connection', exact: true }).click();

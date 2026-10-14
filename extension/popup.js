@@ -27,7 +27,12 @@ function render(next = state) {
   $('#sync').dataset.offline = String(Boolean(state.error));
   const enabled = Boolean(siteURL && sites[siteURL.origin]);
   $('#site-toggle').setAttribute('aria-checked', String(enabled));
-  $('#site-toggle').disabled = !siteURL || siteBusy || !state.connectionKey && !enabled;
+  // Only inert when there is nothing to act on. Without a book the switch
+  // still answers, because a control that silently ignores a click reads as
+  // broken rather than unavailable.
+  $('#site-toggle').disabled = !siteURL || siteBusy;
+  $('#site-toggle').title = !siteURL ? 'Open a website to use your tags'
+    : enabled ? 'Show the website originals again' : 'Show my tags on this website';
 }
 $('#settings-toggle').onclick = () => setup.open(Boolean(state.connectionKey));
 $('#refresh').onclick = async () => {
@@ -40,6 +45,7 @@ async function enable(enabled) {
   siteBusy = true; render();
   try {
     if (!siteURL) throw new Error('Open a website to enable labeling.');
+    if (enabled && !state.connectionKey) throw new Error('Connect a book before turning on this website.');
     if (enabled && !await chrome.permissions.request({ origins: [hostPermission(siteURL.origin)] })) throw new Error('Website access was not granted.');
     sites = (await rpc({ type: 'Site', tabId: tab.id, enabled })).sites;
     $('#adapter-warning').hidden = true; tell('');
