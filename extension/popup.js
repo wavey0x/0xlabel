@@ -28,7 +28,6 @@ function render(next = state) {
   const enabled = Boolean(siteURL && sites[siteURL.origin]);
   $('#site-toggle').setAttribute('aria-checked', String(enabled));
   $('#site-toggle').disabled = !siteURL || siteBusy || !state.connectionKey && !enabled;
-  $('#site-view').textContent = !siteURL ? 'Open a website to use your tags' : enabled ? 'Your tags are on' : 'Website originals';
 }
 $('#settings-toggle').onclick = () => setup.open(Boolean(state.connectionKey));
 $('#refresh').onclick = async () => {

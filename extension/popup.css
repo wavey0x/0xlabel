@@ -6,9 +6,8 @@ body { width: 320px; padding: 20px; background: radial-gradient(ellipse at top l
 .site-info { display: grid; min-width: 0; gap: 2px; }
 .site-info .eyebrow { margin: 0; }
 #site-name { font-size: 12px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#site-view { font-size: 10px; }
-.open-book { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 10px 0 0; font-size: 12px; }
-.open-book span { color: var(--0xlabel-accent); font-size: 16px; }
+.open-book { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: calc(100% + 16px); margin: 6px -8px 0; padding: 10px 8px; font-size: 12px; text-align: left; }
+.open-book svg { flex-shrink: 0; color: var(--0xlabel-accent); }
 #adapter-warning { font-size: 11px; color: var(--0xlabel-warning); }
 #adapter-warning p { margin: 8px 0 2px; }
 #adapter-warning button { font-size: 10px; padding: 4px 8px 4px 0; }

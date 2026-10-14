@@ -69,7 +69,6 @@ test('installed extension: authenticated HTTP/HTTPS books, source isolation, ala
     expect((await (await api.get(local+'/labels')).json()).records).toEqual([localRecord]);
     const siteSwitch = popup.getByRole('switch', { name: 'Show my tags on this website' });
     await expect(siteSwitch).not.toBeChecked();
-    await expect(popup.locator('#site-view')).toHaveText('Website originals');
     await popup.locator('#site-toggle').click();
     await expect(siteSwitch).toBeChecked();
     await expect(website.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Local treasury');
@@ -183,7 +182,6 @@ test('installed extension: authenticated HTTP/HTTPS books, source isolation, ala
     await expect(embedded.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Local edited');
     await popup.locator('#site-toggle').click();
     await expect(siteSwitch).not.toBeChecked();
-    await expect(popup.locator('#site-view')).toHaveText('Website originals');
     await expect(website.locator('[data-0xlabel-address],[data-0xlabel-label],[data-0xlabel-ui]')).toHaveCount(0);
     await expect(another.locator('[data-0xlabel-address],[data-0xlabel-label],[data-0xlabel-ui]')).toHaveCount(0);
     await expect(embedded.locator('[data-0xlabel-address],[data-0xlabel-label],[data-0xlabel-ui]')).toHaveCount(0);
