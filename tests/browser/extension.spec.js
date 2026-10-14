@@ -33,6 +33,16 @@ test('installed extension: authenticated HTTP/HTTPS books, source isolation, ala
     await context.grantPermissions(['clipboard-read','clipboard-write'], {origin:'http://127.0.0.1:8719'});
     const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker');
     const id = worker.url().split('/')[2];
+    // The toolbar is the only at-a-glance signal of whether a website is being
+    // labeled, so record which icon the worker actually asks Chrome to show.
+    await worker.evaluate(() => {
+      const setIcon = chrome.action.setIcon.bind(chrome.action);
+      chrome.action.setIcon = details => { globalThis.shownIcon = details.path?.[16]; return setIcon(details); };
+    });
+    const toolbar = () => worker.evaluate(async () => {
+      const [tab] = await chrome.tabs.query({ url: 'http://127.0.0.1:8719/*' });
+      return { icon: globalThis.shownIcon, title: await chrome.action.getTitle({ tabId: tab.id }) };
+    });
     const website = context.pages()[0]; await website.goto('http://127.0.0.1:8719/tests/fixtures/generic.html');
     await website.evaluate(() => {
       for (const [id, src] of [['embedded', '/tests/fixtures/frame.html'], ['external', 'http://localhost:8719/tests/fixtures/frame.html']]) {
@@ -71,6 +81,7 @@ test('installed extension: authenticated HTTP/HTTPS books, source isolation, ala
     await expect(siteSwitch).not.toBeChecked();
     await popup.locator('#site-toggle').click();
     await expect(siteSwitch).toBeChecked();
+    await expect.poll(toolbar).toEqual({ icon: 'icons/mark-16.png', title: '0xlabel · Active on this page' });
     await expect(website.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Local treasury');
     await expect(embedded.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Local treasury');
     await expect(external.locator('[data-0xlabel-address],[data-0xlabel-ui]')).toHaveCount(0);
@@ -182,6 +193,7 @@ test('installed extension: authenticated HTTP/HTTPS books, source isolation, ala
     await expect(embedded.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Local edited');
     await popup.locator('#site-toggle').click();
     await expect(siteSwitch).not.toBeChecked();
+    await expect.poll(toolbar).toEqual({ icon: 'icons/mark-idle-16.png', title: '0xlabel' });
     await expect(website.locator('[data-0xlabel-address],[data-0xlabel-label],[data-0xlabel-ui]')).toHaveCount(0);
     await expect(another.locator('[data-0xlabel-address],[data-0xlabel-label],[data-0xlabel-ui]')).toHaveCount(0);
     await expect(embedded.locator('[data-0xlabel-address],[data-0xlabel-label],[data-0xlabel-ui]')).toHaveCount(0);
@@ -191,6 +203,7 @@ test('installed extension: authenticated HTTP/HTTPS books, source isolation, ala
     await expect(website.locator('[data-0xlabel-address]')).toHaveCount(0);
     await popup.locator('#site-toggle').click();
     await expect(siteSwitch).toBeChecked();
+    await expect.poll(toolbar).toEqual({ icon: 'icons/mark-16.png', title: '0xlabel · Active on this page' });
     await expect(website.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Local edited');
     await expect(another.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Local edited');
     await popup.locator('#site-toggle').click();
