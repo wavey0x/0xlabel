@@ -1,0 +1,22 @@
+/* Keep native-page annotations quiet; the extension UI carries the heavier style. */
+[data-0xlabel-label],
+[data-0xlabel-label] :not([data-0xlabel-ui]) {
+  font-size: 0 !important;
+}
+a[data-0xlabel-label], span[data-0xlabel-label], code[data-0xlabel-label] {
+  display: inline-block;
+}
+[data-0xlabel-label]::before {
+  content: attr(data-0xlabel-label);
+  font-size: var(--0xlabel-font-size);
+  display: inline-block;
+  padding-inline: .05em .15em;
+  max-width: min(9em, 25vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  color: #4169e1;
+  font-weight: 700;
+  pointer-events: none;
+}

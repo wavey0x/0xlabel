@@ -1,0 +1,13 @@
+{
+  "name": "0xlabel-extension-checks",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "icons": "node scripts/render-icons.mjs",
+    "test": "node --test tests/*.test.js",
+    "test:browser": "playwright test",
+    "screenshots": "playwright test --config=playwright.screenshots.config.js"
+  },
+  "devDependencies": { "@playwright/test": "^1.56.0" }
+}

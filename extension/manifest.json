@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "0xlabel",
+  "version": "1",
+  "description": "Your names for wallet addresses. One small, self-hosted address book.",
+  "minimum_chrome_version": "120",
+  "permissions": ["storage", "alarms", "scripting", "contextMenus", "activeTab"],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
+  "background": {"service_worker": "background.js", "type": "module"},
+  "icons": {"16": "icons/book-16.png", "32": "icons/book-32.png", "48": "icons/book-48.png", "128": "icons/book-128.png"},
+  "action": {
+    "default_title": "0xlabel",
+    "default_popup": "popup.html",
+    "default_icon": {"16": "icons/book-16.png", "24": "icons/book-24.png", "32": "icons/book-32.png", "48": "icons/book-48.png"}
+  },
+  "web_accessible_resources": [{
+    "resources": ["page.js", "editor.js", "editor.css", "icons.js", "shared.js", "adapters.js", "checksum.js", "vendor/keccak.js"],
+    "matches": ["http://*/*", "https://*/*"]
+  }]
+}

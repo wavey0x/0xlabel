@@ -1,0 +1,53 @@
+/* Heavy type, quiet surfaces, soft corners. See docs/style.md. */
+:host { all: initial; font: 14px/1.45 system-ui, sans-serif; color: #111; color-scheme: light; --glass: rgb(255 255 255 / .86); --ink: #111; --soft: #00000007; --line: #00000010; --muted: #666; --shadow: 0 18px 56px #00000024, 0 3px 12px #0000000c; }
+:host([data-dark]) { color-scheme: dark; --glass: rgb(22 23 26 / .8); --ink: #fafafa; --soft: #ffffff08; --line: #ffffff14; --muted: #aaa; --shadow: 0 18px 56px #00000060, 0 3px 12px #00000030; }
+* { box-sizing: border-box; }
+button,input { font: inherit; }
+button { cursor: pointer; border: 0; border-radius: 6px; padding: 6px 10px; line-height: 1.2; font-weight: 700; }
+button:disabled { cursor: default; opacity: .45; }
+button:focus-visible,input:focus-visible { outline: 2px solid #4169e1; outline-offset: 2px; }
+.quiet { color: var(--ink); background: transparent; }
+.quiet:hover { background: var(--soft); color: var(--ink); }
+.primary { background: #4169e1; color: white; }
+.editor { color: var(--ink); width: 320px; max-width: calc(100vw - 20px); max-height: calc(100vh - 20px); overflow: auto; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--glass); backdrop-filter: blur(16px); box-shadow: var(--shadow); }
+header,footer,.address-line { display: flex; align-items: center; gap: 6px; }
+header strong { font-size: 16px; font-weight: 850; letter-spacing: -.5px; }
+.brand { color: #4169e1; }
+.close,.copy,.visibility { display: flex; align-items: center; justify-content: center; flex: 0 0 24px; width: 24px; height: 24px; padding: 4px; }
+.close { font-size: 20px; }
+.address-line { margin-top: 4px; }
+code { flex: 1; min-width: 0; font: 500 10px/1.5 ui-monospace, monospace; overflow-wrap: anywhere; user-select: text; }
+.copy,.visibility { color: var(--muted); }
+.copy svg,.visibility svg { width: 14px; height: 14px; }
+.visibility:hover:not(:disabled) { color: #4169e1; }
+.source { flex: 1; min-width: 0; color: var(--muted); font-size: 10px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[hidden] { display: none !important; }
+.rows { display: grid; gap: 6px; margin-top: 8px; }
+.rows:empty { margin: 0; }
+.row { display: flex; align-items: center; min-height: 34px; gap: 4px; background: var(--soft); border-radius: 7px; padding: 3px 0 3px 8px; }
+.row:focus-within { box-shadow: 0 0 0 1.5px #4169e1; }
+.row input { flex: 1; min-width: 0; width: 0; color: var(--ink); background: transparent; border: 0; border-radius: 4px; padding: 4px 0; font-size: 13px; line-height: 20px; font-weight: 650; }
+.row input:focus-visible { outline: none; }
+.row input::-webkit-search-cancel-button { display: none; }
+.rank { display: flex; flex-shrink: 0; align-items: center; gap: 1px; }
+.rank button { width: 24px; height: 24px; padding: 2px; font-size: 14px; }
+.row:only-child .rank button[aria-label^="Move"] { display: none; }
+.row:only-child:has(input:placeholder-shown) .rank { display: none; }
+.default { color: #4169e1; font-size: 9px; font-weight: 750; margin-right: 3px; }
+.add { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; margin-right: auto; padding: 0; font-size: 20px; }
+.save { display: flex; align-items: center; justify-content: center; flex: 0 0 64px; min-height: 28px; padding: 6px 8px; font-size: 12px; white-space: nowrap; }
+.save svg { width: 16px; height: 16px; }
+.save[aria-label="Saved"] { opacity: 1; }
+.preview,.notice { font-size: 11px; margin: 8px 0 0; overflow-wrap: anywhere; }
+.preview { color: var(--muted); }
+.notice { color: #b5760d; }
+.notice:empty { display: none; }
+.conflict { margin-top: 8px; padding: 8px; border-radius: 7px; background: var(--soft); font-size: 11px; }
+.conflict p { margin: 0 0 5px; }
+.conflict button { padding: 4px 0; font-size: 11px; color: #4169e1; }
+footer { margin-top: 8px; }
+/* Inline with the address, like the site's native copy control. */
+.inline-label { display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 3px; border-radius: 4px; color: #4169e1; background: transparent; }
+.inline-label:hover,.inline-label:focus-visible { background: #4169e110; }
+.inline-label svg { width: 14px; height: 14px; pointer-events: none; }
+.inline-label:hover svg,.inline-label:focus-visible svg { filter: drop-shadow(0 0 3px #4169e180); }

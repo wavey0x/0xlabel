@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <defs>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="0" stdDeviation=".85" flood-color="#36b778" flood-opacity=".5"/>
+    </filter>
+  </defs>
+  <g id="book" fill="none" stroke="#7e8794" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="7" y="4" width="22" height="24" rx="3"/>
+    <path d="M11 5v22M4 10h5M4 16h5M4 22h5"/>
+  </g>
+  <g fill="none" stroke="#4169e1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="14" y="12" width="5" height="8" rx="2.5"/>
+    <path d="m22 12 4 8m0-8-4 8"/>
+  </g>
+</svg>

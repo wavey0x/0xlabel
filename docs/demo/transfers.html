@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>0xlabel · sample transfers</title>
+  <style>
+    :root{color-scheme:dark;--bg:#101113;--panel:#151619;--ink:#f4f4f5;--muted:#8d919b;--line:#ffffff0c;--link:#8bc6df;--soft:#ffffff04}
+    :root[data-theme="light"]{color-scheme:light;--bg:#f6f7fa;--panel:#fff;--ink:#20232b;--muted:#858b96;--line:#e9ecf2;--link:#367a9e;--soft:#f8f9fb}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,sans-serif}
+    .page{padding:30px 32px}header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+    h1{margin:0;font-size:25px;font-weight:800;letter-spacing:-.8px}.sub{margin:4px 0 0;color:var(--muted);font-size:13px}
+    .network{display:flex;align-items:center;gap:7px;padding:6px 11px;border:1px solid var(--line);border-radius:7px;color:var(--muted);font-size:12px}
+    .network svg{width:12px;height:18px;color:var(--ink)}
+    .card{border:1px solid var(--line);border-radius:13px;background:var(--panel);overflow:hidden}
+    table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{text-align:left;padding:17px 18px;border-bottom:1px solid var(--line);white-space:nowrap}
+    th{font-size:11px;font-weight:650;color:var(--muted);padding-top:13px;padding-bottom:13px}td{height:56px}tr:last-child td{border-bottom:0}tbody tr:nth-child(even){background:var(--soft)}
+    a{color:var(--link);text-decoration:none}.hash{font-size:13px}.age{font-size:12px;color:var(--muted)}
+    .hash-tag{display:inline-block;max-width:155px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
+    .copy{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;padding:2px;margin-left:4px;vertical-align:middle;background:none;border:0;color:var(--muted)}.copy svg{width:14px;height:14px}
+    .token{font-size:12px;color:var(--muted)}.token-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#2787d0;margin-right:7px;vertical-align:1px}.token-dot.eth{background:#8882b6}
+    .amount{text-align:right;font-variant-numeric:tabular-nums;font-size:13px;font-weight:500}th.amount{font-size:11px;color:var(--muted)}
+    footer{display:flex;justify-content:space-between;margin-top:17px;color:var(--muted);font-size:11px}.brand{font-weight:800;color:var(--ink);font-size:13px;letter-spacing:-.4px}.brand span{color:#4169e1}
+  </style>
+</head>
+<body>
+<div class="page">
+  <header><div><h1>Token transfers</h1><p class="sub">The wallets you know. The activity that matters.</p></div><div class="network"><svg viewBox="0 0 12 18" fill="currentColor" aria-hidden="true"><path d="m6 0 6 9-6 3-6-3Zm0 13 6-3-6 8-6-8Z"/></svg>Ethereum</div></header>
+  <main class="card"><table><colgroup><col style="width:16%"><col style="width:9%"><col style="width:24%"><col style="width:24%"><col style="width:11%"><col style="width:16%"></colgroup><thead><tr><th>Transaction</th><th>Age</th><th>From</th><th>To</th><th>Token</th><th class="amount">Amount</th></tr></thead><tbody id="transfers"></tbody></table></main>
+  <footer><span>Illustrative transfers · sample labels</span><span class="brand"><span>0x</span>label</span></footer>
+</div>
+<script type="module">
+  import { checksumAddress } from '../../extension/checksum.js';
+  import { COPY_ICON } from '../../extension/icons.js';
+  const addresses = [
+    '0x52908400098527886E0F7030069857D2E4169EE7', '0x8617E340B3D01FA5F11F306F4090FD50E238070D',
+    '0xde709f2102306220921060314715629080e2fb77', '0x27b1fdb04752bbc536007a920d24acb045561c26',
+    '0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed', '0xfB6916095ca1df60bB79Ce92cE3Ea74c37c5d359',
+    '0xdbF03B407c01E7cD3CBea99509d93f8DDDC8C6FB', '0xD1220A0cf47c7B9Be7A2E6BA89F429762e7b9aDb',
+  ];
+  const names = ['Treasury', 'Payroll', 'Exchange deposit', 'Cold storage', 'Multisig', 'Operations', 'Research'];
+  window.demoRecords = names.map((name,i) => ({address:addresses[i].toLowerCase(),scope:'global',labels:[name],version:'demo'}));
+  const wallets = (index) => {
+    const address = checksumAddress(addresses[index]);
+    return `<a class="hash-tag" href="/address/${address}" title="${address}">${address.slice(0,8)}…${address.slice(-8)}</a><button class="copy" aria-label="Copy address" data-copy="${address}">${COPY_ICON}</button>`;
+  };
+  const rows = [[0,1,'USDC','35,000.00'],[1,2,'USDC','8,400.00'],[0,3,'USDC','125,000.00'],[4,0,'ETH','12.50'],[5,4,'ETH','2.00'],[7,6,'USDC','650.00']];
+  const hashes = ['0x2fb8421…d36e910','0xc63a0fe…6df925a','0x12a94c8…ae6b824','0x9b831ef…b15df23','0x46e2a09…1e28f91','0xb75a110…c17c892'];
+  document.querySelector('#transfers').innerHTML = rows.map(([from,to,token,amount],i) => `<tr><td><a class="hash" href="#transaction-${i}">${hashes[i]}</a></td><td class="age">${[2,5,8,14,23,31][i]} mins ago</td><td>${wallets(from)}</td><td>${wallets(to)}</td><td class="token"><span class="token-dot ${token==='ETH'?'eth':''}"></span>${token}</td><td class="amount">${amount}</td></tr>`).join('');
+  document.querySelectorAll('[data-copy]').forEach(button => {button.onclick = () => navigator.clipboard.writeText(button.dataset.copy);});
+</script>
+</body>
+</html>
