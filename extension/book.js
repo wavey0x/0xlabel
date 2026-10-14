@@ -44,8 +44,13 @@ function render(next = state) {
   $('#sync').title = state.error || '';
   $('#sync').dataset.offline = String(Boolean(state.error));
   const count = new Set(state.records.map(record => record.address)).size;
-  $('#count').textContent = `${count} address${count === 1 ? '' : 'es'}`;
-  entries = state.records.map(record => ({ record, text: [record.address, ...record.labels].join('\n').toLocaleLowerCase(), row: null }));
+  $('#count').textContent = `${count.toLocaleString()} address${count === 1 ? '' : 'es'}`;
+  // Sorted by name, so the order is a property of the book rather than of the
+  // order it happened to be written in.
+  entries = state.records
+    .map(record => ({ record, text: [record.address, ...record.labels].join('\n').toLocaleLowerCase(), row: null }))
+    .sort((one, two) => one.record.labels[0].localeCompare(two.record.labels[0]) ||
+      one.record.address.localeCompare(two.record.address));
   if (editor) editor.updateState(state);
   search();
 }
@@ -81,16 +86,21 @@ function bookRow(record) {
   row.lastElementChild.append(copy);
   return row;
 }
+// A screenful at a time. Building a row for every address in a large book
+// costs seconds and shows nobody anything: searching is how you find one.
+const SHOWN = 250;
 function search() {
   const value = $('#search').value.trim().toLocaleLowerCase();
   const matches = entries.filter(entry => entry.text.includes(value));
   // Cache rows and checksums per snapshot; searches only filter the local book.
-  const rows = matches.map(entry => entry.row ||= bookRow(entry.record));
+  const rows = matches.slice(0, SHOWN).map(entry => entry.row ||= bookRow(entry.record));
   if (rows.length !== visibleRows.length || rows.some((row, index) => row !== visibleRows[index])) {
     $('#results').replaceChildren(...rows); visibleRows = rows;
   }
   $('#empty').hidden = Boolean(matches.length);
   $('#empty p').textContent = state.records.length ? 'No matching tags or addresses.' : 'No addresses tagged yet.';
+  $('#shown').hidden = matches.length <= SHOWN;
+  $('#shown').textContent = `Showing ${SHOWN} of ${matches.length.toLocaleString()}. Search to narrow.`;
 }
 $('#search').oninput = search;
 

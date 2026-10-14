@@ -1,9 +1,8 @@
-import { findRecord, normalizeLabels, normalizeScope, parseAddress, sameLabels, validateSnapshot } from './shared.js';
-import { createDeviceBook } from './stores/device.js';
+import { findRecord, normalizeLabels, normalizeScope, parseAddress, recordKey, sameLabels, validateSnapshot } from './shared.js';
+import { createDeviceBook, deviceKeys } from './stores/device.js';
 import { createServerBook } from './stores/server.js';
 
 const MAX_NAME = 40;
-const recordsKey = id => `book:${id}`;
 const cacheKey = id => `cache:${id}`;
 
 // Books are named things people switch between. Where a book is kept is a
@@ -18,6 +17,9 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
   let error = null;
   let revision = 0;
   let needsRefresh = false;
+  // A book whose pages could not be read is never saved over: the save would
+  // write over names this worker never managed to see.
+  let unreadable = false;
   let queue = Promise.resolve();
   let pull = null;
 
@@ -33,7 +35,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
   }
   const transport = item => item.storage.kind === 'server'
     ? createServerBook({ url: item.storage.url, token: item.storage.token, fetch: fetcher })
-    : createDeviceBook({ storage, key: recordsKey(item.id), now });
+    : createDeviceBook({ storage, book: item.id, now });
 
   function cleanName(value, fallback) {
     const name = String(value ?? '').trim().replace(/\s+/g, ' ').slice(0, MAX_NAME);
@@ -74,6 +76,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
     book = transport(item);
     error = null;
     needsRefresh = false;
+    unreadable = false;
     if (item.storage.kind === 'server') {
       const saved = (await storage.get(cacheKey(id)))[cacheKey(id)];
       try {
@@ -82,7 +85,8 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
       } catch { records = []; syncedAt = null; }
     } else {
       syncedAt = null;
-      try { records = await book.load(); } catch (failure) { records = []; error = failure.message; }
+      try { records = await book.load(); }
+      catch (failure) { records = []; error = failure.message; unreadable = true; }
     }
   }
 
@@ -111,6 +115,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
         if (entry(active).storage.kind === 'server') syncedAt = now();
         error = null;
         needsRefresh = false;
+        unreadable = false;
         await cache();
       } catch (failure) {
         error = failure.message;
@@ -192,7 +197,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
       if (!item) throw new Error('That address book is gone.');
       if (books.length === 1) throw new Error('0xlabel keeps at least one address book.');
       books = books.filter(other => other.id !== id);
-      await storage.remove([recordsKey(id), cacheKey(id)]);
+      await storage.remove([...deviceKeys(id), cacheKey(id)]);
       await saveBooks();
       if (active === id) await open(books[0].id);
       changed();
@@ -205,13 +210,16 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
   async function merge(incoming) {
     const wanted = validateSnapshot({ records: incoming });
     return serial(async () => {
-      for (const want of wanted) {
-        const existing = findRecord(records, want.address, want.scope);
-        const saved = await book.put({ address: want.address, scope: want.scope, labels: want.labels,
-          version: existing?.version || null });
-        records = [...records.filter(item => item.address !== want.address || item.scope !== want.scope),
-          ...(saved ? [saved] : [])];
-      }
+      if (unreadable) throw new Error('This address book could not be read, so nothing was added to it.');
+      const index = new Map(records.map(item => [recordKey(item.address, item.scope), item]));
+      const drafts = wanted.map(want => ({ address: want.address, scope: want.scope, labels: want.labels,
+        version: index.get(recordKey(want.address, want.scope))?.version ?? null }));
+      const saved = await book.putMany(drafts);
+      saved.forEach((record, at) => {
+        const key = recordKey(drafts[at].address, drafts[at].scope);
+        if (record) index.set(key, record); else index.delete(key);
+      });
+      records = [...index.values()];
       await cache();
       changed();
       return { state: state(), added: wanted.length };
@@ -229,6 +237,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
     const started = active;
     return serial(async () => {
       if (active !== started) throw new Error('You switched address books before this was saved. Try again.');
+      if (unreadable) throw new Error('This address book could not be read, so nothing was saved over it.');
       // A write that may already have landed is checked, never simply repeated.
       if (book.uncertainWrites && needsRefresh) {
         records = await book.load();

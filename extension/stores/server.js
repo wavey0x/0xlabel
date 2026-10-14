@@ -28,23 +28,32 @@ export function createServerBook({ url, token, fetch: fetcher = globalThis.fetch
     return body;
   }
 
+  async function put({ address, scope, labels, version }) {
+    const body = await request(`/labels/${encodeURIComponent(scope)}/${address}`, {
+      method: 'PUT', body: JSON.stringify({ labels, version }),
+    });
+    const saved = body.record === null ? null : validateRecord(body.record);
+    if ((saved && (saved.address !== address || saved.scope !== scope ||
+         JSON.stringify(saved.labels) !== JSON.stringify(labels))) ||
+        (!saved && labels.length) || (saved && !labels.length)) {
+      throw new Error('That server confirmed a different record. Refresh before trying again.');
+    }
+    return saved;
+  }
+
   return {
     // A write can be interrupted between leaving here and being recorded, so the
     // store refreshes before retrying one rather than repeating it blindly.
     uncertainWrites: true,
+    put,
     async load() {
       return validateSnapshot(await request('/labels'));
     },
-    async put({ address, scope, labels, version }) {
-      const body = await request(`/labels/${encodeURIComponent(scope)}/${address}`, {
-        method: 'PUT', body: JSON.stringify({ labels, version }),
-      });
-      const saved = body.record === null ? null : validateRecord(body.record);
-      if ((saved && (saved.address !== address || saved.scope !== scope ||
-           JSON.stringify(saved.labels) !== JSON.stringify(labels))) ||
-          (!saved && labels.length) || (saved && !labels.length)) {
-        throw new Error('That server confirmed a different record. Refresh before trying again.');
-      }
+    // A record at a time, because that is what this API offers. The store asks
+    // for many only when a file is carried in.
+    async putMany(wanted) {
+      const saved = [];
+      for (const record of wanted) saved.push(await put(record));
       return saved;
     },
   };

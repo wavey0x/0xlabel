@@ -16,6 +16,7 @@ function harness({ remote = [] } = {}) {
   let book = remote;
   let intercept;
   let counter = 0;
+  const writes = [];
   const storage = {
     get: async keys => {
       const all = structuredClone(saved);
@@ -23,7 +24,7 @@ function harness({ remote = [] } = {}) {
       const wanted = Array.isArray(keys) ? keys : [keys];
       return Object.fromEntries(wanted.filter(key => key in all).map(key => [key, all[key]]));
     },
-    set: async entries => Object.assign(saved, structuredClone(entries)),
+    set: async entries => { writes.push(...Object.keys(entries)); Object.assign(saved, structuredClone(entries)); },
     remove: async keys => { for (const key of [].concat(keys)) delete saved[key]; },
   };
   const fetch = async (url, options = {}) => {
@@ -41,20 +42,21 @@ function harness({ remote = [] } = {}) {
     return response({ record: next });
   };
   const make = () => createStore({ storage, fetch, now: () => 100, uuid: () => `id-${++counter}` });
-  return { store: make(), make, saved, calls, storage, fetch,
+  return { store: make(), make, saved, calls, storage, fetch, writes,
+    pages: id => Object.keys(saved).filter(key => key.startsWith(`book:${id}/`)),
     remote: () => book, intercept: value => { intercept = value; } };
 }
 const write = (store, labels, { book = store.state().activeBook, at = address, version = null } = {}) =>
   store.save({ book, address: at, scope: 'global', labels, version });
 
 test('a book exists before anything is set up, and labeling needs no connection', async () => {
-  const { store, saved } = harness();
+  const { store, pages } = harness();
   await store.init();
   assert.equal(store.state().books.length, 1);
   assert.equal(store.state().books[0].where, 'On this device');
   await write(store, ['Treasury']);
   assert.deepEqual(store.state().records.map(entry => entry.labels[0]), ['Treasury']);
-  assert.ok(saved[`book:${store.state().activeBook}`], 'the device book is the storage, not a cache of one');
+  assert.equal(pages(store.state().activeBook).length, 1, 'the device book is the storage, not a cache of one');
 });
 
 test('a device book survives a restart and removing every name deletes the record', async () => {
@@ -81,7 +83,7 @@ test('a stale version is refused rather than quietly overwriting the newer names
 test('an unreadable device book is never presented, or saved over, as an empty one', async () => {
   const { store, storage, make } = harness();
   await store.init();
-  await storage.set({ [`book:${store.state().activeBook}`]: [{ address, scope: 'global', labels: [] }] });
+  await storage.set({ [`book:${store.state().activeBook}/ab`]: [{ address, scope: 'global', labels: [] }] });
   const resumed = make();
   await resumed.init();
   assert.equal(resumed.state().records.length, 0);
@@ -157,7 +159,7 @@ test('an unreachable server costs freshness, not the book', async () => {
 });
 
 test('removing a device book takes its addresses; removing a server book only forgets it', async () => {
-  const { store, saved, remote } = harness({ remote: [] });
+  const { store, pages, remote } = harness({ remote: [] });
   await store.init();
   const device = store.state().activeBook;
   await write(store, ['Mine']);
@@ -173,7 +175,7 @@ test('removing a device book takes its addresses; removing a server book only fo
   const second = store.state().activeBook;
   await write(store, ['Scratch']);
   await store.remove(second);
-  assert.equal(saved[`book:${second}`], undefined, 'its addresses go with it');
+  assert.deepEqual(pages(second), [], 'its addresses go with it');
 });
 
 test('there is always an address book to label into', async () => {
@@ -238,6 +240,73 @@ test('an interrupted write that landed is answered by what the server now says',
   await resumed.init();
   await write(resumed, ['Treasury']);
   assert.deepEqual(remote().map(entry => entry.labels), [['Treasury']], 'the write is neither repeated nor disputed');
+});
+
+test('a save writes the page that holds the address, not the book', async () => {
+  const { store, writes, pages } = harness();
+  await store.init();
+  const book = store.state().activeBook;
+  // Fill pages the save must not touch: the cost of a change belongs to the
+  // change, not to everything else the book holds.
+  await store.merge(Array.from({ length: 64 }, (_, index) => ({
+    address: '0x' + index.toString(16).padStart(2, '0') + 'cd'.repeat(19), scope: 'global',
+    labels: ['Name ' + index], version: 'from-file',
+  })));
+  assert.equal(pages(book).length, 64, 'one page per leading byte, and no more');
+
+  writes.length = 0;
+  await write(store, ['Treasury']);
+  assert.deepEqual(writes, [`book:${book}/ab`, 'stateRevision']);
+  assert.equal(store.state().records.length, 65);
+});
+
+test('an import writes a page once however many records land in it', async () => {
+  const { store, writes } = harness();
+  await store.init();
+  const records = Array.from({ length: 500 }, (_, index) => ({
+    address: '0x' + 'ab' + index.toString(16).padStart(38, '0'), scope: 'global',
+    labels: ['Name ' + index], version: 'from-file',
+  }));
+  writes.length = 0;
+  const { added } = await store.merge(records);
+  assert.equal(added, 500);
+  // Every one of them starts 0xab, so the whole file is one page, written once.
+  assert.deepEqual(writes.filter(key => key.startsWith('book:')), [`book:${store.state().activeBook}/ab`]);
+  assert.equal(store.state().records.length, 500);
+});
+
+test('a book spread across pages is read back whole, and emptying a page takes it away', async () => {
+  const { store, make, pages } = harness();
+  await store.init();
+  const book = store.state().activeBook;
+  const first = '0x' + '11'.repeat(20);
+  const second = '0x' + 'ee'.repeat(20);
+  await write(store, ['First'], { at: first });
+  await write(store, ['Second'], { at: second });
+  assert.deepEqual(pages(book).sort(), [`book:${book}/11`, `book:${book}/ee`]);
+
+  const resumed = make();
+  await resumed.init();
+  assert.deepEqual(resumed.state().records.map(entry => entry.labels[0]).sort(), ['First', 'Second']);
+
+  const held = resumed.state().records.find(entry => entry.address === first);
+  await write(resumed, [], { at: first, version: held.version });
+  assert.deepEqual(pages(book), [`book:${book}/ee`], 'a page with nothing in it is not kept');
+  assert.equal(resumed.state().records.length, 1);
+});
+
+test('one address held in two pages is refused, not quietly shown twice', async () => {
+  const { store, storage, make } = harness();
+  await store.init();
+  const book = store.state().activeBook;
+  await write(store, ['Treasury']);
+  const copy = store.state().records[0];
+  await storage.set({ [`book:${book}/ff`]: [copy] });
+  const resumed = make();
+  await resumed.init();
+  assert.equal(resumed.state().records.length, 0);
+  assert.match(resumed.state().error, /book/i);
+  await assert.rejects(write(resumed, ['Anything']), /could not be read/);
 });
 
 test('a book carried in from a file joins the one that is open, replacing matching names', async () => {

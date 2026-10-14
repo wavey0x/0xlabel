@@ -326,6 +326,22 @@ test('installed extension: a book that works with no setup, moving it to a serve
     await expect(reopened.locator('#confirm-remove')).toBeEnabled();
     await reopened.locator('#keep-book').click();
     await expect(reopened.locator('#remove-dialog')).toBeHidden();
+    // A book large enough to be worth searching shows a screenful, not all of
+    // it, and carrying one in is a single pass over its pages.
+    const carried = Array.from({ length: 300 }, (_, index) => ({
+      address: '0x' + index.toString(16).padStart(40, '0'), scope: 'global',
+      labels: ['Carried in ' + index], version: 'from-file',
+    }));
+    const importing = Date.now();
+    expect(await reopened.evaluate(async records =>
+      (await chrome.runtime.sendMessage({ type: 'Import', records })).result.added, carried)).toBe(300);
+    expect(Date.now() - importing).toBeLessThan(5000);
+    await expect(reopened.locator('#results tr')).toHaveCount(250);
+    await expect(reopened.locator('#shown')).toContainText('Showing 250 of 301');
+    await reopened.locator('#search').fill('Carried in 199');
+    await expect(reopened.locator('#results tr')).toHaveCount(1);
+    await expect(reopened.locator('#shown')).toBeHidden();
+
     expect(errors).toEqual([]);
   } finally {
     await context.close(); await api.dispose(); await rm(profile,{recursive:true,force:true});
