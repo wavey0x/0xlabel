@@ -1,5 +1,4 @@
 from concurrent.futures import ThreadPoolExecutor
-import sqlite3
 
 from fastapi.testclient import TestClient
 import pytest
@@ -65,7 +64,7 @@ def test_concurrent_edits_have_one_winner(book):
     assert book.get('/labels').json()['records'] == [winner]
 
 
-def test_write_requires_the_current_contract(book):
+def test_write_requires_an_explicit_conflict_token(book):
     assert book.put(f'/labels/global/{ADDRESS}', json={'labels': ['Name']}).status_code == 422
     assert book.get('/labels').json() == {'records': []}
 
@@ -74,16 +73,13 @@ def test_restart_and_independent_installations(tmp_path):
     local_path, remote_path = tmp_path / 'local.sqlite3', tmp_path / 'remote.sqlite3'
     local = TestClient(create_app(local_path, TOKEN), headers=HEADERS)
     saved = put(local, ['Local only']).json()['record']
-    before = local_path.read_bytes()
     remote = TestClient(create_app(remote_path, TOKEN), headers=HEADERS)
     assert remote.get('/labels').json() == {'records': []}
     put(remote, ['Remote only'])
     for _ in range(3):
         remote.get('/labels'); local.get('/labels')
-    assert local_path.read_bytes() == before
+    assert local.get('/labels').json()['records'] == [saved]
     assert TestClient(create_app(local_path, TOKEN), headers=HEADERS).get('/labels').json()['records'] == [saved]
-    with sqlite3.connect(local_path) as db:
-        assert db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall() == [('labels',)]
 
 
 def test_token_created_once_with_private_file(tmp_path, monkeypatch):

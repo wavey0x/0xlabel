@@ -76,4 +76,19 @@ This is an unpacked development extension. After editing or pulling its code, re
 
 Displayed labels are part of the website's DOM and readable by that website. Credentials remain in trusted extension storage. Etherscan-family explorers and Safe have dedicated adapters; other enabled sites use full-address detection. Inputs, signing controls, and unresolved abbreviations are skipped. Inconsistent address evidence pauses labeling and offers Retry in the popup.
 
-The app is in active development. Hard cutovers are preferred to migrations and compatibility layers; see [AGENTS.md](AGENTS.md). Development commands and screenshot generation are in [CONTRIBUTING.md](CONTRIBUTING.md).
+## Development checks
+
+```sh
+uv sync --locked
+npm ci
+npx playwright install chromium
+uv run pytest -q
+npm test
+npm run test:browser
+```
+
+On Linux, use `npx playwright install --with-deps chromium`. Tests use disposable books and browser profiles. They focus on identity, data integrity, credential boundaries, and native website behavior.
+
+`npm run screenshots` reproduces the README examples using sample data and the actual extension. `npm run icons` regenerates toolbar assets after editing `extension/icons/book.svg`.
+
+The app is in active development. Prefer hard cutovers over migrations and compatibility layers; see [AGENTS.md](AGENTS.md).

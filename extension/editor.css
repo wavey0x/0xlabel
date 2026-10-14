@@ -1,4 +1,4 @@
-/* Heavy type, quiet surfaces, soft corners. See docs/style.md. */
+/* Heavy minimalism: bold type, compact controls, quiet surfaces. */
 :host { all: initial; font: 14px/1.45 system-ui, sans-serif; color: #111; color-scheme: light; --glass: rgb(255 255 255 / .86); --ink: #111; --soft: #00000007; --line: #00000010; --muted: #666; --shadow: 0 18px 56px #00000024, 0 3px 12px #0000000c; }
 :host([data-dark]) { color-scheme: dark; --glass: rgb(22 23 26 / .8); --ink: #fafafa; --soft: #ffffff08; --line: #ffffff14; --muted: #aaa; --shadow: 0 18px 56px #00000060, 0 3px 12px #00000030; }
 * { box-sizing: border-box; }

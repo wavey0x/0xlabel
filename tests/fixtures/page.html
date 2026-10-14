@@ -1,14 +1,1 @@
-<!doctype html><html lang="en"><meta charset="utf-8"><title>Address fixture</title>
-<style>body{font:14px system-ui;margin:30px;background:white;color:#172033}main{max-width:850px}a{color:#384967}td{padding:7px 20px 7px 0}button{margin-left:10px}.widget{display:inline-flex;align-items:center;gap:10px}input{padding:5px}</style>
-<header>Explorer fixture</header><main><h1>Wallets</h1><div id="rows"></div><input id="native-input" value="0xabababababababababababababababababababab"></main>
-<script>
-const rows = document.querySelector('#rows');
-window.fullAddress = '0xabababababababababababababababababababab';
-for(let i=0;i<500;i++) {
- const line=document.createElement('p');
- line.innerHTML='<span class="widget"><a data-highlight-target="'+fullAddress+'" data-full-address="'+fullAddress+'" href="/address/'+fullAddress+'"><span>0xabababab</span><span>…</span><span>abababab</span></a><button type="button" data-clipboard-text="'+fullAddress+'">Copy</button></span>';
- line.querySelector('button').onclick=event=>{window.nativeCopied=event.target.dataset.clipboardText;};
- line.querySelector('a').addEventListener('click',event=>{window.nativeClicked={text:event.currentTarget.textContent,address:event.currentTarget.getAttribute('href'),ctrl:event.ctrlKey};event.preventDefault();});
- rows.append(line);
-}
-</script></html>
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Controller fixture</title><body><header>Explorer</header><main></main></body></html>

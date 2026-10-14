@@ -194,10 +194,11 @@ export function createEditor(container, { address, scope = 'global', state, save
       }
     }
   }
-  get('.save').onclick = submit;
+  // The editor shares the page DOM. Website scripts must not submit the book.
+  get('.save').addEventListener('click', event => { if (event.isTrusted) submit(); });
   panel.addEventListener('keydown', event => {
     if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); finish(); }
-    if (event.key === 'Enter' && event.target.matches('.row input') && !event.isComposing) { event.preventDefault(); event.stopPropagation(); submit(); }
+    if (event.isTrusted && event.key === 'Enter' && event.target.matches('.row input') && !event.isComposing) { event.preventDefault(); event.stopPropagation(); submit(); }
   });
   guard();
   renderRows();

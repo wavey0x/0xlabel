@@ -84,10 +84,12 @@ test('coalesced pulls and A → B → A discard a late snapshot', async () => {
   const h = harness(); await h.client.init(); await connect(h.client, local); await connect(h.client, remote); await h.client.select(local);
   const gate = deferred(); const began = deferred();
   h.intercept((url, options) => { if (!options.method) { began.resolve(); return gate.promise; } });
-  const one = h.client.refresh(); const two = h.client.refresh(); assert.equal(one, two);
+  const before = h.calls.length;
+  const one = h.client.refresh(); const two = h.client.refresh();
   await began.promise;
   await h.client.select(remote); await h.client.select(local);
-  gate.resolve(response({ records: [record('Must be ignored')] })); await one;
+  gate.resolve(response({ records: [record('Must be ignored')] })); await Promise.all([one, two]);
+  assert.equal(h.calls.length - before, 1);
   assert.equal(h.client.state().records[0].labels[0], 'Local');
 });
 
