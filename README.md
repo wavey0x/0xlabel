@@ -5,7 +5,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/transfers-dark.png">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/transfers-light.png">
-  <img alt="A transfer list with recognizable labels such as Treasury, Payroll and Cold storage instead of abbreviated wallet addresses" src="docs/images/transfers-dark.png">
+  <img alt="Address tags reveal repeated wallets and connections across a transfer list" src="docs/images/transfers-dark.png">
 </picture>
 
 Collect address tags in one book and bring the same context to different websites. See recurring addresses, follow connections, and make sense of onchain activity. Add tags directly on the page; links and copy controls keep working.
@@ -14,7 +14,7 @@ Collect address tags in one book and bring the same context to different website
 - **One consistent view.** The same tags follow addresses across enabled websites. Open the full-page book to search, add, edit, or export them.
 - **Your book, your storage.** Keep it on your laptop or connect to your own authenticated API. Local and remote books stay separate.
 - **Fast by default.** Cached lookups handle hundreds of addresses. A simple periodic pull keeps the selected book fresh.
-- **Easy to compare.** Matching switches control one address or a whole website. Reveal originals without changing your saved tags.
+- **Easy to compare.** Reveal the website's original display for one address or the whole page, without changing your saved tags.
 
 Works with Etherscan-family explorers and Safe. Other enabled sites use conservative detection for full EVM addresses.
 
@@ -38,7 +38,7 @@ uv run 0xlabel
 2. Open 0xlabel. Choose **Connect a book** → **Add connection**, paste the helper's JSON, then connect.
 3. Enable the website in the popup. Click a blue tag beside an address to name it.
 
-![The real inline editor, with a sample label being entered beside a transfer](docs/images/editor.png)
+![The compact translucent editor adding a tag directly to a transfer list](docs/images/editor.png)
 
 <sub>Screenshots use an explorer-style demo and sample data, rendered by the actual extension.</sub>
 

@@ -9,6 +9,7 @@ test('render the README examples with the shipped extension and sample data', as
     await page.goto('/docs/demo/transfers.html');
     await expect(page.locator('tbody tr')).toHaveCount(6);
     await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
+    await page.addStyleTag({ url: '/extension/colors.css' });
     await page.addStyleTag({ url: '/extension/page.css' });
     await page.evaluate(async () => {
       const { createPageController } = await import('/extension/page.js');

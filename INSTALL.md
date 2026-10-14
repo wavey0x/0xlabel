@@ -30,7 +30,7 @@ Open `brave://extensions` or `chrome://extensions`, enable **Developer mode**, c
 
 Choose **Connect a book** → **Add connection**, paste the JSON printed by the helper, name it **Local**, and connect. Accept the browser's permission request. That JSON contains your access token; keep it private. Connection setup closes with Cancel, ×, or Escape. The popup's settings button and the full-page picker's **Edit this connection** update a saved name or token.
 
-Open a supported website, then turn on the popup's **On this website** switch. The toolbar turns green when labeling is active. Permissions are granted per website; other sites remain untouched. **Open address book** opens a full-page extension tab for searching, adding, editing, removing, and exporting tags. It uses the same cached book and API; no extra service is needed.
+Open a supported website, then turn on the popup's **On this website** switch. The toolbar turns royal blue when labeling is active. Permissions are granted per website; other sites remain untouched. **Open address book** opens a full-page extension tab for searching, adding, editing, removing, and exporting tags. It uses the same cached book and API; no extra service is needed.
 
 Click a blue tag beside an address to edit its names. The first name is the default; + appends an alias and arrows reorder them. Enter saves; Escape or an outside click dismisses the draft. Turn off **This address** to temporarily reveal the website's original presentation for matching occurrences on that page. The popup's **On this website** switch restores every website default and persists across refreshes.
 
@@ -74,7 +74,7 @@ uv run 0xlabel --port 8713 --data-dir /path/to/book
 
 This is an unpacked development extension. After editing or pulling its code, reload 0xlabel on the extensions page and refresh enabled websites. Restart the helper when its Python code changes. Address-book sync is independent of code reloads.
 
-Displayed labels are part of the website's DOM and readable by that website. Credentials remain in trusted extension storage. Etherscan-family explorers and Safe have dedicated adapters; other enabled sites use full-address detection. Inputs, signing controls, and unresolved abbreviations are skipped. Inconsistent address evidence pauses labeling and offers Retry in the popup.
+Displayed labels are part of the website's DOM and readable by that website. Credentials remain in trusted extension storage. Etherscan-family explorers and Safe have dedicated adapters; other enabled sites use full-address detection. Inputs, signing controls, unresolved abbreviations, and ambiguous addresses are skipped. An inconsistent site integration pauses labeling and offers Retry in the popup.
 
 ## Development checks
 
@@ -89,6 +89,6 @@ npm run test:browser
 
 On Linux, use `npx playwright install --with-deps chromium`. Tests use disposable books and browser profiles. They focus on identity, data integrity, credential boundaries, and native website behavior.
 
-`npm run screenshots` reproduces the README examples using sample data and the actual extension. `npm run icons` regenerates toolbar assets after editing `extension/icons/book.svg`.
+`npm run screenshots` reproduces the README examples using sample data and the actual extension. All extension colors live in `extension/colors.js`, including the light/dark palettes, accent tints, and toolbar states. After changing that palette or the mark in `extension/icons.js`, run `npm run assets` to regenerate the shared stylesheet, wordmark SVG, and toolbar PNGs, then reload the extension.
 
 The app is in active development. Prefer hard cutovers over migrations and compatibility layers; see [AGENTS.md](AGENTS.md).
