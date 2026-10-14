@@ -32,7 +32,7 @@ Choose **Connect a book** → **Add connection**, paste the JSON printed by the 
 
 Open a supported website, then turn on the popup's **On this website** switch. The toolbar turns royal blue when labeling is active. Permissions are granted per website; other sites remain untouched. **Open address book** opens a full-page extension tab for searching, adding, editing, removing, and exporting tags. It uses the same cached book and API; no extra service is needed.
 
-Click a blue tag beside an address to edit its names. The first name is the default; + appends an alias and arrows reorder them. Enter saves; Escape or an outside click dismisses the draft. Turn off **This address** to temporarily reveal the website's original presentation for matching occurrences on that page. The popup's **On this website** switch restores every website default and persists across refreshes.
+Click a blue tag beside an address to edit its names. The first name is the default; + appends an alias and arrows reorder them. Enter saves; Escape or an outside click dismisses the draft. Turn off **Show tags** to temporarily reveal the website's original presentation for matching occurrences on that page. The popup's **On this website** switch restores every website default and persists across refreshes.
 
 New inline labels apply globally. Editing an existing network override retains its scope. **Add address** in the full-page book offers an optional chain ID for a scoped list; removing that override reveals the global names. The address switch suppresses the whole replacement until restored or reset by refresh, navigation, or switching books. **Remove tags** in the book editor prepares a deletion; Save commits it.
 
