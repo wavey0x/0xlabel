@@ -1,6 +1,7 @@
 import { adapters } from './adapters.js';
 import { indexBook, parseAddress, recordKey, normalizeScope, UNSAFE_HOST } from './shared.js';
-import { createEditor, editorStyles } from './editor.js';
+import { createEditor } from './editor.js';
+import { createOverlay } from './overlay.js';
 import { LABEL_ICON } from './icons.js';
 
 const ADDRESS = 'data-0xlabel-address';
@@ -27,28 +28,15 @@ export async function createPageController({
   let reported = false;
   let editor;
   let editorTarget;
-  let editorAnchor;
   let contextTarget;
   const targets = new Map();
   const dirty = new Set();
   // Temporary comparisons belong to this page and chain, never the saved book.
   const hiddenLabels = new Set();
 
-  const host = doc.createElement('div');
-  host.setAttribute('data-0xlabel-ui', '');
-  // One UI root outside website-owned component trees. Shadow DOM isolates styles.
-  host.style.cssText = 'position:absolute;left:0;top:0;z-index:2147483647;pointer-events:none;';
-  const shadow = host.attachShadow({ mode: 'open' });
-  await editorStyles(shadow);
-  const editorBox = doc.createElement('div');
-  editorBox.style.cssText = 'position:fixed;pointer-events:auto;display:none;';
-  shadow.append(editorBox);
-  doc.documentElement.append(host);
-  // Rules an adapter needs applied to the website's own elements, which the
-  // shadow root cannot reach. Only the active adapter's styles are present.
-  const siteStyles = doc.createElement('style');
-  siteStyles.setAttribute('data-0xlabel-ui', '');
-  (doc.head || doc.documentElement).append(siteStyles);
+  const overlay = await createOverlay(doc, win);
+  // Keep the editor beside the row it belongs to, while there still is one.
+  const position = (fit = false) => { if (editor) overlay.position(editorTarget?.element, fit); };
   const abort = new AbortController();
   const listen = (target, type, callback, options = {}) => target.addEventListener(type, callback, { ...options, signal: abort.signal });
 
@@ -58,7 +46,7 @@ export async function createPageController({
     slot.setAttribute('data-0xlabel-edit', '');
     slot.style.cssText = 'display:inline-flex;vertical-align:middle;flex-shrink:0;width:20px;height:20px;margin-inline-start:3px;';
     const root = slot.attachShadow({ mode: 'open' });
-    root.adoptedStyleSheets = shadow.adoptedStyleSheets;
+    root.adoptedStyleSheets = overlay.shadow.adoptedStyleSheets;
     const button = doc.createElement('button');
     button.type = 'button'; button.className = 'inline-label';
     button.setAttribute('aria-label', 'Edit wallet labels'); button.title = 'Edit labels';
@@ -170,7 +158,7 @@ export async function createPageController({
       if (editor) { editorTarget = null; editor.detach(); }
       href = nextURL.href;
       adapter = adapters.find(candidate => candidate.matches(nextURL)) || adapters.at(-1);
-      if (adapter !== observed) { observed = adapter; observe(); siteStyles.textContent = adapter.styles || ''; }
+      if (adapter !== observed) { observed = adapter; observe(); overlay.applyStyles(adapter.styles); }
       reported = false;
       paused = false;
       probing = false;
@@ -262,37 +250,6 @@ export async function createPageController({
   }
   observe();
 
-  function theme() {
-    const style = win.getComputedStyle(doc.body);
-    const rgb = style.backgroundColor.match(/[\d.]+/g)?.map(Number);
-    const dark = style.colorScheme.includes('dark') || rgb && rgb[3] !== 0 && (rgb[0] * .2126 + rgb[1] * .7152 + rgb[2] * .0722 < 110);
-    host.toggleAttribute('data-dark', Boolean(dark));
-  }
-  function position(fit = false) {
-    if (!editor) return;
-    const box = editorBox.getBoundingClientRect();
-    if (!editorTarget?.element?.isConnected) {
-      editorBox.style.position = 'fixed';
-      editorBox.style.left = `${Math.max(10, Math.min(win.innerWidth - box.width - 10, box.left))}px`;
-      editorBox.style.top = `${Math.max(10, Math.min(win.innerHeight - box.height - 10, box.top))}px`;
-      editorAnchor = null;
-      return;
-    }
-    const rect = editorTarget.element.getBoundingClientRect();
-    const anchor = { left: rect.left + win.scrollX, bottom: rect.bottom + win.scrollY, width: box.width, height: box.height };
-    editorBox.style.position = 'absolute';
-    if (fit || !editorAnchor || box.width !== editorAnchor.width || box.height !== editorAnchor.height) {
-      editorBox.style.left = `${win.scrollX + Math.max(10, Math.min(win.innerWidth - box.width - 10, rect.left))}px`;
-      const below = rect.bottom + 8;
-      editorBox.style.top = `${win.scrollY + Math.max(10, Math.min(win.innerHeight - box.height - 10, below + box.height < win.innerHeight ? below : rect.top - box.height - 8))}px`;
-    } else {
-      // Follow layout shifts and inner scrollers without changing the chosen gap
-      // or side. Ordinary page scrolling is handled entirely by the browser.
-      editorBox.style.left = `${parseFloat(editorBox.style.left) + anchor.left - editorAnchor.left}px`;
-      editorBox.style.top = `${parseFloat(editorBox.style.top) + anchor.bottom - editorAnchor.bottom}px`;
-    }
-    editorAnchor = anchor;
-  }
   function open(target) {
     if (!target) return;
     if (editor && editorTarget?.address === target.address && editorTarget.network === target.network &&
@@ -303,11 +260,8 @@ export async function createPageController({
     }
     if (editor && !editor.closeIfUnchanged()) { position(true); return; }
     editorTarget = { ...target, connectionKey: state.connectionKey };
-    editorAnchor = null;
-    editorBox.style.position = 'fixed';
-    editorBox.style.display = 'block';
-    editorBox.style.left = '10px'; editorBox.style.top = '10px';
-    theme();
+    overlay.show();
+    overlay.theme();
     const connectionKey = state.connectionKey;
     const key = recordKey(target.address, target.network);
     const visibility = () => {
@@ -318,7 +272,7 @@ export async function createPageController({
           live?.element.isConnected && live.address === target.address && live.network === target.network,
       };
     };
-    editor = createEditor(editorBox, { address: target.address, scope: recordFor(target)?.scope || 'global', state, save,
+    editor = createEditor(overlay.box, { address: target.address, scope: recordFor(target)?.scope || 'global', state, save,
       visibility,
       toggleVisibility: () => {
         const view = visibility();
@@ -332,8 +286,7 @@ export async function createPageController({
       close: () => {
         editor = null;
         editorTarget = null;
-        editorBox.replaceChildren();
-        editorBox.style.display = 'none';
+        overlay.hide();
         if (target.element?.isConnected && targets.has(target.element)) {
           target.element.focus({ preventScroll: true });
         }
@@ -373,8 +326,7 @@ export async function createPageController({
     clearInterval(routeCheck);
     observer.disconnect(); abort.abort(); clear();
     if (editor) editor.close();
-    host.remove();
-    siteStyles.remove();
+    overlay.destroy();
   }
   dirty.add(doc);
   run();

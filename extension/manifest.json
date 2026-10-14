@@ -15,7 +15,7 @@
     "default_icon": {"16": "icons/book-16.png", "24": "icons/book-24.png", "32": "icons/book-32.png", "48": "icons/book-48.png"}
   },
   "web_accessible_resources": [{
-    "resources": ["page.js", "editor.js", "editor.css", "icons.js", "shared.js", "adapters.js", "detect.js", "networks.js", "checksum.js", "vendor/keccak.js"],
+    "resources": ["page.js", "editor.js", "overlay.js", "editor.css", "icons.js", "shared.js", "adapters.js", "detect.js", "networks.js", "checksum.js", "vendor/keccak.js"],
     "matches": ["http://*/*", "https://*/*"]
   }]
 }
