@@ -46,3 +46,18 @@ export const shownAddress = page => page.getByRole('dialog').locator('code');
 export const health = page => page.evaluate(() => window.controller.health);
 // What the toolbar is told: the controller's own health plus the adapter reading the page.
 export const reported = page => page.evaluate(() => window.reports.at(-1));
+
+// WCAG contrast between two resolved CSS colours, for asserting that a label
+// stays legible against the website it is painted on.
+export function contrast(a, b) {
+  const channels = value => value.match(/[\d.]+/g).slice(0, 3).map(Number);
+  const luminance = value => {
+    const [r, g, b] = channels(value).map(part => {
+      const unit = part / 255;
+      return unit <= 0.03928 ? unit / 12.92 : ((unit + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const [high, low] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (high + 0.05) / (low + 0.05);
+}

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { checksumAddress } from '../../extension/checksum.js';
-import { address, other, record, start, edit, input, save, shownAddress } from './controller.js';
+import { address, other, record, start, edit, input, save, shownAddress, contrast, wallets } from './controller.js';
 
 test('500 addresses retain native text, navigation, selection and copying; disabling removes only our UI', async ({ page }) => {
   const row = `<p><a href="/address/${address}">0xabab…abab</a><button data-copy="${address}">Copy</button></p>`;
@@ -343,4 +343,48 @@ test('contradictory address evidence disqualifies only that element; generic det
     <button>${address}</button><input value="${address}"><div contenteditable="true">${address}</div></main>` });
   await expect(page.locator('[data-0xlabel-address]')).toHaveCount(1);
   await expect(page.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Treasury');
+});
+
+// Every theming defect this project has had was invisible to the suite: the
+// labels were present and correct, and unreadable. Legibility is the contract.
+const legible = async (page, surface) => {
+  await expect.poll(() => page.evaluate(() => document.documentElement.getAttribute('data-0xlabel-surface'))).toBe(surface);
+  const behind = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const label = await page.locator('#first').evaluate(element => getComputedStyle(element, '::before').color);
+  const tag = await edit(page).evaluate(element => getComputedStyle(element).color);
+  expect(contrast(label, behind), `${surface}: label on the page`).toBeGreaterThanOrEqual(4.5);
+  expect(contrast(tag, behind), `${surface}: tag button on the page`).toBeGreaterThanOrEqual(4.5);
+  await edit(page).click();
+  const primary = await save(page).evaluate(element => {
+    const style = getComputedStyle(element);
+    return { ink: style.color, fill: style.backgroundColor };
+  });
+  expect(contrast(primary.ink, primary.fill), `${surface}: Save label on its own fill`).toBeGreaterThanOrEqual(4.5);
+  await input(page).press('Escape');
+};
+
+test('labels, tag buttons and editor controls stay legible on light and dark websites', async ({ page }) => {
+  // A website already on its surface when labeling starts.
+  for (const [surface, colour] of [['light', '#ffffff'], ['dark', '#101113']]) {
+    await start(page, { html: `<style>body{background:${colour}}</style>${wallets}` });
+    await legible(page, surface);
+  }
+  // And a website that changes surface under labels already on the page.
+  await start(page, { html: `<style>body{background:#ffffff}</style>${wallets}` });
+  await legible(page, 'light');
+  await page.evaluate(() => { document.body.style.background = '#101113'; });
+  await legible(page, 'dark');
+});
+
+test('a website surface is read from what the browser actually paints', async ({ page }) => {
+  const shapes = [
+    ['a background painted on the document element', '<style>html{background:#101113}</style>', 'dark'],
+    ['supporting both schemes is not the same as being dark', '<style>:root{color-scheme:light dark}html{background:#ffffff}</style>', 'light'],
+    ['a translucent dark body over a light document', '<style>html{background:#ffffff}body{background:rgba(0,0,0,.9)}</style>', 'dark'],
+  ];
+  for (const [shape, style, expected] of shapes) {
+    await start(page, { html: style + wallets });
+    await expect.poll(() => page.evaluate(() => document.documentElement.getAttribute('data-0xlabel-surface')),
+      { message: shape }).toBe(expected);
+  }
 });
