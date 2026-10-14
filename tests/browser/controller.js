@@ -17,7 +17,7 @@ export async function start(page, { html = wallets, site = 'https://etherscan.io
   await page.evaluate(async ({ site, records }) => {
     const { createPageController } = await import('/extension/page.js');
     window.site = new URL(site);
-    window.state = { connectionKey: 'http://127.0.0.1:8712', connectionName: 'Local', selectionGeneration: 1, stateRevision: 1, records };
+    window.state = { location: 'device', locationName: 'On this device', server: null, stateRevision: 1, records };
     window.saves = [];
     window.reports = [];
     window.controller = await createPageController({ state: window.state, url: () => window.site,

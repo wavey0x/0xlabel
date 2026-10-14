@@ -36,19 +36,17 @@ dialog::backdrop { background: var(--0xlabel-backdrop); backdrop-filter: blur(2p
 .switch span { display: block; width: 14px; height: 14px; background: var(--0xlabel-on-accent); border-radius: 50%; }
 .switch[aria-checked="true"] { background: var(--0xlabel-accent); }
 .switch[aria-checked="true"] span { transform: translateX(14px); }
-#connection { anchor-name: --connection; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex: 1; min-width: 0; text-align: left; font-weight: 750; color: var(--0xlabel-ink); background: var(--0xlabel-soft); padding: 8px 10px; }
-#connection span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#connection svg { width: 14px; height: 14px; flex-shrink: 0; color: var(--0xlabel-muted); }
-#connection[aria-expanded="true"] svg { transform: rotate(180deg); }
-#connection-menu { position: absolute; position-anchor: --connection; inset: auto; top: calc(anchor(bottom) + 5px); right: anchor(right); width: max(240px, anchor-size(width)); max-width: calc(100vw - 24px); overflow: auto; margin: 0; padding: 4px; border: 1px solid var(--0xlabel-line); border-radius: 10px; color: var(--0xlabel-ink); background: var(--0xlabel-panel); box-shadow: var(--0xlabel-shadow); }
-#connection-menu button { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; padding: 8px; color: var(--0xlabel-ink); background: transparent; }
-#connection-menu button:hover,#connection-menu button:focus-visible { background: var(--0xlabel-soft); }
-#connection-menu button[aria-checked="true"] { background: var(--0xlabel-accent-soft); }
-#connection-menu button span { flex: 1; min-width: 0; }
-#connection-menu strong,#connection-menu small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#connection-menu strong { font-size: 12px; font-weight: 750; }
-#connection-menu small { font-size: 10px; font-weight: 400; color: var(--0xlabel-muted); }
-#connection-menu svg { width: 14px; height: 14px; flex-shrink: 0; color: var(--0xlabel-accent); }
-#connection-menu button:not([aria-checked="true"]) svg { visibility: hidden; }
-#connection-menu .menu-action { font-size: 11px; color: var(--0xlabel-accent); }
-#connection-menu button:not(.menu-action) + .menu-action { margin-top: 4px; border-top: 1px solid var(--0xlabel-line); }
+#location { anchor-name: --location; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex: 1; min-width: 0; text-align: left; font-weight: 750; color: var(--0xlabel-ink); background: var(--0xlabel-soft); padding: 8px 10px; }
+#location span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#location svg { width: 14px; height: 14px; flex-shrink: 0; color: var(--0xlabel-muted); }
+#location[aria-expanded="true"] svg { transform: rotate(180deg); }
+#location-menu { position: absolute; position-anchor: --location; inset: auto; top: calc(anchor(bottom) + 5px); right: anchor(right); width: max(240px, anchor-size(width)); max-width: calc(100vw - 24px); overflow: auto; margin: 0; padding: 4px; border: 1px solid var(--0xlabel-line); border-radius: 10px; color: var(--0xlabel-ink); background: var(--0xlabel-panel); box-shadow: var(--0xlabel-shadow); }
+#location-menu button { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; padding: 8px; color: var(--0xlabel-ink); background: transparent; }
+#location-menu button:hover,#location-menu button:focus-visible { background: var(--0xlabel-soft); }
+#location-menu button[aria-checked="true"] { background: var(--0xlabel-accent-soft); }
+#location-menu button span { flex: 1; min-width: 0; }
+#location-menu strong,#location-menu small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#location-menu strong { font-size: 12px; font-weight: 750; }
+#location-menu small { font-size: 10px; font-weight: 400; color: var(--0xlabel-muted); }
+#location-menu svg { width: 14px; height: 14px; flex-shrink: 0; color: var(--0xlabel-accent); }
+#location-menu button:not([aria-checked="true"]) svg { visibility: hidden; }

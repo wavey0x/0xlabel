@@ -29,6 +29,17 @@ export function normalizeAPI(value) {
   return url.origin + url.pathname.replace(/\/+$/, '');
 }
 
+// A server prints one line to paste. The key rides in the fragment, which the
+// browser never sends to the server, so pasting it cannot leak it onward.
+export function parseConnectLink(value) {
+  let link;
+  try { link = new URL(String(value).trim()); }
+  catch { throw new Error('That does not look like a link. Paste the whole line your server printed.'); }
+  const key = new URLSearchParams(link.hash.slice(1)).get('key');
+  if (!key) throw new Error('That link has no access key. Copy the whole line your server printed.');
+  return { url: normalizeAPI(link.origin + link.pathname), token: key };
+}
+
 export function hostPermission(value) {
   const url = new URL(value);
   return `${url.protocol}//${url.hostname}/*`;

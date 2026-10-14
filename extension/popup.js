@@ -1,5 +1,5 @@
 import { hostPermission } from './shared.js';
-import { $, rpc, emptyState, currentSnapshot, syncText, connectionPicker, connectionForm } from './ui.js';
+import { $, rpc, emptyState, currentSnapshot, syncText, locationPicker, serverForm } from './ui.js';
 
 let state = emptyState;
 let sites = {};
@@ -8,19 +8,19 @@ let siteURL;
 let busy = false;
 let siteBusy = false;
 const tell = error => { $('#message').textContent = error?.message || String(error || ''); };
-const setup = connectionForm({ container: $('#settings'), state: () => state, connected: render,
+const setup = serverForm({ container: $('#server'), state: () => state, connected: render,
   busy: value => { busy = value; render(); }, error: tell,
   visible: open => { $('#home').hidden = open; tell(''); },
 });
-const picker = connectionPicker({ add: () => setup.open(), select: async url => {
-  try { render(await rpc({ type: 'Select', url })); tell(''); } catch (error) { tell(error); }
+const picker = locationPicker({ choose: async place => {
+  if (place === 'server') return setup.open();
+  try { render(await rpc({ type: 'Use', location: place })); tell(''); } catch (error) { tell(error); }
 } });
 function render(next = state) {
   if (!currentSnapshot(next, state)) return;
   state = next;
   picker(state);
-  $('#connection').disabled = busy;
-  $('#settings-toggle').disabled = busy;
+  $('#location').disabled = busy;
   $('#sync').textContent = busy ? 'Connecting…' : syncText(state);
   $('#sync').title = state.error || '';
   $('#sync').dataset.offline = String(Boolean(state.error));
@@ -33,12 +33,10 @@ function render(next = state) {
   $('#site-toggle').title = !siteURL ? 'Open a website to use your tags'
     : enabled ? 'Show the website originals again' : 'Show my tags on this website';
 }
-$('#settings-toggle').onclick = () => setup.open(Boolean(state.connectionKey));
 async function enable(enabled) {
   siteBusy = true; render();
   try {
     if (!siteURL) throw new Error('Open a website to enable labeling.');
-    if (enabled && !state.connectionKey) throw new Error('Connect a book before turning on this website.');
     if (enabled && !await chrome.permissions.request({ origins: [hostPermission(siteURL.origin)] })) throw new Error('Website access was not granted.');
     sites = (await rpc({ type: 'Site', tabId: tab.id, enabled })).sites;
     $('#adapter-warning').hidden = true; tell('');

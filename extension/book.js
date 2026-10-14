@@ -1,4 +1,4 @@
-import { $, rpc, emptyState, currentSnapshot, syncText, connectionPicker, connectionForm, dismissDialog } from './ui.js';
+import { $, rpc, emptyState, currentSnapshot, syncText, locationPicker, serverForm, dismissDialog } from './ui.js';
 import { parseAddress, normalizeScope } from './shared.js';
 import { scopeName } from './networks.js';
 import { checksumAddress } from './checksum.js';
@@ -16,21 +16,21 @@ await editorStyles(shadow);
 const theme = matchMedia('(prefers-color-scheme: dark)');
 const applyTheme = () => $('#editor-host').toggleAttribute('data-dark', theme.matches);
 theme.addEventListener('change', applyTheme); applyTheme();
-const setup = connectionForm({ container: $('#settings'), state: () => state, connected: render,
+const setup = serverForm({ container: $('#server'), state: () => state, connected: render,
   busy: value => { busy = value; render(); }, error: tell,
 });
-const picker = connectionPicker({ add: () => setup.open(), edit: () => setup.open(true), select: async url => {
-  try { render(await rpc({ type: 'Select', url })); tell(''); } catch (error) { tell(error); }
+const picker = locationPicker({ choose: async place => {
+  if (place === 'server') return setup.open();
+  try { render(await rpc({ type: 'Use', location: place })); tell(''); } catch (error) { tell(error); }
 } });
 function render(next = state) {
   if (!currentSnapshot(next, state)) return;
-  if (next.connectionKey !== state.connectionKey) $('#search').value = '';
+  if (next.location !== state.location) $('#search').value = '';
   state = next;
   picker(state);
-  $('#connection').disabled = busy;
-  $('#refresh').disabled = !state.connectionKey || busy || $('#refresh').hasAttribute('aria-busy');
-  $('#add-address').disabled = !state.connectionKey;
-  $('#export').disabled = !state.connectionKey || !state.records.length;
+  $('#location').disabled = busy;
+  $('#refresh').disabled = busy || $('#refresh').hasAttribute('aria-busy');
+  $('#export').disabled = !state.records.length;
   $('#sync').textContent = busy ? 'Connecting…' : syncText(state);
   $('#sync').title = state.error || '';
   $('#sync').dataset.offline = String(Boolean(state.error));
@@ -41,7 +41,6 @@ function render(next = state) {
   search();
 }
 function edit(address, scope = 'global') {
-  if (!state.connectionKey) return;
   if (editor && !editor.closeIfUnchanged()) return;
   editor = createEditor(shadow, { address, scope, state, modal: true,
     save: draft => rpc({ type: 'Save', draft }), onSaved: render,
@@ -82,11 +81,9 @@ function search() {
     $('#results').replaceChildren(...rows); visibleRows = rows;
   }
   $('#empty').hidden = Boolean(matches.length);
-  $('#empty p').textContent = !state.connectionKey ? 'Connect a book to get started.' : state.records.length ? 'No matching tags or addresses.' : 'No addresses tagged yet.';
-  $('#connect-empty').hidden = Boolean(state.connectionKey);
+  $('#empty p').textContent = state.records.length ? 'No matching tags or addresses.' : 'No addresses tagged yet.';
 }
 $('#search').oninput = search;
-$('#connect-empty').onclick = () => setup.open();
 const addDialog = $('#add-dialog');
 const closeAdd = () => { addDialog.close(); $('#manual-form').reset(); $('#address-error').textContent = ''; $('#add-address').focus(); };
 dismissDialog(addDialog, closeAdd);

@@ -1,10 +1,10 @@
 import { COLORS } from './colors.js';
-import { createClient } from './client.js';
+import { createStore } from './store.js';
 import { hostPermission } from './shared.js';
 
 let sites = {};
 const health = new Map();
-const client = createClient({ storage: chrome.storage.local, notify: broadcast });
+const store = createStore({ storage: chrome.storage.local, notify: broadcast });
 const ready = initialize();
 
 function siteOrigin(value) {
@@ -28,7 +28,7 @@ async function register(origin) {
 async function initialize() {
   await chrome.storage.local.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' });
   sites = (await chrome.storage.local.get('sites')).sites || {};
-  await client.init();
+  await store.init();
   for (const origin of Object.keys(sites)) {
     if (sites[origin] && await chrome.permissions.contains({ origins: [hostPermission(origin)] })) await register(origin);
     else delete sites[origin];
@@ -40,7 +40,7 @@ async function initialize() {
   if (!await chrome.alarms.get('sync')) await chrome.alarms.create('sync', { periodInMinutes: 1 });
   await chrome.contextMenus.removeAll();
   chrome.contextMenus.create({ id: 'edit-label', title: 'Label address with 0xlabel', contexts: ['page', 'link', 'selection'] });
-  client.refresh().catch(() => {});
+  store.refresh().catch(() => {});
 }
 
 async function send(tabId, message, options = { frameId: 0 }) {
@@ -97,11 +97,11 @@ async function handle(message, sender) {
     if (!view && !page) return { enabled: false };
     const tabId = view ? message.tabId : sender.tab.id;
     if (view && tabId && !health.has(tabId)) await refreshAction(tabId);
-    return { state: client.state(), enabled: Boolean(page), ...(view ? { sites } : {}), health: health.get(tabId) || null };
+    return { state: store.state(), enabled: Boolean(page), ...(view ? { sites } : {}), health: health.get(tabId) || null };
   }
   if (!view && !page) throw new Error('This page is not enabled.');
-  if (message.type === 'Save') return client.save(message.draft);
-  if (message.type === 'Resume') { client.refresh().catch(() => {}); return {}; }
+  if (message.type === 'Save') return store.save(message.draft);
+  if (message.type === 'Resume') { store.refresh().catch(() => {}); return {}; }
   if (message.type === 'Health' && page) {
     // The toolbar describes the outer page. Embedded views cannot replace its
     // adapter status (including unrelated contract and advertising frames).
@@ -113,13 +113,15 @@ async function handle(message, sender) {
     return {};
   }
   if (!view) throw new Error('Open 0xlabel to change settings.');
-  if (message.type === 'Connect') {
-    const origin = hostPermission(message.connection.url);
-    if (!await chrome.permissions.contains({ origins: [origin] })) throw new Error('Allow access to this API first.');
-    return client.connect(message.connection);
+  if (message.type === 'Use') {
+    if (message.location === 'server' && message.url) {
+      if (!await chrome.permissions.contains({ origins: [hostPermission(message.url)] })) {
+        throw new Error('Allow access to that server first.');
+      }
+    }
+    return store.use(message.location, { url: message.url, token: message.token });
   }
-  if (message.type === 'Select') { const state = await client.select(message.url); client.refresh().catch(() => {}); return state; }
-  if (message.type === 'Refresh') return client.refresh();
+  if (message.type === 'Refresh') return store.refresh();
   if (message.type === 'Site') {
     const tab = await chrome.tabs.get(message.tabId);
     const origin = siteOrigin(tab.url);
@@ -159,7 +161,7 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     reply({ ok: false, error: error.message, status: error.status, current: error.current }));
   return true;
 });
-chrome.alarms.onAlarm.addListener(alarm => { if (alarm.name === 'sync') ready.then(() => client.refresh()).catch(() => {}); });
+chrome.alarms.onAlarm.addListener(alarm => { if (alarm.name === 'sync') ready.then(() => store.refresh()).catch(() => {}); });
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   ready.then(() => { if (tab?.id && sites[siteOrigin(tab.url)]) return send(tab.id, { type: 'OpenEditor', selection: info.selectionText, link: info.linkUrl }, { frameId: info.frameId || 0 }); }).catch(() => {});
 });

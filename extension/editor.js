@@ -19,8 +19,8 @@ export async function editorStyles(root) {
 
 // Shared by the page popover and book. The draft never follows a recycled row.
 export function createEditor(container, { address, scope = 'global', state, save, close, onSaved = () => {}, onLayout = () => {}, visibility, toggleVisibility, modal = false }) {
-  const connectionKey = state.connectionKey;
-  const connectionName = state.connectionName || 'No connection';
+  const place = state.location;
+  const placeName = state.locationName || 'On this device';
   const displayAddress = checksumAddress(address);
   const own = findRecord(state.records, address, scope);
   const initial = own || (scope !== 'global' && findRecord(state.records, address, 'global'));
@@ -40,11 +40,11 @@ export function createEditor(container, { address, scope = 'global', state, save
   if (modal) panel.showModal();
   const get = selector => panel.querySelector(selector);
   get('code').textContent = displayAddress;
-  get('.source').textContent = connectionName;
-  get('.source').title = `Saving to ${connectionName}${connectionKey ? ` · ${connectionKey}` : ''}`;
-  get('.source').setAttribute('aria-label', `Saving to ${connectionName}`);
+  get('.source').textContent = placeName;
+  get('.source').title = `Saving to your book · ${placeName}`;
+  get('.source').setAttribute('aria-label', `Saving to ${placeName}`);
   get('.copy').title = `Copy ${displayAddress}`;
-  get('.save').title = `Save to ${connectionName}`;
+  get('.save').title = `Save to ${placeName}`;
   function outside(event) {
     const path = event.composedPath();
     const box = modal && panel.getBoundingClientRect();
@@ -93,15 +93,15 @@ export function createEditor(container, { address, scope = 'global', state, save
     queueMicrotask(onLayout);
   }
   function guard() {
-    const switched = activeState.connectionKey !== connectionKey;
+    const switched = activeState.location !== place;
     updateControls();
-    get('.notice').textContent = phase === 'saved' ? '' : switched ? `This draft belongs to ${connectionName}. Switch back to save it, or close this editor.` : pageNotice;
+    get('.notice').textContent = phase === 'saved' ? '' : switched ? `Your book moved to ${activeState.locationName}. Close this editor and try again.` : pageNotice;
     queueMicrotask(onLayout);
   }
   function updateControls() {
     updateVisibility();
     const busy = phase !== 'idle';
-    get('.save').disabled = busy || activeState.connectionKey !== connectionKey || !connectionKey;
+    get('.save').disabled = busy || activeState.location !== place;
     if (phase === 'saved') {
       get('.save').innerHTML = COPIED_ICON;
       get('.save').setAttribute('aria-label', 'Saved');
@@ -109,7 +109,7 @@ export function createEditor(container, { address, scope = 'global', state, save
     } else {
       get('.save').textContent = busy ? 'Saving…' : 'Save';
       get('.save').removeAttribute('aria-label');
-      get('.save').title = `Save to ${connectionName}`;
+      get('.save').title = `Save to ${placeName}`;
     }
     panel.querySelectorAll('input').forEach(input => { input.disabled = busy; });
     const rows = panel.querySelectorAll('.row');
@@ -156,14 +156,14 @@ export function createEditor(container, { address, scope = 'global', state, save
   get('.add').onclick = () => { draft.labels.push(''); renderRows(draft.labels.length - 1); };
 
   async function submit() {
-    if (closed || phase !== 'idle' || activeState.connectionKey !== connectionKey || !connectionKey) return;
+    if (closed || phase !== 'idle' || activeState.location !== place) return;
     let labels;
     try { labels = normalizeLabels(draft.labels); }
     catch (error) { get('.notice').textContent = error.message; queueMicrotask(onLayout); return; }
     phase = 'saving';
     guard();
     try {
-      const result = await save({ connectionKey, address, scope, labels, version: draft.version });
+      const result = await save({ location: place, address, scope, labels, version: draft.version });
       if (closed) return;
       phase = 'saved';
       guard();

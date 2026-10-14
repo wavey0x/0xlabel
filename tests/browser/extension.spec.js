@@ -9,7 +9,7 @@ const local = 'http://127.0.0.1:8721';
 const remote = 'https://127.0.0.1:8722';
 const headers = { Authorization: 'Bearer test-only-token' };
 
-test('installed extension: authenticated HTTP/HTTPS books, source isolation, alarm pulls, editor and native copy', async () => {
+test('installed extension: a book that works with no setup, moving it to a server, alarm pulls, editor and native copy', async () => {
   test.setTimeout(90000);
   const api = await request.newContext({ ignoreHTTPSErrors: true, extraHTTPHeaders: headers });
   const seed = await api.put(`${local}/labels/global/${address}`, { data: { labels: ['Local treasury'], version: null } });
@@ -56,37 +56,32 @@ test('installed extension: authenticated HTTP/HTTPS books, source isolation, ala
     const popup = await context.newPage(); await website.bringToFront();
     await popup.setViewportSize({width:380,height:600});
     await popup.goto(`chrome-extension://${id}/popup.html`);
-    // Before any book exists the switch must still answer a click. Silently
-    // ignoring it is indistinguishable, to the person clicking, from a break.
+    // Nothing has been set up, so there is a book and it is on this device.
     await expect(popup.locator('#site-name')).toHaveText('127.0.0.1');
-    await popup.getByRole('switch', { name: 'Show my tags on this website' }).click();
-    await expect(popup.locator('#message')).toHaveText('Connect a book before turning on this website.');
-    const addConnection = async data => {
-      await popup.locator('#connection').click();
-      await popup.getByRole('menuitem', { name: '+ Add connection', exact: true }).click();
-      await popup.locator('#pairing').fill(JSON.stringify(data));
-    };
-    await addConnection({url:local,token:'test-only-token',name:'Local'});
-    await popup.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await expect(popup.locator('#settings')).toBeHidden();
-    await expect(popup.locator('#token')).toHaveValue('');
-    await expect(popup.locator('#pairing')).toHaveValue('');
-    await addConnection({url:local,token:'test-only-token',name:'Local'});
-    await popup.locator('#connect').click();
-    await expect(popup.locator('#settings')).toBeHidden({ timeout: 10000 });
-    await expect(popup.locator('#connection')).toHaveText('Local');
-    await popup.getByRole('button', { name: 'Connection settings', exact: true }).click();
-    await expect(popup.locator('#api-url')).toHaveValue(local);
-    await expect(popup.locator('#token')).toHaveValue('');
-    await popup.locator('#name').fill('Local notebook');
-    await popup.getByRole('button', { name: 'Save connection', exact: true }).click();
-    await expect(popup.locator('#connection')).toHaveText('Local notebook');
-    expect((await (await api.get(local+'/labels')).json()).records).toEqual([localRecord]);
+    await expect(popup.locator('#location')).toHaveText('On this device');
     const siteSwitch = popup.getByRole('switch', { name: 'Show my tags on this website' });
     await expect(siteSwitch).not.toBeChecked();
     await popup.locator('#site-toggle').click();
     await expect(siteSwitch).toBeChecked();
     await expect.poll(toolbar).toEqual({ icon: 'icons/mark-16.png', title: '0xlabel · Active on this page' });
+    // Label an address with no server anywhere in the picture.
+    await website.getByRole('button', { name: 'Edit wallet labels', exact: true }).first().click();
+    await website.getByRole('textbox', { name: 'Label 1' }).fill('Kept on this device');
+    await website.getByRole('textbox', { name: 'Label 1' }).press('Enter');
+    await expect(website.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Kept on this device');
+
+    // Moving the book onto a server takes one pasted line and nothing else.
+    const useServer = async (url, key) => {
+      await popup.locator('#location').click();
+      await popup.getByRole('menuitemradio', { name: /On my own server/ }).click();
+      await popup.locator('#connect-link').fill(`${url}#key=${key}`);
+      await popup.locator('#connect').click();
+    };
+    await useServer(local, 'test-only-token');
+    await expect(popup.locator('#server')).toBeHidden({ timeout: 10000 });
+    await expect(popup.locator('#location')).toHaveAttribute('title', local);
+    // That server already holds a book, so it is joined rather than overwritten.
+    expect((await (await api.get(local+'/labels')).json()).records).toEqual([localRecord]);
     await expect(website.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Local treasury');
     await expect(embedded.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Local treasury');
     await expect(external.locator('[data-0xlabel-address],[data-0xlabel-ui]')).toHaveCount(0);
@@ -124,25 +119,20 @@ test('installed extension: authenticated HTTP/HTTPS books, source isolation, ala
     await expect(foreign.frameLocator('iframe').locator('[data-0xlabel-address],[data-0xlabel-ui]')).toHaveCount(0);
     await foreign.close(); await website.bringToFront();
 
-    await addConnection({url:remote,token:'wrong-token',name:'Remote'});
-    await popup.locator('#connect').click();
-    await expect(popup.locator('#connection-error')).toContainText('rejected');
-    await popup.locator('#pairing').press('Escape');
-    await expect(popup.locator('#settings')).toBeHidden();
-    await expect(popup.locator('#connection')).toHaveText('Local notebook');
-    await addConnection({url:remote,token:'test-only-token',name:'Remote'});
-    await popup.locator('#connect').click();
-    await expect(popup.locator('#settings')).toBeHidden();
-    await expect(popup.locator('#connection')).toHaveText('Remote');
-    await expect(website.locator('#wallet')).not.toHaveAttribute('data-0xlabel-label');
-    await expect(embedded.locator('#wallet')).not.toHaveAttribute('data-0xlabel-label');
+    // A key the server refuses never becomes the place the book lives.
+    await useServer(remote, 'wrong-token');
+    await expect(popup.locator('#server-error')).toContainText('rejected');
+    await popup.locator('#connect-link').press('Escape');
+    await expect(popup.locator('#server')).toBeHidden();
+    await expect(popup.locator('#location')).toHaveAttribute('title', local);
+    // An empty server is given a copy of the book being carried to it.
+    await useServer(remote, 'test-only-token');
+    await expect(popup.locator('#server')).toBeHidden({ timeout: 10000 });
+    await expect(popup.locator('#location')).toHaveAttribute('title', remote);
+    expect((await (await api.get(remote+'/labels')).json()).records.map(entry => entry.labels[0])).toEqual(['Local treasury']);
     expect((await (await api.get(local+'/labels')).json()).records).toEqual([localRecord]);
-    const caches = await worker.evaluate(async ({local,remote}) => {
-      const result = await chrome.storage.local.get([`connection:${local}`, `connection:${remote}`]);
-      return { local: result[`connection:${local}`].records, remote: result[`connection:${remote}`].records };
-    }, {local,remote});
-    expect(caches.local).toEqual([localRecord]); expect(caches.remote).toEqual([]);
 
+    await api.put(`${remote}/labels/global/${address}`, { data:{labels:[],version:(await (await api.get(remote+'/labels')).json()).records[0].version} });
     const remoteRecord = (await (await api.put(`${remote}/labels/global/${address}`, { data:{labels:['Remote vault'],version:null} })).json()).record;
     // Exercise the real alarm listener with an accelerated one-shot test alarm.
     await worker.evaluate(() => chrome.alarms.create('sync', { when:Date.now()+100 }));
@@ -151,8 +141,8 @@ test('installed extension: authenticated HTTP/HTTPS books, source isolation, ala
     await api.put(`${remote}/labels/global/${address}`, { data:{labels:[],version:remoteRecord.version} });
     await worker.evaluate(() => chrome.alarms.create('sync', { when:Date.now()+100 }));
     await expect(website.locator('#wallet')).not.toHaveAttribute('data-0xlabel-label', /./, { timeout:10000 });
-    await popup.locator('#connection').click();
-    await popup.getByRole('menuitemradio', { name: /^Local / }).click();
+    await useServer(local, 'test-only-token');
+    await expect(popup.locator('#server')).toBeHidden({ timeout: 10000 });
     await expect(website.locator('#wallet')).toHaveAttribute('data-0xlabel-label','Local treasury');
     await website.getByRole('button',{name:'Edit wallet labels',exact:true}).first().click();
     await website.getByRole('textbox',{name:'Label 1'}).fill('Local edited');
@@ -230,12 +220,12 @@ test('installed extension: authenticated HTTP/HTTPS books, source isolation, ala
     await book.locator('#manual-address').fill(added); await book.locator('#network').fill('8453');
     await book.getByRole('button',{name:'Add tags',exact:true}).click();
     await book.getByRole('textbox',{name:'Label 1'}).fill('New Base wallet');
-    await popup.locator('#connection').click();
-    await popup.getByRole('menuitemradio', { name: /^Remote / }).click();
+    // Moving the book under an open draft must not let it save into the new place.
+    await popup.locator('#location').click();
+    await popup.getByRole('menuitemradio', { name: /On this device/ }).click();
     await expect(book.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
     await expect(book.getByRole('textbox', { name: 'Label 1' })).toHaveValue('New Base wallet');
-    await popup.locator('#connection').click();
-    await popup.getByRole('menuitemradio', { name: /^Local / }).click();
+    await useServer(local, 'test-only-token');
     await expect(book.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
     await book.getByRole('button',{name:'Add label',exact:false}).click();
     await book.getByRole('textbox',{name:'Label 2'}).fill('Second alias');

@@ -1,7 +1,7 @@
-import { hostPermission, normalizeAPI } from './shared.js';
+import { hostPermission, parseConnectLink } from './shared.js';
 import { COPIED_ICON } from './icons.js';
 
-export const emptyState = { records: [], connections: [], connectionKey: null, selectionGeneration: -1, stateRevision: 0 };
+export const emptyState = { records: [], location: 'device', locationName: 'On this device', server: null, stateRevision: -1, syncedAt: null, error: null };
 export const $ = selector => document.querySelector(selector);
 export async function rpc(message) {
   const response = await chrome.runtime.sendMessage(message);
@@ -13,12 +13,14 @@ export async function rpc(message) {
   return response.result;
 }
 export function currentSnapshot(next, current) {
-  return Number.isSafeInteger(next?.selectionGeneration) && Number.isSafeInteger(next?.stateRevision) &&
-    (next.selectionGeneration > current.selectionGeneration ||
-      next.selectionGeneration === current.selectionGeneration && next.stateRevision >= current.stateRevision);
+  return Number.isSafeInteger(next?.stateRevision) && next.stateRevision >= current.stateRevision;
 }
 export function syncText(state) {
-  return state.error ? 'Using cached book' : state.syncedAt ? `Synced ${new Date(state.syncedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : 'Connect your own API';
+  if (state.location === 'device') return 'Saved on this device';
+  if (state.error) return 'Using your saved copy';
+  return state.syncedAt
+    ? `Synced ${new Date(state.syncedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+    : 'Connecting…';
 }
 export function dismissDialog(dialog, close) {
   dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });
@@ -28,13 +30,24 @@ export function dismissDialog(dialog, close) {
   });
 }
 
-// The two extension views share one small connection picker and setup form.
-export function connectionPicker({ select, add, edit }) {
-  const trigger = $('#connection');
-  const menu = $('#connection-menu');
+// Where a book can live. The list is the whole vocabulary: there is nothing to
+// pair, name or configure, only a place to keep it.
+export const PLACES = [
+  { id: 'device', label: 'On this device', note: 'Nothing leaves your computer.' },
+  { id: 'server', label: 'On my own server', note: 'Share it between your devices.' },
+];
+
+export function placeLabel(state) {
+  return state.location === 'server' && state.server ? new URL(state.server).hostname
+    : PLACES.find(place => place.id === state.location)?.label || 'On this device';
+}
+
+// One control in both views: it says where the book is and offers the others.
+export function locationPicker({ choose }) {
+  const trigger = $('#location');
+  const menu = $('#location-menu');
   menu.addEventListener('beforetoggle', event => {
     trigger.setAttribute('aria-expanded', String(event.newState === 'open'));
-    if (event.newState === 'open') menu.style.maxHeight = `${Math.max(72, Math.min(300, innerHeight - trigger.getBoundingClientRect().bottom - 12))}px`;
   });
   trigger.addEventListener('keydown', event => {
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); menu.showPopover(); }
@@ -45,123 +58,87 @@ export function connectionPicker({ select, add, edit }) {
     event.preventDefault();
     const options = [...menu.querySelectorAll('button')];
     const index = options.indexOf(document.activeElement);
-    const next = event.key === 'Home' ? 0 : event.key === 'End' ? options.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length;
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? options.length - 1
+      : (index + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length;
     options[next]?.focus();
   });
   menu.addEventListener('click', event => {
     const option = event.target.closest('button');
     if (!option) return;
     menu.hidePopover();
-    if (option.dataset.url) select(option.dataset.url);
-    else if (option.dataset.action === 'edit') edit();
-    else add();
+    choose(option.dataset.place);
   });
   return state => {
-    const active = state.connections.find(connection => connection.url === state.connectionKey);
-    trigger.querySelector('span').textContent = active?.name || 'Connect a book';
-    trigger.setAttribute('aria-label', active ? `Active connection: ${active.name}` : 'Connect a book');
-    trigger.title = active?.url || 'Add a connection';
-    const focused = menu.contains(document.activeElement);
-    const focusedURL = focused ? document.activeElement.dataset.url : null;
-    const options = state.connections.map(connection => {
+    trigger.querySelector('span').textContent = placeLabel(state);
+    trigger.setAttribute('aria-label', `Your book is kept ${placeLabel(state).toLowerCase()}`);
+    trigger.title = state.server || 'Your address book';
+    menu.replaceChildren(...PLACES.map(place => {
       const button = document.createElement('button');
-      button.type = 'button'; button.dataset.url = connection.url; button.title = connection.url;
+      button.type = 'button';
+      button.dataset.place = place.id;
       button.setAttribute('role', 'menuitemradio');
-      button.setAttribute('aria-checked', String(connection.url === state.connectionKey));
-      button.autofocus = connection.url === state.connectionKey;
+      button.setAttribute('aria-checked', String(place.id === state.location));
+      button.autofocus = place.id === state.location;
       button.innerHTML = `<span><strong></strong><small></small></span>${COPIED_ICON}`;
-      button.querySelector('strong').textContent = connection.name;
-      button.querySelector('small').textContent = connection.url.replace(/^https?:\/\//, '');
+      button.querySelector('strong').textContent = place.label;
+      button.querySelector('small').textContent = place.id === 'server' && state.server
+        ? new URL(state.server).hostname : place.note;
       return button;
-    });
-    for (const [action, text] of [['add', '+ Add connection'], ...(active && edit ? [['edit', 'Edit this connection']] : [])]) {
-      const button = document.createElement('button');
-      button.type = 'button'; button.dataset.action = action; button.className = 'menu-action'; button.textContent = text;
-      button.setAttribute('role', 'menuitem'); button.autofocus = !active && action === 'add';
-      options.push(button);
-    }
-    menu.replaceChildren(...options);
-    if (focused) (options.find(button => button.dataset.url === focusedURL) || options[0])?.focus();
+    }));
   };
 }
 
-export function connectionForm({ container, state, connected, busy, error, visible = () => {} }) {
+// The only thing a server needs: the line it printed.
+export function serverForm({ container, state, connected, busy, error, visible = () => {} }) {
   const modal = container instanceof HTMLDialogElement;
   let pending = false;
-  let editing = false;
-  container.innerHTML = `<header class="view-heading"><h2>Add connection</h2><button type="button" class="quiet icon" data-cancel aria-label="Close connection setup">×</button></header>
-    <form id="connection-form" novalidate>
-      <label for="pairing">Connection JSON</label><textarea id="pairing" rows="3" autocomplete="off" spellcheck="false" placeholder="Paste the JSON from your helper"></textarea>
-      <label for="name">Name <span class="muted">(optional)</span></label><input id="name" maxlength="50" autocomplete="off" placeholder="Local or Remote">
-      <details id="manual-details"><summary>Enter API details manually</summary>
-        <label for="api-url">API address</label><input id="api-url" type="url" autocomplete="off" spellcheck="false" placeholder="http://127.0.0.1:8712">
-        <label for="token">Access token</label><input id="token" type="password" autocomplete="off" placeholder="Token from your helper">
-      </details>
-      <p class="muted setup-note">Each API keeps a separate book.</p><p id="connection-error" class="message" role="alert"></p>
-      <footer class="form-actions"><button type="button" class="quiet" data-cancel>Cancel</button><button id="connect" type="submit" class="primary">Connect</button></footer>
+  container.innerHTML = `<header class="view-heading"><h2>Your own server</h2><button type="button" class="quiet icon" data-cancel aria-label="Close">×</button></header>
+    <form id="server-form" novalidate>
+      <label for="connect-link">Paste the link your server printed</label>
+      <input id="connect-link" type="text" autocomplete="off" spellcheck="false" placeholder="http://127.0.0.1:8712#key=…">
+      <p class="muted setup-note">Run <code>uv run 0xlabel</code> and copy the line it prints.</p>
+      <p id="server-error" class="message" role="alert"></p>
+      <footer class="form-actions"><button type="button" class="quiet" data-cancel>Cancel</button><button id="connect" type="submit" class="primary">Use this server</button></footer>
     </form>`;
   const get = selector => container.querySelector(selector);
   const form = get('form');
   const opened = () => modal ? container.open : !container.hidden;
   function close() {
     if (modal) container.close(); else container.hidden = true;
-    form.reset(); get('#manual-details').open = false; get('#connection-error').textContent = '';
-    visible(false); $('#connection').focus();
+    form.reset(); get('#server-error').textContent = '';
+    visible(false); $('#location').focus();
   }
   container.querySelectorAll('[data-cancel]').forEach(button => { button.onclick = close; });
   if (modal) dismissDialog(container, close);
   else container.addEventListener('keydown', event => { if (event.key === 'Escape') { event.preventDefault(); close(); } });
-  get('#pairing').oninput = event => {
-    try {
-      const value = JSON.parse(event.target.value);
-      if (typeof value.url === 'string') get('#api-url').value = value.url;
-      if (typeof value.token === 'string') get('#token').value = value.token;
-      if (typeof value.name === 'string') get('#name').value = value.name.slice(0, 50);
-    } catch { /* Keep incomplete pastes editable. */ }
-  };
   form.onsubmit = async event => {
     event.preventDefault();
     if (pending) return;
-    let connection;
-    try {
-      if (get('#pairing').value.trim()) JSON.parse(get('#pairing').value);
-      if (!get('#api-url').value.trim()) { get('#manual-details').open = true; get('#api-url').focus(); throw new Error('Enter an API address or paste its connection JSON.'); }
-      connection = { url: normalizeAPI(get('#api-url').value), token: get('#token').value, name: get('#name').value };
-    } catch (failure) {
-      get('#connection-error').textContent = failure instanceof SyntaxError ? 'Paste valid connection JSON, or clear it and enter the API details.' : failure.message;
-      return;
-    }
-    const permission = chrome.permissions.request({ origins: [hostPermission(connection.url)] });
+    let link;
+    try { link = parseConnectLink(get('#connect-link').value); }
+    catch (failure) { get('#server-error').textContent = failure.message; return; }
+    const permission = chrome.permissions.request({ origins: [hostPermission(link.url)] });
     pending = true; busy(true); get('#connect').disabled = true; get('#connect').textContent = 'Connecting…';
-    get('#connection-error').textContent = '';
-    container.querySelectorAll('input,textarea').forEach(input => { input.disabled = true; });
-    container.querySelector('footer [data-cancel]').textContent = 'Back';
+    get('#server-error').textContent = '';
+    get('#connect-link').disabled = true;
     try {
-      if (!await permission) throw new Error('API access was not granted.');
-      connected(await rpc({ type: 'Connect', connection }));
+      if (!await permission) throw new Error('Access to that server was not granted.');
+      connected(await rpc({ type: 'Use', location: 'server', url: link.url, token: link.token }));
       if (opened()) close();
     } catch (failure) {
-      if (opened()) get('#connection-error').textContent = failure.message;
-      else error(failure);
+      if (opened()) get('#server-error').textContent = failure.message; else error(failure);
     } finally {
-      pending = false; busy(false); get('#connect').disabled = false; get('#connect').textContent = editing ? 'Save connection' : 'Connect';
-      container.querySelectorAll('input,textarea').forEach(input => { input.disabled = false; });
-      container.querySelector('footer [data-cancel]').textContent = 'Cancel';
+      pending = false; busy(false); get('#connect').disabled = false; get('#connect').textContent = 'Use this server';
+      get('#connect-link').disabled = false;
     }
   };
   return {
-    open(edit = false) {
+    open() {
       if (pending) return;
-      editing = edit;
-      form.reset(); get('#connection-error').textContent = '';
-      get('#connect').textContent = edit ? 'Save connection' : 'Connect';
-      get('h2').textContent = edit ? 'Edit connection' : 'Add connection';
-      get('#api-url').value = edit ? state().connectionKey || '' : '';
-      get('#name').value = edit ? state().connectionName || '' : '';
-      get('#token').placeholder = edit ? 'Leave blank to keep the saved token' : 'Token from your helper';
-      get('#manual-details').open = edit;
+      form.reset(); get('#server-error').textContent = '';
+      get('#connect-link').value = state()?.server || '';
       if (modal) container.showModal(); else container.hidden = false;
-      visible(true); (edit ? get('#name') : get('#pairing')).focus();
+      visible(true); get('#connect-link').focus();
     },
   };
 }

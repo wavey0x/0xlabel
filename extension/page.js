@@ -282,22 +282,22 @@ export async function createPageController({
   function open(target) {
     if (!target) return;
     if (editor && editorTarget?.address === target.address && editorTarget.network === target.network &&
-        editorTarget.connectionKey === state.connectionKey) {
-      editorTarget = { ...target, connectionKey: state.connectionKey };
+        editorTarget.place === state.location) {
+      editorTarget = { ...target, place: state.location };
       position(true); editor.focus();
       return;
     }
     if (editor && !editor.closeIfUnchanged()) { position(true); return; }
-    editorTarget = { ...target, connectionKey: state.connectionKey };
+    editorTarget = { ...target, place: state.location };
     overlay.show();
     overlay.theme();
-    const connectionKey = state.connectionKey;
+    const place = state.location;
     const key = recordKey(target.address, target.network);
     const visibility = () => {
       const live = targets.get(editorTarget?.element);
       return {
         available: Boolean(recordFor(target)), hidden: hiddenLabels.has(key),
-        enabled: state.connectionKey === connectionKey && health.status === 'ready' && href === url().href &&
+        enabled: state.location === place && health.status === 'ready' && href === url().href &&
           live?.element.isConnected && live.address === target.address && live.network === target.network,
       };
     };
@@ -341,10 +341,9 @@ export async function createPageController({
   const routeCheck = setInterval(() => { if (url().href !== href) schedule(); }, 1000);
 
   function updateState(next) {
-    if (!next || !Number.isSafeInteger(next.selectionGeneration) || !Number.isSafeInteger(next.stateRevision)) return;
-    if (next.selectionGeneration < state.selectionGeneration) return;
-    if (next.selectionGeneration === state.selectionGeneration && next.stateRevision < state.stateRevision) return;
-    const switched = next.connectionKey !== state.connectionKey || next.selectionGeneration !== state.selectionGeneration;
+    if (!next || !Number.isSafeInteger(next.stateRevision)) return;
+    if (next.stateRevision < state.stateRevision) return;
+    const switched = next.location !== state.location;
     if (switched) hiddenLabels.clear();
     state = next;
     book = indexBook(next.records);
