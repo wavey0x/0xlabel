@@ -268,6 +268,19 @@ test('explorer identities come from complete sources, including search suggestio
     <div class="search-panel-container"><ul><li role="option" data-address="${address}">
       <span style="display:none">${address}</span>
       <a id="recent" class="nav-link" href="/address/${address}" style="display:block;width:100%"><h6 style="display:flex;margin:0"><i></i><div class="text-truncate">${address}</div></h6></a>
+    </li><li role="option" data-address="${address}">
+      <span style="display:none">${address}</span>
+      <a id="recent-name" class="nav-link" href="/address/name.eth"><h6><i></i><div class="text-truncate">name.eth</div></h6></a>
+    </li><li role="option" data-address="${other}">
+      <span style="display:none">${other}</span>
+      <a id="recent-tag" class="nav-link" href="/address/${other}"><h6><i></i><div class="text-truncate">Website organization</div></h6></a>
+    </li><li role="option">
+      <span style="display:none">${address}</span>
+      <a id="suggested-name" class="nav-link" href="/address/name.eth"><div><h6>name.eth</h6><span>${address}</span></div></a>
+    </li><li role="option" data-address="name.eth">
+      <a id="unresolved-search" href="/name-lookup-search?id=name.eth">name.eth</a>
+    </li><li role="option">
+      <a id="search-page" href="/api">Etherscan API</a>
     </li></ul></div></header><main>
     <a href="/address/${address}"><span id="ens" class="hash-tag">name.eth</span></a>
     <a id="fragment" href="/address/${address}">0xabab…abab</a>
@@ -277,11 +290,14 @@ test('explorer identities come from complete sources, including search suggestio
     <a id="unresolved" class="hash-tag" href="/address/name.eth">name.eth</a>
     <nav><a class="hash-tag" href="/address/${address}">View address</a></nav>
     </main><script>
-    document.querySelector('#recent').onmousedown=event=>{event.preventDefault();window.nativeSearchSelection=event.currentTarget.getAttribute('href');};
-    document.querySelector('#recent').onclick=event=>event.preventDefault();
+    document.querySelectorAll('.search-panel-container a').forEach(link=>{
+      link.onmousedown=event=>{event.preventDefault();window.nativeSearchSelection=event.currentTarget.getAttribute('href');};
+      link.onclick=event=>event.preventDefault();
+    });
     </script>` });
-  for (const id of ['recent','ens','fragment','fee','table']) await expect(page.locator('#'+id)).toHaveAttribute('data-0xlabel-address', address);
-  await expect(page.locator('[data-0xlabel-address]')).toHaveCount(5);
+  for (const id of ['recent','recent-name','suggested-name','ens','fragment','fee','table']) await expect(page.locator('#'+id)).toHaveAttribute('data-0xlabel-address', address);
+  await expect(page.locator('#recent-tag')).toHaveAttribute('data-0xlabel-address', other);
+  await expect(page.locator('[data-0xlabel-address]')).toHaveCount(8);
   await page.locator('#recent + [data-0xlabel-edit]').getByRole('button').click();
   await expect(shownAddress(page)).toHaveText(checksumAddress(address));
   expect(await page.evaluate(() => window.nativeSearchSelection)).toBeUndefined();
@@ -289,6 +305,18 @@ test('explorer identities come from complete sources, including search suggestio
   await page.locator('#recent').click();
   expect(await page.evaluate(() => window.nativeSearchSelection)).toBe('/address/' + address);
   await expect(page.locator('#recent')).toHaveText(address);
+  for (const [id, identity, text, href] of [['recent-name', address, 'name.eth', '/address/name.eth'], ['recent-tag', other, 'Website organization', '/address/' + other]]) {
+    await page.evaluate(() => { delete window.nativeSearchSelection; });
+    await page.locator('#'+id+' + [data-0xlabel-edit]').getByRole('button').click();
+    await expect(shownAddress(page)).toHaveText(checksumAddress(identity));
+    expect(await page.evaluate(() => window.nativeSearchSelection)).toBeUndefined();
+    await input(page).press('Escape');
+    await page.locator('#'+id).click();
+    expect(await page.evaluate(() => window.nativeSearchSelection)).toBe(href);
+    await expect(page.locator('#'+id)).toHaveText(text);
+  }
+  await page.locator('#suggested-name').evaluate(element => { element.querySelector('h6').textContent = 'Updated website name'; });
+  await expect(page.locator('#suggested-name')).toHaveAttribute('data-0xlabel-address', address);
   await page.locator('#fee span').evaluate(element => { element.dataset.bsOriginalTitle=element.title; element.removeAttribute('title'); });
   await page.locator('#fee + [data-0xlabel-edit]').getByRole('button').click();
   await expect(shownAddress(page)).toHaveText(checksumAddress(address));
@@ -299,11 +327,16 @@ test('explorer identities come from complete sources, including search suggestio
 });
 
 test('contradictory address evidence pauses labeling; generic detection skips fragments and editable or interactive content', async ({ page }) => {
-  await start(page, { html: `<header></header><main><a href="/address/${other}" data-full-address="${address}">${address}</a></main>` });
-  expect(await page.evaluate(() => window.controller.health.status)).toBe('stale');
-  await expect(page.locator('[data-0xlabel-address],[data-0xlabel-label]')).toHaveCount(0);
-  await page.evaluate(() => window.controller.retry());
-  expect(await page.evaluate(() => window.controller.health.status)).toBe('stale');
+  for (const html of [
+    `<header></header><main><a href="/address/${other}" data-full-address="${address}">${address}</a></main>`,
+    `<header></header><main><div class="search-panel-container"><li role="option"><span>${other}</span><a href="/address/name.eth"><h6>name.eth</h6><span>${address}</span></a></li></div></main>`,
+  ]) {
+    await start(page, { html });
+    expect(await page.evaluate(() => window.controller.health.status)).toBe('stale');
+    await expect(page.locator('[data-0xlabel-address],[data-0xlabel-label]')).toHaveCount(0);
+    await page.evaluate(() => window.controller.retry());
+    expect(await page.evaluate(() => window.controller.health.status)).toBe('stale');
+  }
   await start(page, { site: 'https://plain.example', html: `<main><p id="wallet">${address}</p><p>0xabab…abab</p>
     <button>${address}</button><input value="${address}"><div contenteditable="true">${address}</div></main>` });
   await expect(page.locator('[data-0xlabel-address]')).toHaveCount(1);

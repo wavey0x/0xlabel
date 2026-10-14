@@ -21,7 +21,11 @@ function evidence(element, url, extra = [], allowNames = false) {
   const shown = element.textContent.trim().toLowerCase().replace(/\s/g, '');
   const fullShown = parseAddress(shown);
   const link = addressLink(element, url);
+  const searchRow = allowNames && element.matches('.search-panel-container li[role="option"] > a[href]');
   const values = [fullShown, link?.address, ...extra];
+  // ENS search links use the domain in their URL. The resolved address is
+  // supplied separately in the row; accept only complete, consistent values.
+  if (searchRow) values.push(...query(element.parentElement, 'span').map(node => parseAddress(node.textContent.trim())));
   for (const host of [element, element.parentElement]) {
     if (!host) continue;
     for (const key of ['data-full-address', 'data-highlight-target', 'data-address', 'title', 'aria-label']) {
@@ -35,8 +39,8 @@ function evidence(element, url, extra = [], allowNames = false) {
   const fragment = shown.match(/^(?:[a-z]+:)?(0x[0-9a-f]+)[.\u2026]+([0-9a-f]+)$/);
   if (fragment && (!address.startsWith(fragment[1]) || !address.endsWith(fragment[2]))) throw new Error('address-fragment-changed');
   // Do not label navigation cards merely because their link leads to an address.
-  const namedWidget = allowNames && element.matches('.hash-tag,[data-highlight-value]') &&
-    (link || parseAddress(element.getAttribute('data-full-address'))) && !element.closest('.dropdown-item,nav');
+  const namedWidget = allowNames && (searchRow || element.matches('.hash-tag,[data-highlight-value]') &&
+    (link || parseAddress(element.getAttribute('data-full-address')))) && !element.closest('.dropdown-item,nav');
   if (!fullShown && !fragment && !namedWidget && !element.matches('[data-highlight-target],#mainaddress') && !parseAddress(element.getAttribute('data-address'))) return null;
   return { address, network: link?.network };
 }
