@@ -78,9 +78,31 @@ export function normalizeSource(value) {
   return value;
 }
 
+// What to call a source in front of a person. A live suggestion is described in
+// the present tense, because the name in the field is the site's at that moment.
+// A stored record is described as history, because the name may since have been
+// rewritten and still came from wherever it came from.
+const SOURCE_NAMES = {
+  'safe:address-book': "Safe's address book",
+  'safe:page': 'Safe',
+  'etherscan:page': 'Etherscan',
+};
+export const suggestedBy = source => (SOURCE_NAMES[source] ? `Suggested by ${SOURCE_NAMES[source]}` : '');
+export const addedFrom = source => (SOURCE_NAMES[source] ? `Added from ${SOURCE_NAMES[source]}` : '');
+
 // Records carry a source only when they have one, so a record composed by hand
 // is the plain object it has always been.
 const withSource = (record, source) => (source ? { ...record, source } : record);
+
+// A name a website displays is worth offering back only if it is a name: not
+// an address or a piece of one, and nothing a tag could not hold anyway. Which
+// of a site's own words are placeholders is its adapter's business, not this
+// one's. Nothing here restricts what a person may deliberately type.
+export function usableName(value) {
+  const name = typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : '';
+  if (!name || /^(?:[a-z]+:)?0x[0-9a-f]/i.test(name)) return null;
+  try { return normalizeTags([name])[0]; } catch { return null; }
+}
 
 export function validateRecord(value) {
   if (!value || typeof value !== 'object') throw new Error('The API returned an invalid record.');

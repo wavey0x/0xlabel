@@ -1,6 +1,6 @@
 import { adapters } from './adapters.js';
 import { addressAt } from './detect.js';
-import { applyChange, indexBook, parseAddress, query, recordKey, normalizeScope, UI, UI_ATTRIBUTE, UNSAFE_HOST } from './shared.js';
+import { applyChange, indexBook, parseAddress, query, recordKey, normalizeScope, usableName, UI, UI_ATTRIBUTE, UNSAFE_HOST } from './shared.js';
 import { createEditor } from './editor.js';
 import { createOverlay } from './overlay.js';
 import { TAG_ICON } from './icons.js';
@@ -381,7 +381,17 @@ export async function createPageController({
           live?.element.isConnected && live.address === target.address && live.network === target.network,
       };
     };
+    // What this website calls this address, read now rather than during a
+    // scan: a suggestion is only ever worth anything once someone is looking
+    // at the editor, and reading every row to prepare one nobody opens is work
+    // for nothing.
+    // An address reached through the context menu has no display behind it, so
+    // there is nothing for a site to be calling it.
+    const display = target.element ? shownOn(target) : null;
+    const offered = display && adapter.names && adapter.source ? usableName(adapter.names(display)) : null;
+    const suggestion = offered ? { name: offered, source: adapter.source } : null;
     editor = createEditor(overlay.box, { address: target.address, scope: recordFor(target)?.scope || 'global', state, save,
+      suggestion,
       visibility,
       toggleVisibility: () => {
         const view = visibility();

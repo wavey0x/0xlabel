@@ -1,4 +1,4 @@
-import { findRecord, MAX_TAGS, MAX_TAG_LENGTH, normalizeTags, sameTags } from './shared.js';
+import { findRecord, MAX_TAGS, MAX_TAG_LENGTH, normalizeTags, sameTags, suggestedBy, usableName } from './shared.js';
 import { checksumAddress } from './checksum.js';
 import { EDITOR_MARK, COPY_ICON, COPIED_ICON, confirmCopied } from './icons.js';
 
@@ -18,7 +18,7 @@ export async function editorStyles(root) {
 }
 
 // Shared by the page popover and book. The draft never follows a recycled row.
-export function createEditor(container, { address, scope = 'global', state, save, close, onLayout = () => {}, visibility, toggleVisibility, modal = false }) {
+export function createEditor(container, { address, scope = 'global', state, save, close, onLayout = () => {}, visibility, toggleVisibility, suggestion = null, modal = false }) {
   const book = state.activeBook;
   // Which book a save goes to only matters once there is more than one.
   const bookName = state.books.length > 1 ? state.bookName : '';
@@ -32,7 +32,12 @@ export function createEditor(container, { address, scope = 'global', state, save
     return { tags: shown?.tags || [], version: mine?.version || null };
   };
   let loaded = reading(state);
-  const draft = { tags: [...(loaded.tags.length ? loaded.tags : [''])], version: loaded.version };
+  // What the website calls this address. Where nothing is saved it is a
+  // starting value, so saving is the only thing left to do. Where something is
+  // saved the address is settled, and the site's name is only ever offered.
+  const offered = suggestion?.name && usableName(suggestion.name) ? suggestion : null;
+  const prefill = offered && !loaded.tags.length ? offered : null;
+  const draft = { tags: [...(loaded.tags.length ? loaded.tags : [prefill ? prefill.name : ''])], version: loaded.version };
   // Compared as a save would store them, so a stray space is not an edit.
   const edited = () => !sameTags(draft.tags.map(tag => tag.trim()).filter(Boolean), loaded.tags);
   const adopt = next => {
@@ -49,7 +54,7 @@ export function createEditor(container, { address, scope = 'global', state, save
   panel.innerHTML = `<header><strong class="brand" role="img" aria-label="0xtagger">${EDITOR_MARK}tagger</strong><span class="source"></span>${visibility ? '<div class="visibility-group"><span>Show tags</span><button type="button" class="switch visibility" role="switch" aria-label="Show my tags for this address" aria-checked="true"><span></span></button></div>' : '<button type="button" class="quiet close" aria-label="Close editor" title="Close">×</button>'}</header>
     <div class="address-line"><code></code><button type="button" class="quiet copy" aria-label="Copy">${COPY_ICON}</button></div>
     <div class="rows"></div>
-    <p class="preview"></p><p class="notice" role="status"></p><div class="conflict" hidden></div>
+    <p class="preview"></p><p class="attribution" hidden></p><p class="offer" hidden></p><p class="notice" role="status"></p><div class="conflict" hidden></div>
     <footer><button type="button" class="quiet add" aria-label="Add tag" title="Add tag">+</button>${modal && own ? '<button type="button" class="quiet clear">Remove tags</button>' : ''}<button type="button" class="primary save">Save</button></footer>`;
   container.replaceChildren(panel);
   if (modal) panel.showModal();
@@ -103,6 +108,23 @@ export function createEditor(container, { address, scope = 'global', state, save
   // A record for one network giving way to a global one is worth saying, because
   // the tag that takes over is not on screen. That emptying the field puts the
   // address back is the field in front of you, said twice.
+  // Attribution describes the name now in the first field, so it goes the
+  // moment that name stops being the site's. The offer below it is for an
+  // address already named: the site's name is shown, never substituted, and
+  // adding it appends — the preferred name stays where it is.
+  function attribution() {
+    const live = Boolean(prefill) && draft.tags[0] === prefill.name;
+    get('.attribution').hidden = !live;
+    get('.attribution').textContent = live ? suggestedBy(prefill.source) : '';
+    const spare = offered && !prefill && !draft.tags.some(tag => tag.trim() === offered.name);
+    get('.offer').hidden = !spare;
+    get('.offer').replaceChildren();
+    if (spare) {
+      const button = element('button', 'Add tag', { type: 'button', class: 'quiet' });
+      button.onclick = () => { draft.tags.push(offered.name); renderRows(draft.tags.length - 1); };
+      get('.offer').append(element('span', `${suggestedBy(offered.source)}: ${offered.name}`), button);
+    }
+  }
   function preview() {
     const fallback = !draft.tags.length && scope !== 'global'
       ? findRecord(activeState.records, address, 'global')?.tags[0] : null;
@@ -149,7 +171,7 @@ export function createEditor(container, { address, scope = 'global', state, save
       const input = element('input', undefined, { type: 'search', role: 'textbox', name: `0xtagger-tag-${index + 1}`, maxlength: MAX_TAG_LENGTH, 'aria-label': `Tag ${index + 1}`, placeholder: 'Add a tag', autocomplete: 'off', 'data-bwignore': 'true', spellcheck: 'false' });
       input.value = tag;
       // Typing changes no panel geometry; avoid positioning/layout work per letter.
-      input.oninput = () => { draft.tags[index] = input.value; };
+      input.oninput = () => { draft.tags[index] = input.value; if (index === 0) attribution(); };
       const controls = element('div', undefined, { class: 'rank' });
       if (index === 0 && draft.tags.length > 1) controls.append(element('small', 'Default', { class: 'default' }));
       for (const [text, action, offset] of [['↑', 'Move up', -1], ['↓', 'Move down', 1], ['×', 'Remove tag', 0]]) {
@@ -166,6 +188,7 @@ export function createEditor(container, { address, scope = 'global', state, save
       rows.append(row);
     });
     updateControls();
+    attribution();
     preview();
     if (focus === null) return;
     const input = rows.querySelectorAll('input')[focus];
@@ -182,7 +205,11 @@ export function createEditor(container, { address, scope = 'global', state, save
     phase = 'saving';
     guard();
     try {
-      await save({ book, address, scope, tags, version: draft.version });
+      // A suggestion rewritten before it was ever saved is a name composed by
+      // hand, and carries no origin. The book keeps the origin of a record that
+      // already has one, so this only ever names a record being created.
+      const source = prefill && tags[0] === prefill.name ? prefill.source : undefined;
+      await save({ book, address, scope, tags, version: draft.version, source });
       if (closed) return;
       phase = 'saved';
       guard();

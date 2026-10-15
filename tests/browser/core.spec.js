@@ -494,3 +494,72 @@ test('a website surface is read from what the browser actually paints', async ({
       { message: shape }).toBe(expected);
   }
 });
+
+// What a website already calls an address is a starting value, offered only
+// once the editor is open. It is never a claim about who the address is, and
+// it never competes with a name already saved.
+test.describe('a name the website already shows', () => {
+  const labelled = (id, at, name) =>
+    `<p><a id="${id}" href="/address/${at}"><span class="hash-tag">${name}</span></a></p>`;
+  const open = (page, html, records) =>
+    start(page, { html: `<header>Explorer</header><main>${html}</main>`, records });
+  const attribution = page => page.getByRole('dialog').locator('.attribution');
+  const offer = page => page.getByRole('dialog').locator('.offer');
+
+  test('fills an unnamed address with the site\'s name, selected and attributed', async ({ page }) => {
+    await open(page, labelled('row', other, 'Uniswap V3: Router'), [record]);
+    await tagFor(page, 'row').click();
+    await expect(input(page)).toHaveValue('Uniswap V3: Router');
+    await expect(attribution(page)).toHaveText('Suggested by Etherscan');
+    // Selected, so typing replaces it rather than appending to it.
+    expect(await input(page).evaluate(field => [field.selectionStart, field.selectionEnd]))
+      .toEqual([0, 'Uniswap V3: Router'.length]);
+  });
+
+  test('saving it keeps where it came from; rewriting it first does not', async ({ page }) => {
+    await open(page, labelled('row', other, 'Uniswap V3: Router'), [record]);
+    await tagFor(page, 'row').click();
+    await save(page).click();
+    await expect.poll(() => page.evaluate(() => window.saves.at(-1)))
+      .toMatchObject({ address: other, tags: ['Uniswap V3: Router'], source: 'etherscan:page' });
+
+    await open(page, labelled('row', other, 'Uniswap V3: Router'), [record]);
+    await tagFor(page, 'row').click();
+    await input(page).fill('The router we use');
+    await expect(attribution(page)).toBeHidden();
+    await save(page).click();
+    const written = await page.evaluate(() => window.saves.at(-1));
+    expect(written.tags).toEqual(['The router we use']);
+    expect(written.source).toBe(undefined);
+  });
+
+  // A saved address is settled. The site's name is shown, never substituted,
+  // and adding it appends: the preferred name stays the preferred name.
+  test('an address already named is offered the site\'s name, never filled with it', async ({ page }) => {
+    await open(page, labelled('row', address, 'Uniswap V3: Router'), [record]);
+    await tagFor(page, 'row').click();
+    await expect(input(page)).toHaveValue('Treasury');
+    await expect(attribution(page)).toBeHidden();
+    await expect(offer(page)).toContainText('Suggested by Etherscan: Uniswap V3: Router');
+    await offer(page).getByRole('button', { name: 'Add tag' }).click();
+    await save(page).click();
+    await expect.poll(() => page.evaluate(() => window.saves.at(-1))).toMatchObject({
+      tags: ['Treasury', 'Operations', 'Uniswap V3: Router'],
+    });
+  });
+
+  test('says nothing when the site agrees with a name already saved', async ({ page }) => {
+    await open(page, labelled('row', address, 'Treasury'), [record]);
+    await tagFor(page, 'row').click();
+    await expect(offer(page)).toBeHidden();
+    await expect(attribution(page)).toBeHidden();
+  });
+
+  // An address, or a piece of one, is not a name worth offering back.
+  test('never offers an address as a name', async ({ page }) => {
+    await open(page, labelled('row', other, '0xcdcd…cdcd'), [record]);
+    await tagFor(page, 'row').click();
+    await expect(input(page)).toHaveValue('');
+    await expect(attribution(page)).toBeHidden();
+  });
+});

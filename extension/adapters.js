@@ -23,6 +23,10 @@ const SEARCH_ROW = '.search-panel-container li[role="option"] > a[href]';
 
 const etherscanAdapter = site({
   id: 'Etherscan',
+  source: 'etherscan:page',
+  // What the explorer calls this address: its public name tag, which is the
+  // same element a tag is allowed to stand in for.
+  names: element => (element.matches('.hash-tag') ? element : element.querySelector('.hash-tag'))?.textContent,
   matches: url => Boolean(explorerNetwork(url.hostname)),
   watch: ['data-highlight-value'],
   // The heading of an address page is what the page is about. A name alone
@@ -92,6 +96,15 @@ const safePair = element => element.closest(`${SAFE_NAME},[class*="addressContai
 const safeAdapter = site({
   id: 'Safe',
   matches: url => url.hostname === 'app.safe.global',
+  source: 'safe:page',
+  // What Safe calls this address, read from the box it sets names in — never
+  // from our own replacement, which lives in a stylesheet and leaves the title
+  // alone. Safe's two placeholders name no wallet: one is the page talking
+  // about itself, the other is the absence of a name.
+  names: element => {
+    const name = safePair(element)?.querySelector(SAFE_NAME)?.getAttribute('title');
+    return ['This Safe account', 'Unverified contract'].includes(name) ? null : name;
+  },
   probe({ document, url }) {
     if (document.readyState === 'loading' || document.querySelector('[role="progressbar"]')) return { status: 'waiting' };
     if (!document.querySelector('main') && !(document.querySelector('header') && document.querySelector('[data-testid="sidebar-container"]'))) return { status: 'stale', reason: 'safe-landmarks-missing' };
