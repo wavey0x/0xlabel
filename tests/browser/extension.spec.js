@@ -434,6 +434,41 @@ test('installed extension: a file is reviewed before it lands, and a page cannot
     await site.goto('http://127.0.0.1:8719/tests/fixtures/generic.html');
     expect(await site.evaluate(() => typeof chrome === 'undefined' || !chrome.runtime?.sendMessage)).toBe(true);
 
+    // The whole asking round trip, through the real worker: a trusted view asks
+    // a tab what it keeps, the answer is held for the book page, and reading it
+    // takes it away so the same names cannot arrive twice.
+    const tabId = await worker.evaluate(async () =>
+      (await chrome.tabs.query({ url: 'http://127.0.0.1:8719/*' }))[0].id);
+    // A website that was never turned on is not asked anything at all.
+    const refused = await book.evaluate(async id =>
+      await chrome.runtime.sendMessage({ type: 'Harvest', tabId: id }), tabId);
+    expect(refused.ok).toBe(false);
+    expect(refused.error).toMatch(/Enable this website/);
+
+    // Turning a website on is a trusted view's call, so it comes from here.
+    const turnedOn = await book.evaluate(async id =>
+      await chrome.runtime.sendMessage({ type: 'Site', tabId: id, enabled: true }), tabId);
+    expect(turnedOn.ok, turnedOn.error).toBe(true);
+    await site.reload();
+    const asked = await book.evaluate(async id =>
+      await chrome.runtime.sendMessage({ type: 'Harvest', tabId: id }), tabId);
+    expect(asked.ok).toBe(true);
+    // This page's adapter keeps no book of its own, so there is nothing to bring.
+    expect(asked.result.count).toBe(0);
+    const first = await book.evaluate(async () => await chrome.runtime.sendMessage({ type: 'PendingImport' }));
+    expect(first.result).toMatchObject({ records: [] });
+    const second = await book.evaluate(async () => await chrome.runtime.sendMessage({ type: 'PendingImport' }));
+    expect(second.result).toBe(null);
+
+    // Both extension views load and run clean; a typo in either is a trial
+    // that fails on its first morning.
+    const popup = await context.newPage();
+    await popup.goto(`chrome-extension://${id}/popup.html`);
+    await expect(popup.locator('#location')).toBeVisible();
+    // No website keeping names of its own, so the row is not there at all.
+    await expect(popup.locator('#import-site')).toBeHidden();
+    await popup.close();
+
     expect(errors).toEqual([]);
   } finally {
     await context.close(); await rm(profile, { recursive: true, force: true });
