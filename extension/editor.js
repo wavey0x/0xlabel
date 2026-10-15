@@ -100,11 +100,14 @@ export function createEditor(container, { address, scope = 'global', state, save
     }
     catch { get('.notice').textContent = 'Select the full address above to copy it.'; queueMicrotask(onLayout); }
   };
+  // A record for one network giving way to a global one is worth saying, because
+  // the tag that takes over is not on screen. That emptying the field puts the
+  // address back is the field in front of you, said twice.
   function preview() {
-    const tags = draft.tags;
-    const fallback = scope !== 'global' ? findRecord(activeState.records, address, 'global')?.tags[0] : null;
-    get('.preview').hidden = tags.length > 0;
-    get('.preview').textContent = fallback ? `Removing this override will show ${fallback}.` : 'Removing all tags restores the original address display.';
+    const fallback = !draft.tags.length && scope !== 'global'
+      ? findRecord(activeState.records, address, 'global')?.tags[0] : null;
+    get('.preview').hidden = !fallback;
+    get('.preview').textContent = fallback ? `Removing this override will show ${fallback}.` : '';
     queueMicrotask(onLayout);
   }
   function guard() {
