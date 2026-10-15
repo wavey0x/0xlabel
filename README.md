@@ -3,9 +3,9 @@
 <p align="center"><a href="#get-started">Get started</a> · <a href="INSTALL.md">Setup guide</a> · <a href="LICENSE">MIT</a></p>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/transfers-dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="docs/images/transfers-light.png">
-  <img alt="Address tags reveal repeated wallets and connections across a transfer list" src="docs/images/transfers-dark.png">
+  <source media="(prefers-reduced-motion: reduce) and (prefers-color-scheme: light)" srcset="docs/images/transfers-light.png">
+  <source media="(prefers-reduced-motion: reduce)" srcset="docs/images/transfers-dark.png">
+  <img alt="Adding address tags on Etherscan, revealing the original addresses, and choosing a preferred tag" src="docs/images/demo.gif">
 </picture>
 
 Collect address tags in one book and bring the same context to different websites. See recurring addresses, follow connections, and make sense of onchain activity. Add tags directly on the page; links and copy controls keep working.
