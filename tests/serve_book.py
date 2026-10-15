@@ -12,6 +12,7 @@ import uvicorn
 parser = argparse.ArgumentParser()
 parser.add_argument('--port', type=int, required=True)
 parser.add_argument('--tls', action='store_true')
+parser.add_argument('--web', action='store_true')
 args = parser.parse_args()
 with tempfile.TemporaryDirectory(prefix='0xtagger-test-') as directory:
     root = Path(directory)
@@ -19,4 +20,11 @@ with tempfile.TemporaryDirectory(prefix='0xtagger-test-') as directory:
     if args.tls:
         subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', str(root / 'key.pem'), '-out', str(root / 'cert.pem'), '-days', '1', '-subj', '/CN=localhost'], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         options = {'ssl_keyfile': str(root / 'key.pem'), 'ssl_certfile': str(root / 'cert.pem')}
-    uvicorn.run(create_app(root / 'book.sqlite3', 'test-only-token'), host='127.0.0.1', port=args.port, access_log=False, **options)
+    if args.web:
+        from fastapi import FastAPI
+        app = FastAPI()
+        app.mount('/0xtagger', create_app(root / 'book.sqlite3', 'test-only-token',
+                  tailscale_login='test@example.com', public_url=f'http://127.0.0.1:{args.port}/0xtagger/'))
+    else:
+        app = create_app(root / 'book.sqlite3', 'test-only-token')
+    uvicorn.run(app, host='127.0.0.1', port=args.port, access_log=False, proxy_headers=False, **options)

@@ -56,11 +56,40 @@ Use a reachable hostname and valid certificate. If serving under a path, pass th
 
 The helper prints one line. In either view, open the address book menu, choose **Connect to a server**, and paste it. The book is named for where it is kept — **Local server** for one on this machine, the hostname otherwise — and can be renamed in its own row afterwards. A server that is already one of your books opens rather than being added twice. The key travels in the link's fragment, which your browser never sends to the server, and the field is cleared as soon as it has been used. Keep the line private.
 
-Connecting and copying are separate: a book opens as it is. If it turns out to be empty and the one you were looking at was not, you are asked once whether to carry those addresses over, and the copy is the same single transaction a file import gets.
+Connecting and copying are separate: a book opens as it is. If it is empty and the previous book was not, its empty view offers to copy those addresses. The copy is the same single transaction a file import gets.
 
 Books are separate and switching between them changes neither, so the book on your device stays exactly as it was while you use one kept on a server. A book is renamed in its own row in the list: hover it and click the pencil, or press F2 with the row focused. The trash button beside the book name removes the book that is open — removing one kept on a server only forgets it here, while removing one kept on this device deletes its addresses. **Import** in the full-page book carries addresses from an exported file into the book that is open.
 
-For a book kept on a server, sync is a read-only snapshot pull, asked for where you are about to look at the book: opening the popup, switching to it, a page coming back to the front, opening an editor, and startup — at most once a minute however many of those arrive together, plus a five-minute backstop and the manual refresh. The pull is conditional, so a book that has not changed answers in a few hundred bytes and nothing downstream is told anything. A book kept on this device is never pulled, since nothing else writes it. Failed pulls keep the previous copy. An explicit save is the only operation that changes a book; saving to a server book needs that server. Conflicting or failed saves preserve the draft. Importing a file writes it in batches, each one applied by the server whole or not at all.
+For a book kept on a server, sync is a read-only snapshot pull, asked for where you are about to look at the book: opening the popup, switching to it, a page coming back to the front, opening an editor, and startup — at most once a minute however many of those arrive together, plus a five-minute backstop and the manual refresh. The pull is conditional, so a book that has not changed answers in a few hundred bytes and nothing downstream is told anything. A book kept on this device is never pulled, since nothing else writes it. Failed pulls keep the previous copy. An explicit save is the only operation that changes a book; saving to a server book needs that server. Conflicting or failed saves preserve the draft. A confirmed import travels in one atomic request, with a limit of 5,000 changes.
+
+## Browse privately through Tailscale
+
+The helper also ships the same book page and editor for an ordinary browser.
+This view opens the server's one book: search, add/edit/remove tags, and import/export.
+It uses your Tailscale identity, so its bookmark contains no access key.
+
+On the server, explicitly allow your Tailscale login and keep the helper bound to loopback:
+
+```sh
+uv run 0xtagger --public-url https://machine.your-tailnet.ts.net/0xtagger/ \
+  --tailscale-login you@example.com
+tailscale serve --bg --https=443 --set-path=/0xtagger/ http://127.0.0.1:8712
+```
+
+Use the actual machine name and login from your tailnet. Open the plain HTTPS URL
+while connected to Tailscale. Serve strips the mount prefix before forwarding;
+the UI and API share an origin, and CORS stays disabled. Keep Funnel off.
+The extension continues to use the private connection link and its stored API key.
+
+`--tailscale-login` (or `OXTAGGER_TAILSCALE_LOGIN`) trusts the identity supplied by
+the local Serve proxy and accepts only that configured login. Serve replaces
+incoming identity headers. Loopback binding keeps the backend off the network;
+this deployment still trusts the server's local processes. Browser writes also
+require the configured HTTPS origin. Without this explicit proxy configuration,
+identity headers grant no access and API clients require the key.
+
+The installed Python package includes the UI assets. The data directory is never
+served. See [Tailscale Serve identity headers](https://tailscale.com/docs/features/tailscale-serve#identity-headers).
 
 ## Data and backups
 

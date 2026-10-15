@@ -10,6 +10,63 @@ TOKEN = 'test-only-token'
 HEADERS = {'Authorization': f'Bearer {TOKEN}'}
 
 
+def test_proxy_identity_is_explicit_and_only_trusted_from_loopback(tmp_path):
+    identity = {'Tailscale-User-Login': 'me@example.com'}
+    with TestClient(create_app(tmp_path / 'key.sqlite3', TOKEN), client=('127.0.0.1', 1234)) as client:
+        assert client.get('/tags', headers=identity).status_code == 401
+    app = create_app(tmp_path / 'proxy.sqlite3', TOKEN,
+                     tailscale_login='me@example.com', public_url='https://electro.example/0xtagger/')
+    with TestClient(app, client=('127.0.0.1', 1234)) as client:
+        assert client.get('/tags', headers=identity).status_code == 200
+        assert client.get('/tags').status_code == 401
+        assert client.get('/tags', headers={'Tailscale-User-Login': 'someone@example.com'}).status_code == 401
+        assert client.get('/tags', headers=HEADERS).status_code == 200
+    with TestClient(app, client=('100.64.0.2', 1234)) as client:
+        assert client.get('/tags', headers=identity).status_code == 401
+
+
+def test_proxy_writes_require_the_browser_origin_and_keys_still_work(tmp_path):
+    app = create_app(tmp_path / 'book.sqlite3', TOKEN,
+                     tailscale_login='me@example.com', public_url='https://electro.example/0xtagger/')
+    identity = {'Tailscale-User-Login': 'me@example.com'}
+    with TestClient(app, client=('127.0.0.1', 1234)) as client:
+        for origin in [None, 'null', 'https://other.example']:
+            headers = identity | ({'Origin': origin} if origin else {})
+            assert client.put(f'/tags/global/{ADDRESS}', headers=headers, json={'tags': ['Unwanted']}).status_code == 403
+        assert client.get('/tags', headers=identity).json()['records'] == []
+        saved = client.put(f'/tags/global/{ADDRESS}', headers=identity | {'Origin': 'https://electro.example'},
+                           json={'tags': ['Mine'], 'version': None})
+        assert saved.status_code == 200
+        assert client.put(f'/tags/global/{ADDRESS}', headers=HEADERS,
+                          json={'tags': ['From the extension'], 'version': saved.json()['record']['version']}).status_code == 200
+        preflight = client.options('/tags', headers={'Origin': 'https://other.example',
+                                   'Access-Control-Request-Method': 'PUT'})
+        assert 'access-control-allow-origin' not in preflight.headers
+
+
+def test_hosted_ui_ships_its_assets_but_no_private_or_extension_files(tmp_path):
+    from server import WEB_ASSETS
+    with TestClient(create_app(tmp_path / 'tags.sqlite3', TOKEN), headers=HEADERS) as client:
+        page = client.get('/')
+        assert page.status_code == 200 and 'book-web.js' in page.text and TOKEN not in page.text
+        for asset in WEB_ASSETS:
+            assert client.get('/' + asset).status_code == 200, asset
+        for path in ['tags.sqlite3', 'token.txt', 'server.py', 'manifest.json', 'background.js', 'book-extension.js', '../server.py']:
+            assert client.get('/' + path).status_code == 404, path
+
+
+def test_proxy_mode_requires_a_loopback_bind_and_explicit_browser_url(tmp_path, monkeypatch):
+    import server
+    with pytest.raises(ValueError, match='browser-facing'):
+        create_app(tmp_path / 'book.sqlite3', TOKEN, tailscale_login='me@example.com')
+    for url in ['http://electro.example/', 'https://name:password@electro.example/', 'https://electro.example/#key=secret']:
+        with pytest.raises(ValueError, match='browser-facing'):
+            create_app(tmp_path / 'book.sqlite3', TOKEN, tailscale_login='me@example.com', public_url=url)
+    monkeypatch.setattr('sys.argv', ['0xtagger', '--host', '0.0.0.0', '--tailscale-login', 'me@example.com'])
+    with pytest.raises(SystemExit):
+        server.main()
+
+
 @pytest.fixture
 def book(tmp_path):
     return TestClient(create_app(tmp_path / 'book.sqlite3', TOKEN), headers=HEADERS)

@@ -2,6 +2,7 @@
 
 import argparse
 import hmac
+from importlib.resources import files
 import json
 import os
 from pathlib import Path
@@ -10,9 +11,10 @@ import secrets
 import sqlite3
 from typing import Literal
 from contextlib import closing
+from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 import uvicorn
@@ -21,6 +23,11 @@ ADDRESS = re.compile(r"0x[0-9a-f]{40}", re.IGNORECASE)
 NETWORK = re.compile(r"eip155:([1-9][0-9]*)")
 MAX_TAGS = 32
 MAX_TAG_LENGTH = 80
+WEB_ASSETS = {
+    'book-web.js', 'book.js', 'book.css', 'ui.js', 'ui.css', 'colors.js', 'colors.css',
+    'store.js', 'records.js', 'stores/server.js', 'shared.js', 'networks.js',
+    'editor.js', 'editor.css', 'icons.js', 'icons/mark.svg', 'checksum.js', 'vendor/keccak.js',
+}
 
 
 def address_key(value: str) -> str:
@@ -92,9 +99,15 @@ def record(row: sqlite3.Row | None) -> dict | None:
     }
 
 
-def create_app(database: str | Path, token: str) -> FastAPI:
+def create_app(database: str | Path, token: str, *, tailscale_login: str | None = None,
+               public_url: str | None = None) -> FastAPI:
     if not token:
         raise ValueError("An access token is required.")
+    public = urlsplit(public_url or '')
+    if tailscale_login and (not public.hostname or public.username or public.password or public.query or public.fragment
+            or not (public.scheme == 'https' or public.scheme == 'http' and public.hostname in {'127.0.0.1', 'localhost', '::1'})):
+        raise ValueError('Tailscale identity requires the browser-facing public URL.')
+    public_origin = f'{public.scheme}://{public.netloc}'
     database = Path(database)
     database.parent.mkdir(parents=True, exist_ok=True)
 
@@ -129,10 +142,18 @@ def create_app(database: str | Path, token: str) -> FastAPI:
 
     bearer = HTTPBearer(auto_error=False)
 
-    def authenticated(credentials: HTTPAuthorizationCredentials | None = Depends(bearer)) -> None:
+    def authenticated(request: Request, credentials: HTTPAuthorizationCredentials | None = Depends(bearer)) -> None:
         supplied = credentials.credentials if credentials and credentials.scheme.lower() == "bearer" else ""
-        if not hmac.compare_digest(supplied.encode(), token.encode()):
-            raise HTTPException(401, "Access token required.", headers={"WWW-Authenticate": "Bearer"})
+        if hmac.compare_digest(supplied.encode(), token.encode()):
+            return
+        # Explicit proxy authentication trusts this host's local processes. It
+        # never becomes active just because a caller supplies a familiar header.
+        if (tailscale_login and request.client and request.client.host in {'127.0.0.1', '::1'}
+                and hmac.compare_digest(request.headers.get('Tailscale-User-Login', '').encode(), tailscale_login.encode())):
+            if request.method not in {'GET', 'HEAD'} and request.headers.get('Origin') != public_origin:
+                raise HTTPException(403, 'Open this address book to make changes.')
+            return
+        raise HTTPException(401, "Access to this address book was not allowed.", headers={"WWW-Authenticate": "Bearer"})
 
     app = FastAPI(title="0xtagger", docs_url=None, redoc_url=None, openapi_url=None)
 
@@ -256,6 +277,19 @@ def create_app(database: str | Path, token: str) -> FastAPI:
 
         return unlocked(work)
 
+    assets = files('oxtagger_ui')
+
+    @app.get('/', dependencies=[Depends(authenticated)])
+    def read_ui():
+        html = assets.joinpath('book.html').read_text().replace('book-extension.js', 'book-web.js')
+        return HTMLResponse(html)
+
+    @app.get('/{asset:path}')
+    def read_asset(asset: str):
+        if asset not in WEB_ASSETS:
+            raise HTTPException(404)
+        return FileResponse(str(assets.joinpath(asset)))
+
     return app
 
 
@@ -289,19 +323,24 @@ def main() -> None:
     parser.add_argument("--data-dir", type=Path,
                         default=Path(os.environ.get("OXTAGGER_DATA_DIR", Path.home() / ".local/share/0xtagger")))
     parser.add_argument("--public-url", help="HTTPS base URL when hosted behind a reverse proxy")
+    parser.add_argument("--tailscale-login", default=os.environ.get('OXTAGGER_TAILSCALE_LOGIN'),
+                        help="Accept this Tailscale user from a local Serve proxy")
     args = parser.parse_args()
+    if args.tailscale_login and args.host not in {'127.0.0.1', '::1'}:
+        parser.error('Tailscale proxy authentication requires a loopback bind address.')
     args.data_dir.mkdir(parents=True, exist_ok=True)
     if os.name != "nt":
         args.data_dir.chmod(0o700)
     token = load_token(args.data_dir)
-    app = create_app(args.data_dir / "tags.sqlite3", token)
+    app = create_app(args.data_dir / "tags.sqlite3", token,
+                     tailscale_login=args.tailscale_login, public_url=args.public_url)
     base = args.public_url or f"http://127.0.0.1:{args.port}"
     # One line to paste. The key rides in the fragment, which a browser never
     # sends to a server, so the link cannot carry it back out over the wire.
     print("0xtagger is ready. Paste this link into the extension:", flush=True)
     print(connect_link(base, token), flush=True)
     print(f"Keep it private. Book: {args.data_dir / 'tags.sqlite3'}", flush=True)
-    uvicorn.run(app, host=args.host, port=args.port, access_log=False)
+    uvicorn.run(app, host=args.host, port=args.port, access_log=False, proxy_headers=False)
 
 
 if __name__ == "__main__":

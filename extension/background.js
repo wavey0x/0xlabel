@@ -192,7 +192,7 @@ async function handle(message, sender) {
     if (!sites[origin]) throw new Error('Enable this website first.');
     const answer = await send(message.tabId, { type: 'Harvest' });
     const records = validateImport(answer?.records || []);
-    await chrome.storage.session.set({ pendingImport: { records, origin } });
+    if (records.length) await chrome.storage.session.set({ pendingImport: { records, origin } });
     return { count: records.length, origin };
   }
   if (message.type === 'PendingImport') {

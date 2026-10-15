@@ -1,10 +1,11 @@
-import { $, rpc, emptyState, currentSnapshot, syncText, bookPicker, connectForm, watchBook, dismissDialog, tooltips } from './ui.js';
+import { $, emptyState, currentSnapshot, syncText, bookPicker, connectForm, dismissDialog, tooltips } from './ui.js';
 import { parseAddress, normalizeScope, readBookFile, reviewImport, sourceName } from './shared.js';
 import { scopeName } from './networks.js';
 import { checksumAddress } from './checksum.js';
 import { createEditor, editorStyles } from './editor.js';
 import { COPY_ICON, TRASH_ICON, confirmCopied } from './icons.js';
 
+export async function startBook({ rpc, watchBook, watchPending = () => {}, manageBooks = false }) {
 let state = emptyState;
 let busy = false;
 let editor;
@@ -17,10 +18,10 @@ const ready = Promise.all([editorStyles(shadow), rpc({ type: 'State' })]);
 const theme = matchMedia('(prefers-color-scheme: dark)');
 const applyTheme = () => $('#editor-host').toggleAttribute('data-dark', theme.matches);
 theme.addEventListener('change', applyTheme); applyTheme();
-const setup = connectForm({ container: $('#server'), state: () => state, created: render,
+const setup = manageBooks && connectForm({ container: $('#server'), state: () => state, created: render,
   busy: value => { busy = value; render(); }, error: tell,
 });
-const picker = bookPicker({
+const picker = manageBooks ? bookPicker({
   connect: () => setup.open(),
   // One field is not worth a dialog: the book is made and its row opens on its
   // own name. A refusal — twenty books already — lands where every other one
@@ -34,7 +35,9 @@ const picker = bookPicker({
   },
   // A refused name is reported in the row being typed in, so the picker keeps it.
   rename: async (book, name) => { await rpc({ type: 'RenameBook', book, name }); tell(''); },
-});
+}) : () => {};
+$('#location').hidden = !manageBooks;
+$('#remove-book').hidden = !manageBooks;
 function render(next = state) {
   if (!currentSnapshot(next, state)) return;
   if (next.activeBook !== state.activeBook) $('#search').value = '';
@@ -365,11 +368,11 @@ $('#review-network').oninput = () => { tell(''); renderReview(); };
 // The popup may be bringing them to a tab that is already open, so this page
 // hears about them rather than only looking once while it was starting.
 async function readPending() {
-  if (pending) return;
+  if (!manageBooks || pending) return;
   const held = await rpc({ type: 'PendingImport' }).catch(() => null);
   if (held?.records?.length) review(held.records, { what: sourceName(held.records[0]?.source) });
 }
-chrome.storage.session.onChanged.addListener(changes => {
+watchPending(changes => {
   if (changes.pendingImport?.newValue) readPending().catch(tell);
 });
 $('#cancel-import').onclick = () => { showReview(false); tell(''); };
@@ -401,4 +404,5 @@ try {
 finally {
   $('.book').hidden = false;
   $('#search').focus({ preventScroll: true });
+}
 }

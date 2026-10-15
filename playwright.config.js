@@ -9,5 +9,6 @@ export default defineConfig({
     { command: 'uv run python -m http.server 8719 --bind 127.0.0.1', url: 'http://127.0.0.1:8719/tests/fixtures/page.html', reuseExistingServer: false },
     { command: 'uv run python tests/serve_book.py --port 8721', url: 'http://127.0.0.1:8721/tags', reuseExistingServer: false },
     { command: 'uv run python tests/serve_book.py --port 8722 --tls', url: 'https://127.0.0.1:8722/tags', ignoreHTTPSErrors: true, reuseExistingServer: false },
+    { command: 'uv run python tests/serve_book.py --port 8723 --web', url: 'http://127.0.0.1:8723/0xtagger/colors.css', reuseExistingServer: false },
   ],
 });

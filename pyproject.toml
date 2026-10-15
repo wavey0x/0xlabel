@@ -25,6 +25,14 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 py-modules = ["server"]
+packages = ["oxtagger_ui"]
+include-package-data = false
+
+[tool.setuptools.package-dir]
+oxtagger_ui = "extension"
+
+[tool.setuptools.package-data]
+oxtagger_ui = ["book.html", "*.js", "*.css", "stores/*.js", "icons/*.svg", "vendor/*.js", "vendor/LICENSE"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

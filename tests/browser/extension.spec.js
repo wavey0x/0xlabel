@@ -584,6 +584,7 @@ test('installed extension: a file is reviewed before it lands, and a page cannot
     expect(asked.ok).toBe(true);
     // This page's adapter keeps no book of its own, so there is nothing to bring.
     expect(asked.result.count).toBe(0);
+    expect((await worker.evaluate(() => chrome.storage.session.get('pendingImport'))).pendingImport).toBeUndefined();
 
     // A book page that was already open hears about names a website was asked
     // for, rather than only looking once while it was starting up. Opening the

@@ -16,7 +16,7 @@ export function createServerBook({ url, token, fetch: fetcher = globalThis.fetch
       response = await fetcher(url + path, {
         ...options, redirect: 'error', cache: 'no-store', credentials: 'omit',
         signal: AbortSignal.timeout(10000),
-        headers: { Authorization: `Bearer ${token}`, ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...headers },
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...headers },
       });
     } catch {
       // A read that never arrived changed nothing, and can say so. A write
@@ -37,7 +37,9 @@ export function createServerBook({ url, token, fetch: fetcher = globalThis.fetch
         : 'That server returned an unreadable reply. Your saved book is unchanged.');
     }
     if (!response.ok) {
-      const error = new Error(response.status === 401 ? 'That server rejected the access key. Paste its link again.' :
+      const error = new Error(response.status === 401 ? (token
+        ? 'That server rejected the access key. Paste its link again.'
+        : 'Your Tailscale identity was not allowed to open this address book.') :
         typeof body.detail === 'string' ? body.detail : 'That server rejected the request.');
       error.status = response.status;
       if (response.status === 409) {

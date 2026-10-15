@@ -36,6 +36,9 @@ uv run 0xtagger
 
 Open the address book menu → **Connect to a server**, then paste the link the server prints.
 
+For a private browser view of that same book, [serve it through Tailscale](INSTALL.md#browse-privately-through-tailscale).
+Your Tailscale identity opens it directly, with no key in the bookmark.
+
 ![The compact translucent editor adding a tag directly to a transfer list](docs/images/editor.png)
 
 <sub>Editor screenshot uses sample data.</sub>
