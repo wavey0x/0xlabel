@@ -8,9 +8,11 @@ body { background: radial-gradient(ellipse at top right, var(--0xtagger-accent-c
 .book-heading h2 { font-size: 24px; letter-spacing: -.6px; }
 #count { margin: 4px 0 0; }
 .book-panel { padding: 0; overflow: hidden; }
-.book-tools { padding: 12px; border-bottom: 1px solid var(--0xtagger-line); }
-#search { max-width: 400px; }
-#export { flex-shrink: 0; font-size: 11px; }
+/* Search takes the room it needs; the two file actions belong together at the
+   end of the row rather than drifting apart across whatever is left. */
+.book-tools { justify-content: flex-start; gap: 8px; padding: 12px; border-bottom: 1px solid var(--0xtagger-line); }
+#search { flex: 1; max-width: 400px; margin-right: auto; }
+#import,#export { flex-shrink: 0; font-size: 11px; }
 .table-scroll { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; }
 th,td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--0xtagger-line); }
