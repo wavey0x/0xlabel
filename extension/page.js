@@ -142,19 +142,19 @@ export async function createPageController({
   function paint(target) {
     if (target.element.getAttribute(ADDRESS) !== target.address) target.element.setAttribute(ADDRESS, target.address);
     if (!target.editButton?.isConnected) addEditButton(target);
-    const name = target.naming !== false && !hiddenTags.has(recordKey(target.address, target.network)) &&
+    const tag = target.naming !== false && !hiddenTags.has(recordKey(target.address, target.network)) &&
       recordFor(target)?.tags[0];
     const shown = shownOn(target);
     if (shown !== target.element) { target.element.removeAttribute(TAG); target.element.removeAttribute(SHORT); }
-    if (name) {
+    if (tag) {
       // Preserve native nodes and copy sources; CSS substitutes only their
       // visible glyphs with the shared custom-tag typography.
-      if (shown.getAttribute(TAG) !== name) shown.setAttribute(TAG, name);
+      if (shown.getAttribute(TAG) !== tag) shown.setAttribute(TAG, tag);
       const trailer = adapter.subject && target.element.matches(adapter.subject)
         ? abbreviate(checksumAddress(target.address)) : null;
       if (trailer) { if (shown.getAttribute(SHORT) !== trailer) shown.setAttribute(SHORT, trailer); }
       else shown.removeAttribute(SHORT);
-      const description = `0xtagger: ${name}`;
+      const description = `0xtagger: ${tag}`;
       if (!target.element.hasAttribute('aria-description') || target.description === target.element.getAttribute('aria-description')) {
         if (target.element.getAttribute('aria-description') !== description) target.element.setAttribute('aria-description', description);
         target.description = description;

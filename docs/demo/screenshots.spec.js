@@ -15,7 +15,8 @@ test('render the README examples with the shipped extension and sample data', as
       const { createPageController } = await import('/extension/page.js');
       window.controller = await createPageController({
         url: () => new URL('https://etherscan.io/tokentxns'),
-        state: { connectionKey: 'http://127.0.0.1:8712', connectionName: 'Local', selectionGeneration: 1, stateRevision: 1, records: window.demoRecords },
+        state: { books: [{ id: 'book-1', name: 'Local', where: 'http://127.0.0.1:8712' }],
+          activeBook: 'book-1', bookName: 'Local', bookKind: 'server', stateRevision: 1, records: window.demoRecords },
         save: () => { throw new Error('Screenshots never save tags.'); },
       });
     });
