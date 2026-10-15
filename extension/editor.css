@@ -83,3 +83,8 @@ footer { margin-top: 8px; }
 .quiet.confirmed { color: var(--0xtagger-accent); }
 .primary.confirmed { color: var(--0xtagger-success); }
 @media (prefers-reduced-motion: reduce) { .confirmed svg path { animation: none; } }
+
+/* A button held shut while it confirms is locked, not unavailable: fading it
+   is both the wrong thing to say and the reason the tick had nothing to be
+   read against — the fill under it washed out to the panel behind. */
+button.confirmed:disabled { opacity: 1; }

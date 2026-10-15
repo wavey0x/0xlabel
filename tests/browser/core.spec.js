@@ -635,10 +635,13 @@ test('the saved tick is drawn in the colour the button writes in', async ({ page
   const [drawn, ink] = await stroke.evaluate(node =>
     [getComputedStyle(node).stroke, getComputedStyle(node.closest('button')).color]);
   expect(drawn).toBe(ink);
-  // Green, and bright enough to carry on the purple the button is filled with.
-  const fill = await page.getByRole('dialog').locator('.save')
-    .evaluate(node => getComputedStyle(node).backgroundColor);
   expect(drawn).toBe('rgb(74, 222, 128)');
+  // The button is held shut while it confirms, and a faded fill would leave
+  // the tick with nothing to be read against — a declared colour says 5:1
+  // while the eye sees the panel behind it.
+  const [fill, faded] = await page.getByRole('dialog').locator('.save')
+    .evaluate(node => [getComputedStyle(node).backgroundColor, getComputedStyle(node).opacity]);
+  expect(faded, 'a confirming button is locked, not faded').toBe('1');
   expect(contrast(drawn, fill)).toBeGreaterThanOrEqual(3);
 });
 

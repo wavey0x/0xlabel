@@ -189,6 +189,10 @@ $('#refresh').onclick = async () => {
 // go to the same review.
 async function openFile(file) {
   if (!file) return;
+  // A confirmed import owns this screen until it answers: opening another
+  // review over it would leave the first to close the second on its way out,
+  // and the file that arrived second would be quietly dropped.
+  if (busy) { tell('Finishing the import you confirmed. Try that file again in a moment.'); return; }
   try {
     const { records, unnamed } = readBookFile(await file.text());
     review(records, { unnamed, what: file.name });
@@ -219,11 +223,12 @@ addEventListener('drop', event => {
   if (!carriesFile(event)) return;
   event.preventDefault();
   showDrop(false);
-  // One book is one decision. A handful dropped together is not an order to
-  // guess which, so the first is read and the rest are said out loud.
+  // One book is one decision, and a handful dropped together is not an
+  // instruction to pick one. Nothing is read, and the reason stays on screen
+  // rather than being wiped by the review it would have opened.
   const files = [...event.dataTransfer.files];
-  if (files.length > 1) tell(`Reading ${files[0].name}. Drop one book at a time.`);
-  openFile(files[0]);
+  if (files.length > 1) tell(`${files.length} files. Drop one book at a time.`);
+  else openFile(files[0]);
 });
 $('#export').onclick = () => {
   const blob = new Blob([JSON.stringify({ records: state.records }, null, 2) + '\n'], { type: 'application/json' });

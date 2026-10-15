@@ -414,6 +414,20 @@ test('installed extension: a file is reviewed before it lands, and a page cannot
     await expect(book.locator('#review-rows')).toContainText('Dropped in');
     await book.locator('#cancel-import').click();
 
+    // One book is one decision, so a handful at once is refused rather than
+    // guessed at — and the reason stays up, instead of being wiped by the
+    // review that would otherwise have opened over it.
+    const several = await book.evaluateHandle(text => {
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([text], 'one.json', { type: 'application/json' }));
+      transfer.items.add(new File([text], 'two.json', { type: 'application/json' }));
+      return transfer;
+    }, JSON.stringify({ records: [{ address: '0x' + '56'.repeat(20), scope: 'global', tags: ['Not read'] }] }));
+    await book.dispatchEvent('body', 'drop', { dataTransfer: several });
+    await expect(book.locator('#message')).toHaveText('2 files. Drop one book at a time.');
+    await expect(book.locator('#review')).toBeHidden();
+    await expect(book.locator('#message')).toHaveText('2 files. Drop one book at a time.');
+
     // Safe's signer export: no header, no network, and a signer nobody named.
     const file = [`${address},Safe calls it this`, `${other},dudesahn`, `${'0x' + 'ef'.repeat(20)},`].join('\n');
     await book.locator('#import-file').setInputFiles({ name: '1-signers.csv', mimeType: 'text/csv', buffer: Buffer.from(file) });
