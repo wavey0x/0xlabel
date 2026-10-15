@@ -207,7 +207,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
         if (!source) throw new Error('There is nothing to copy.');
         const from = source.id === active ? records : (await local.load(source.id)).records;
         // The receiving book issues its own versions, wherever it is kept.
-        const wanted = from.map(({ address, scope, tags }) => ({ address, scope, tags }));
+        const wanted = from.map(({ address, scope, tags, source }) => ({ address, scope, tags, ...(source ? { source } : {}) }));
         held = candidate ? await candidate.putMany(wanted.map(record => ({ ...record, version: null }))) : wanted;
       }
       if (held.length || !candidate) ({ records: held, revision } = await local.write(item.id, held));
@@ -261,12 +261,18 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
   // Addresses carried in from a file land in the book that is open, replacing
   // any tags already held for the same address on the same network. One file
   // is one decision, so it is one write: all of it lands or none of it does.
-  async function merge(incoming) {
+  // `book` is the one the names were reviewed against. A review is a decision
+  // about a particular book, so it is checked again here: switching books
+  // between reading the screen and confirming it must not quietly redirect the
+  // write, the same way an open editor refuses to save into a book it was not
+  // opened on.
+  async function merge(incoming, book = active) {
     const wanted = validateImport(incoming);
     // Nothing to add is not a write. It costs no request, no transaction and
     // no revision, and the view says so rather than claiming an import.
     if (!wanted.length) return { added: 0 };
     return serial(async () => {
+      if (book !== active) throw new Error('You switched address books. Review these names again.');
       if (unreadable) throw new Error('This address book could not be read, so nothing was added to it.');
       const index = new Map(records.map(item => [recordKey(item.address, item.scope), item]));
       // Versions belong to the receiving book, and a file never carries one.

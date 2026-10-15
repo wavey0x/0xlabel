@@ -135,7 +135,11 @@ const safeAdapter = site({
   // claiming the name came from one of Safe's own books. It goes for exactly as
   // long as the substitution lasts, and comes back with it, because the rule
   // rests on an attribute the controller already adds and removes.
-  styles: `${SAFE_NAME} > [data-0xtagger-tag] ~ * { display: none !important; }`,
+  // Everything of Safe's that follows the name it set — the badge — and
+  // nothing of ours: the glyph is placed beside the name on this row, and
+  // hiding our own control along with Safe's claim would be a fine way to
+  // make the row untaggable.
+  styles: `${SAFE_NAME} > [data-0xtagger-tag] ~ *:not(${UI}) { display: none !important; }`,
   rules: {
     targets: `a[href*="/address/"],[data-address],[title],[class*="addressContainer"] span,main span,${SAFE_NAME_BOX},${SAFE_SELECTOR}`,
     attributes: ['data-address', 'title', 'aria-label'],

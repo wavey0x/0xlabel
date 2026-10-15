@@ -241,6 +241,9 @@ test.describe('Safe address widget', () => {
   test('hides Safe\'s name-origin badge only while a tag stands in for the name', async ({ page }) => {
     await open(page, widget());
     await expect(page.locator('#badge')).toBeHidden();
+    // Only Safe's badge: hiding our own control beside it would make the row
+    // the substitution happened on the one row nobody can edit.
+    await expect(page.locator('#name + [data-0xtagger-edit], #name [data-0xtagger-edit]')).toBeVisible();
     await page.evaluate(() => window.controller.stop());
     await expect(page.locator('#badge')).toBeVisible();
     await expect(page.locator('#name')).toHaveText('dudesahn');
@@ -253,6 +256,42 @@ test.describe('Safe address widget', () => {
     await expect(page.locator('[data-0xtagger-address]')).toHaveCount(0);
     await open(page, widget({ link: false, shown: address }));
     await expect(page.locator('#addr')).toHaveAttribute('data-0xtagger-tag', 'Treasury');
+  });
+
+  // Safe's own placeholders name no wallet: one is the page talking about
+  // itself, the other is the absence of a name. Neither is worth offering back.
+  test('never offers Safe\'s placeholders as a name', async ({ page }) => {
+    for (const placeholder of ['This Safe account', 'Unverified contract']) {
+      await open(page, widget({ name: placeholder, href: '' }));
+      await expect(page.locator('#name')).toHaveAttribute('data-0xtagger-address', address);
+      await page.locator('#name + [data-0xtagger-edit], #name [data-0xtagger-edit]').getByRole('button').click();
+      await expect(page.getByRole('textbox', { name: 'Tag 1', exact: true })).toHaveValue('Treasury');
+      await expect(page.getByRole('dialog').locator('.offer')).toBeHidden();
+      await page.keyboard.press('Escape');
+    }
+  });
+
+  // The website's own name and its badge are borrowed, never taken: hiding our
+  // tags for a moment must hand both back exactly as they were.
+  test('hands the name and its badge back while tags are hidden', async ({ page }) => {
+    await open(page, widget());
+    await expect(page.locator('#badge')).toBeHidden();
+    await page.locator('#name + [data-0xtagger-edit], #name [data-0xtagger-edit]').getByRole('button').click();
+    await page.getByRole('switch', { name: 'Show my tags for this address', exact: true }).click();
+    await expect(page.locator('#name')).not.toHaveAttribute('data-0xtagger-tag', /./);
+    await expect(page.locator('#badge')).toBeVisible();
+    await page.getByRole('switch', { name: 'Show my tags for this address', exact: true }).click();
+    await expect(page.locator('#badge')).toBeHidden();
+  });
+
+  // A live panel rewrites its own rows; the substitution has to survive that.
+  test('keeps one name to a widget through a rerender', async ({ page }) => {
+    await open(page, widget());
+    await expect(page.locator('[data-0xtagger-tag]')).toHaveCount(1);
+    await page.locator('.SrcEthHashInfo_container__h').evaluate(node => { node.innerHTML = node.innerHTML; });
+    await expect(page.locator('#name')).toHaveAttribute('data-0xtagger-tag', 'Treasury');
+    await expect(page.locator('[data-0xtagger-tag]')).toHaveCount(1);
+    await expect(page.locator('#badge')).toBeHidden();
   });
 
   // A widget Safe renders without a name is still an address to tag.

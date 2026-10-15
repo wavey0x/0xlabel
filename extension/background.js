@@ -135,7 +135,7 @@ async function handle(message, sender) {
     }
     return store.add({ name: message.name, storage: where, copyFrom: message.copyFrom });
   }
-  if (message.type === 'Import') return store.merge(message.records);
+  if (message.type === 'Import') return store.merge(message.records, message.book);
   // A website is asked what names it keeps; it never says what to do with
   // them. The answer is held for the book page to review, and the write that
   // may follow is an ordinary Import from a trusted view.

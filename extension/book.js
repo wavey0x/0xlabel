@@ -52,9 +52,15 @@ function render(next = state) {
     .sort((one, two) => one.record.tags[0].localeCompare(two.record.tags[0]) ||
       one.record.address.localeCompare(two.record.address));
   if (editor) editor.updateState(state);
-  // A book that moved under a review is still the book it is going into, so
-  // what it would add is worked out again rather than left as it was.
-  if (pending) renderReview();
+  // A review is a decision about one book. If that book moved under it, what
+  // it would add is worked out again; if you left that book entirely, the
+  // decision is about somewhere you are no longer looking, so it is put away
+  // rather than quietly retargeted.
+  if (pending && pending.book !== state.activeBook) {
+    const left = state.books.find(item => item.id === pending.book)?.name;
+    showReview(false);
+    tell(`Those names were for ${left || 'another address book'}. Import them again from here.`);
+  } else if (pending) renderReview();
   search();
 }
 function edit(address, scope = 'global') {
@@ -206,7 +212,10 @@ function review(records, { unnamed = 0, what = '' } = {}) {
   // is shown rather than asked about. Offering to change it is only honest
   // where the file itself said nothing either way.
   const scoped = records.some(item => item.scope && item.scope !== 'global');
-  pending = { records, unnamed, what, scoped, network: '', left: new Set() };
+  // The book these names were read against. Confirming sends it back, so a
+  // switch between reading the screen and pressing the button is refused
+  // rather than quietly redirected.
+  pending = { records, unnamed, what, scoped, book: state.activeBook, left: new Set() };
   showReview(true);
   $('#review-into').textContent = `Into ${state.bookName}${what ? ` · ${what}` : ''}`;
   $('#review-scope').hidden = scoped || !records.length;
@@ -274,7 +283,7 @@ $('#confirm-import').onclick = async () => {
   const wanted = pending.ready;
   busy = true; renderReview();
   try {
-    const result = await rpc({ type: 'Import', records: wanted });
+    const result = await rpc({ type: 'Import', records: wanted, book: pending.book });
     showReview(false);
     tell(`${result.added.toLocaleString()} name${result.added === 1 ? '' : 's'} imported.`);
   } catch (error) {

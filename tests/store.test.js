@@ -702,3 +702,28 @@ test('a review of a Safe signer export carries its source and names every networ
   assert.deepEqual(outcome.add.map(item => [item.scope, item.source]),
     [['global', 'safe:address-book'], ['global', 'safe:address-book']]);
 });
+
+// A review is a decision about one book. Switching books between reading the
+// screen and confirming it must not quietly redirect the write.
+test('an import lands in the book it was reviewed against, or it does not land', async () => {
+  const { store } = harness();
+  await store.init();
+  const first = store.state().activeBook;
+  await store.add({ name: 'Second', storage: { kind: 'device' } });
+  assert.notEqual(store.state().activeBook, first);
+  await assert.rejects(store.merge([{ address, tags: ['Treasury'] }], first),
+    /switched address books/);
+  assert.equal(store.state().records.length, 0);
+  // Reviewed against the book that is actually open, it lands.
+  assert.deepEqual(await store.merge([{ address, tags: ['Treasury'] }], store.state().activeBook), { added: 1 });
+});
+
+// A copy of a book is the same book somewhere else, origins included.
+test('copying a book carries where each name came from', async () => {
+  const { store } = harness();
+  await store.init();
+  await write(store, ['Treasury'], { source: 'safe:address-book' });
+  const from = store.state().activeBook;
+  await store.add({ name: 'Copy', storage: onServer, copyFrom: from });
+  assert.equal(store.state().records[0].source, 'safe:address-book');
+});
