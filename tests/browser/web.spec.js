@@ -107,3 +107,66 @@ test('hosted book: a failed first read never opens a writable empty device book'
   await expect(page.getByRole('button', { name: '+ Add address', exact: true })).not.toBeVisible();
   await expect(page.locator('#message')).toContainText('could not be reached');
 });
+
+test('hosted book: reconnecting preserves an offline draft and protects a newer save', async ({ page }) => {
+  const api = await request.newContext({ extraHTTPHeaders: key });
+  const at = '0x' + '91'.repeat(20);
+  const path = `${base}/tags/eip155:8453/${at}`;
+  try {
+    expect((await api.put(path, { data: { tags: ['Saved before disconnect'], version: null } })).ok()).toBe(true);
+    await page.setExtraHTTPHeaders({ 'Tailscale-User-Login': 'test@example.com' });
+    await page.goto(base + '/');
+    await page.locator('.record', { hasText: 'Saved before disconnect' }).click();
+    const input = page.getByRole('textbox', { name: 'Tag 1', exact: true });
+    await input.fill('My offline draft');
+    await page.route(base + '/tags**', route => route.abort());
+    await input.press('Enter');
+    await expect(page.getByRole('dialog')).toContainText('server did not answer');
+    await expect(input).toHaveValue('My offline draft');
+    const before = (await (await api.get(base + '/tags')).json()).records.find(item => item.address === at);
+    expect(before.tags).toEqual(['Saved before disconnect']);
+    const changed = await api.put(path, { data: { tags: ['Saved on another device'], version: before.version } });
+    expect(changed.ok()).toBe(true);
+    const newer = (await changed.json()).record;
+
+    await page.unroute(base + '/tags**');
+    const resumed = page.waitForResponse(base + '/tags');
+    await page.evaluate(() => window.dispatchEvent(new Event('online')));
+    expect((await resumed).ok()).toBe(true);
+    await expect(input).toHaveValue('My offline draft');
+    expect((await (await api.get(base + '/tags')).json()).records.find(item => item.address === at)).toEqual(newer);
+
+    await input.press('Enter');
+    await expect(page.getByRole('button', { name: 'Keep mine', exact: true })).toBeVisible();
+    expect((await (await api.get(base + '/tags')).json()).records.find(item => item.address === at)).toEqual(newer);
+    await page.getByRole('button', { name: 'Keep mine', exact: true }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect((await (await api.get(base + '/tags')).json()).records.find(item => item.address === at))
+      .toMatchObject({ scope: 'eip155:8453', tags: ['My offline draft'] });
+  } finally { await api.dispose(); }
+});
+
+test('hosted book: a server returning without an online event refreshes the saved copy', async ({ page }) => {
+  const api = await request.newContext({ extraHTTPHeaders: key });
+  const at = '0x' + '92'.repeat(20);
+  const path = `${base}/tags/eip155:1/${at}`;
+  try {
+    const first = await api.put(path, { data: { tags: ['Last saved name'], version: null } });
+    expect(first.ok()).toBe(true);
+    const held = (await first.json()).record;
+    await page.clock.install();
+    await page.setExtraHTTPHeaders({ 'Tailscale-User-Login': 'test@example.com' });
+    await page.goto(base + '/');
+    await expect(page.locator('.record', { hasText: 'Last saved name' })).toHaveCount(1);
+    await page.route(base + '/tags', route => route.abort());
+    await page.clock.fastForward(60000);
+    await expect(page.locator('#sync')).toHaveText('Using your saved copy');
+    await expect(page.locator('.record', { hasText: 'Last saved name' })).toHaveCount(1);
+
+    expect((await api.put(path, { data: { tags: ['Changed while away'], version: held.version } })).ok()).toBe(true);
+    await page.unroute(base + '/tags');
+    await page.clock.fastForward(60000);
+    await expect(page.locator('.record', { hasText: 'Changed while away' })).toHaveCount(1);
+    await expect(page.locator('#sync')).toContainText('Synced');
+  } finally { await api.dispose(); }
+});

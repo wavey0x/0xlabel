@@ -81,6 +81,11 @@ while connected to Tailscale. Serve strips the mount prefix before forwarding;
 the UI and API share an origin, and CORS stays disabled. Keep Funnel off.
 The extension continues to use the private connection link and its stored API key.
 
+An open browser page keeps its saved tags if the server becomes unreachable.
+It checks again when connectivity returns, when you return to the tab, and once
+a minute while visible. Failed edits stay in the open editor for you to retry;
+they are never queued for a later upload. Closing or reloading discards that draft.
+
 `--tailscale-login` (or `OXTAGGER_TAILSCALE_LOGIN`) trusts the identity supplied by
 the local Serve proxy and accepts only that configured login. Serve replaces
 incoming identity headers. Loopback binding keeps the backend off the network;

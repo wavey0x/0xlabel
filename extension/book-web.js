@@ -31,9 +31,15 @@ try {
     },
     watchBook: (_held, render) => { announce = render; },
   });
-  document.addEventListener('visibilitychange', () => {
+  const sync = () => {
     if (!document.hidden) store.sync().catch(() => {});
+  };
+  document.addEventListener('visibilitychange', sync);
+  window.addEventListener('online', () => {
+    if (!document.hidden) store.refresh().catch(() => {});
   });
+  // A server or Tailscale can return without the browser reporting "online".
+  setInterval(sync, 60000);
 } catch (error) {
   // A refused or unreachable server is not an empty address book.
   const main = document.querySelector('main');
