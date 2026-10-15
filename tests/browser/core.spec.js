@@ -555,6 +555,46 @@ test.describe('a name the website already shows', () => {
     await expect(attribution(page)).toBeHidden();
   });
 
+  // A label belongs to the chain the page was showing it on. Saving an
+  // Ethereum contract's name to every network would put it against whatever
+  // sits at that address on Base.
+  test('saves a name to the network the website was showing', async ({ page }) => {
+    await open(page, labelled('row', other, 'Uniswap V3: Router'), [record]);
+    await tagFor(page, 'row').click();
+    await save(page).click();
+    await expect.poll(() => page.evaluate(() => window.saves.at(-1)))
+      .toMatchObject({ address: other, scope: 'eip155:1' });
+  });
+
+  // A name this editor put in the field itself is not something anyone typed,
+  // so moving to another address must not ask anyone to save work they did not
+  // do. Typing makes it a draft, and then it does.
+  test('an untouched suggestion is not an unsaved draft', async ({ page }) => {
+    // Far enough apart that the open editor does not sit over the second row.
+    await open(page, labelled('one', other, 'Uniswap V3: Router')
+      + '<div style="height:420px"></div>' + labelled('two', address, 'Treasury'), [record]);
+    await tagFor(page, 'one').click();
+    await expect(input(page)).toHaveValue('Uniswap V3: Router');
+    await tagFor(page, 'two').click();
+    await expect(shownAddress(page)).toHaveText(checksumAddress(address));
+    await expect(page.getByRole('dialog')).not.toContainText('Save or close');
+
+    await tagFor(page, 'one').click();
+    await input(page).fill('Mine now');
+    await tagFor(page, 'two').click();
+    await expect(shownAddress(page)).toHaveText(checksumAddress(other));
+    await expect(page.getByRole('dialog')).toContainText('Save or close');
+  });
+
+  // A record's own origin is history: it stays true however often the name has
+  // been rewritten, and is said in the past tense because of that.
+  test('says where a saved name came from, as history', async ({ page }) => {
+    await open(page, labelled('row', address, 'Treasury'),
+      [{ ...record, tags: ['Our treasury'], source: 'safe:address-book' }]);
+    await tagFor(page, 'row').click();
+    await expect(attribution(page)).toHaveText("Added from Safe's address book");
+  });
+
   // An address, or a piece of one, is not a name worth offering back.
   test('never offers an address as a name', async ({ page }) => {
     await open(page, labelled('row', other, '0xcdcd…cdcd'), [record]);

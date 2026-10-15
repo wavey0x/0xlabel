@@ -455,10 +455,24 @@ test('installed extension: a file is reviewed before it lands, and a page cannot
     expect(asked.ok).toBe(true);
     // This page's adapter keeps no book of its own, so there is nothing to bring.
     expect(asked.result.count).toBe(0);
-    const first = await book.evaluate(async () => await chrome.runtime.sendMessage({ type: 'PendingImport' }));
-    expect(first.result).toMatchObject({ records: [] });
-    const second = await book.evaluate(async () => await chrome.runtime.sendMessage({ type: 'PendingImport' }));
-    expect(second.result).toBe(null);
+
+    // A book page that was already open hears about names a website was asked
+    // for, rather than only looking once while it was starting up. Opening the
+    // tab the popup focuses must not be the difference between a review and a
+    // book that sits there saying nothing.
+    const third = '0x' + 'ef'.repeat(20);
+    await worker.evaluate(async records =>
+      chrome.storage.session.set({ pendingImport: { records, origin: 'https://app.safe.global' } }),
+      [{ address: third, scope: 'global', tags: ['dudesahn'], source: 'safe:address-book' }]);
+    // Waking the worker and opening the book can take a moment; the point is
+    // that it arrives without the tab being reopened, not that it is instant.
+    await expect(book.locator('#review')).toBeVisible({ timeout: 15000 });
+    await expect(book.locator('#review-rows')).toContainText('dudesahn');
+    await expect(book.locator('#review-into')).toContainText("Safe's address book");
+    // Read once and taken away, so the same names cannot arrive twice.
+    expect((await book.evaluate(async () =>
+      await chrome.runtime.sendMessage({ type: 'PendingImport' }))).result).toBe(null);
+    await book.locator('#cancel-import').click();
 
     // Both extension views load and run clean; a typo in either is a trial
     // that fails on its first morning.

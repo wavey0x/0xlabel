@@ -215,7 +215,7 @@ function review(records, { unnamed = 0, what = '' } = {}) {
   // The book these names were read against. Confirming sends it back, so a
   // switch between reading the screen and pressing the button is refused
   // rather than quietly redirected.
-  pending = { records, unnamed, what, scoped, book: state.activeBook, left: new Set() };
+  pending = { records, unnamed, what, scoped, book: state.activeBook, left: new Set(), badScope: '' };
   showReview(true);
   $('#review-into').textContent = `Into ${state.bookName}${what ? ` · ${what}` : ''}`;
   $('#review-scope').hidden = scoped || !records.length;
@@ -225,13 +225,20 @@ function review(records, { unnamed = 0, what = '' } = {}) {
 }
 function renderReview() {
   if (!pending) return;
+  // A network nobody can use is a correction to make, not a reason to throw
+  // the screen away: the names stay on it and the button waits.
+  let wanted;
+  try { wanted = scoped(); pending.badScope = ''; }
+  catch (error) { pending.badScope = error.message; }
   let outcome;
-  try { outcome = reviewImport(scoped(), state.records); }
+  try { outcome = reviewImport(wanted ?? pending.records, state.records); }
   catch (error) { tell(error); showReview(false); return; }
-  const rows = outcome.add.filter((_, index) => !pending.left.has(index));
-  $('#review-rows').replaceChildren(...outcome.add.map((entry, index) => {
+  // Left out by the row a name came in on. A position in a list that is worked
+  // out again on every change names a different thing each time it changes.
+  const rows = outcome.add.filter(entry => !pending.left.has(entry.row));
+  $('#review-rows').replaceChildren(...outcome.add.map(entry => {
     const row = document.createElement('tr');
-    const out = pending.left.has(index);
+    const out = pending.left.has(entry.row);
     if (out) row.setAttribute('data-left-out', '');
     const name = document.createElement('td'); name.textContent = entry.tags.join(' · ');
     const at = document.createElement('td'); at.className = 'address';
@@ -243,7 +250,7 @@ function renderReview() {
     button.textContent = out ? 'Put back' : 'Leave out';
     button.setAttribute('aria-label', `${out ? 'Put back' : 'Leave out'} ${entry.tags[0]}`);
     button.onclick = () => {
-      if (out) pending.left.delete(index); else pending.left.add(index);
+      if (out) pending.left.delete(entry.row); else pending.left.add(entry.row);
       renderReview();
     };
     drop.append(button);
@@ -265,7 +272,9 @@ function renderReview() {
   }));
   $('#confirm-import').textContent = rows.length
     ? `Import ${rows.length.toLocaleString()} name${rows.length === 1 ? '' : 's'}` : 'Nothing to import';
-  $('#confirm-import').disabled = busy || !rows.length;
+  $('#confirm-import').disabled = busy || !rows.length || Boolean(pending.badScope);
+  $('#review-network').setAttribute('aria-invalid', String(Boolean(pending.badScope)));
+  if (pending.badScope) $('#review-summary').textContent = pending.badScope;
   pending.ready = rows;
 }
 // What the file said, with the one network choice the screen offers applied to
@@ -277,6 +286,17 @@ function scoped() {
   return pending.records.map(item => ({ ...item, scope }));
 }
 $('#review-network').oninput = () => { tell(''); renderReview(); };
+// A website was asked what names it keeps, and this is where they are read.
+// The popup may be bringing them to a tab that is already open, so this page
+// hears about them rather than only looking once while it was starting.
+async function readPending() {
+  if (pending) return;
+  const held = await rpc({ type: 'PendingImport' }).catch(() => null);
+  if (held?.records?.length) review(held.records, { what: sourceName(held.records[0]?.source) });
+}
+chrome.storage.session.onChanged.addListener(changes => {
+  if (changes.pendingImport?.newValue) readPending().catch(tell);
+});
 $('#cancel-import').onclick = () => { showReview(false); tell(''); };
 $('#confirm-import').onclick = async () => {
   if (!pending?.ready?.length) return;
@@ -298,9 +318,7 @@ watchBook(() => state, render);
 try {
   const [, response] = await ready;
   render(response.state);
-  // A website was asked what names it keeps, and this is where they are read.
-  const held = await rpc({ type: 'PendingImport' }).catch(() => null);
-  if (held?.records?.length) review(held.records, { what: sourceName(held.records[0]?.source) });
+  await readPending();
 } catch (error) { render(); tell(error); }
 finally {
   $('.book').hidden = false;

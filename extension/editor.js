@@ -1,4 +1,4 @@
-import { findRecord, MAX_TAGS, MAX_TAG_LENGTH, normalizeTags, sameTags, suggestedBy, usableName } from './shared.js';
+import { addedFrom, findRecord, MAX_TAGS, MAX_TAG_LENGTH, normalizeTags, sameTags, suggestedBy, usableName } from './shared.js';
 import { checksumAddress } from './checksum.js';
 import { EDITOR_MARK, COPY_ICON, COPIED_ICON, confirmCopied } from './icons.js';
 
@@ -39,7 +39,12 @@ export function createEditor(container, { address, scope = 'global', state, save
   const prefill = offered && !loaded.tags.length ? offered : null;
   const draft = { tags: [...(loaded.tags.length ? loaded.tags : [prefill ? prefill.name : ''])], version: loaded.version };
   // Compared as a save would store them, so a stray space is not an edit.
-  const edited = () => !sameTags(draft.tags.map(tag => tag.trim()).filter(Boolean), loaded.tags);
+  const written = () => draft.tags.map(tag => tag.trim()).filter(Boolean);
+  // A name this editor put in the field itself is not something anyone typed.
+  // Treating it as an unsaved draft would make opening one address and then
+  // another ask to save work nobody did.
+  const untouched = () => Boolean(prefill) && !loaded.tags.length && sameTags(written(), [prefill.name]);
+  const edited = () => !untouched() && !sameTags(written(), loaded.tags);
   const adopt = next => {
     loaded = next;
     draft.tags = [...(next.tags.length ? next.tags : [''])];
@@ -114,8 +119,12 @@ export function createEditor(container, { address, scope = 'global', state, save
   // adding it appends — the preferred name stays where it is.
   function attribution() {
     const live = Boolean(prefill) && draft.tags[0] === prefill.name;
-    get('.attribution').hidden = !live;
-    get('.attribution').textContent = live ? suggestedBy(prefill.source) : '';
+    // A live suggestion describes the name in the field, so it is said in the
+    // present tense and goes when that name does. A record's own origin is
+    // history: it stays true however often the name has been rewritten since.
+    const history = !live && addedFrom(own?.source);
+    get('.attribution').hidden = !live && !history;
+    get('.attribution').textContent = live ? suggestedBy(prefill.source) : history || '';
     const spare = offered && !prefill && !draft.tags.some(tag => tag.trim() === offered.name);
     get('.offer').hidden = !spare;
     get('.offer').replaceChildren();

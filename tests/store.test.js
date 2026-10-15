@@ -378,19 +378,49 @@ test('a book is read back whole, and removing another one leaves it alone', asyn
   assert.deepEqual(again.state().records.map(entry => entry.tags[0]).sort(), ['First', 'Second']);
 });
 
-test('a book carried in from a file joins the one that is open, replacing matching names', async () => {
+// What a review hands on is an absence: names the book does not have. A save
+// landing between reading that screen and confirming it makes the review
+// stale, so it is read again rather than written over.
+test('a book carried in from a file joins the one that is open, and never writes over it', async () => {
   const { store } = harness();
   await store.init();
   await write(store, ['Treasury']);
   const { added } = await store.merge([
-    { address, scope: 'global', tags: ['Renamed'], version: 'from-file' },
     { address: other, scope: 'eip155:8453', tags: ['Payroll'], version: 'from-file' },
   ]);
-  assert.equal(added, 2);
+  assert.equal(added, 1);
   const names = Object.fromEntries(store.state().records.map(entry => [entry.address, entry.tags[0]]));
-  assert.deepEqual(names, { [address]: 'Renamed', [other]: 'Payroll' });
+  assert.deepEqual(names, { [address]: 'Treasury', [other]: 'Payroll' });
   assert.ok(store.state().records.every(entry => entry.version !== 'from-file'),
     'the receiving book issues its own versions');
+
+  await assert.rejects(store.merge([{ address, scope: 'global', tags: ['Renamed'] }]),
+    /Some names changed/);
+  assert.equal(store.state().records.find(entry => entry.address === address).tags[0], 'Treasury');
+});
+
+// The same, on a server, and for a write whose answer was lost: the book is
+// reconciled first, so an import that already landed is seen rather than
+// repeated into a pile of conflicts.
+test('an import whose answer was lost is reconciled, not repeated', async () => {
+  const { store, intercept, remote } = harness();
+  await store.init();
+  await store.add({ name: 'Shared', storage: onServer });
+  // The server takes the batch; the answer never arrives.
+  intercept(async (url, options) => {
+    if (options.method !== 'PUT') return null;
+    JSON.parse(options.body).changes.forEach(change => remote().push(
+      { address: change.address, scope: change.scope, tags: change.tags, version: 'landed' }));
+    intercept(null);
+    throw new TypeError('Failed to fetch');
+  });
+  await assert.rejects(store.merge([{ address, scope: 'global', tags: ['Treasury'] }]),
+    /did not answer. Whether this landed is checked/);
+  // Asked again, the book sees what landed instead of writing over it.
+  await assert.rejects(store.merge([{ address, scope: 'global', tags: ['Treasury'] }]),
+    /Some names changed/);
+  assert.equal(store.state().records.length, 1);
+  assert.deepEqual(store.state().records[0].tags, ['Treasury']);
 });
 
 test('a file that is not a book is refused before anything is written', async () => {
@@ -674,15 +704,33 @@ test('an import carrying nothing writes nothing, asks nothing and moves no revis
 test('a review says what would be added, what is already yours, and what it could not read', async () => {
   const held = [{ address, scope: 'eip155:1', tags: ['Treasury'], version: 'one' }];
   const outcome = reviewImport([
-    { row: 2, address, tags: ['Safe calls it this'], scope: 'global' },
+    { row: 2, address, tags: ['Already named here'], scope: 'eip155:1' },
     { row: 3, address: other, tags: ['Payroll'], scope: 'eip155:8453' },
     { row: 4, address: 'not-an-address', tags: ['Oops'] },
     { row: 5, address: third, tags: [''] },
   ], held);
-  assert.deepEqual(outcome.add, [{ address: other, scope: 'eip155:8453', tags: ['Payroll'] }]);
-  assert.equal(outcome.kept, 1, 'an address already named is left exactly as it is');
+  assert.deepEqual(outcome.add, [{ address: other, scope: 'eip155:8453', tags: ['Payroll'], row: 3 }]);
+  assert.equal(outcome.kept, 1, 'a name on the same network is left exactly as it is');
   assert.deepEqual(outcome.invalid.map(item => item.row), [4, 5]);
   assert.match(outcome.invalid[0].reason, /full Ethereum address/);
+});
+
+// A name covers an incoming one on its own network, or on every network. A
+// name on some other chain covers nothing: an address named on Ethereum is
+// still nameless on Base, and an import that skipped it would leave it so.
+test('a name on one chain does not stand in for a name on another', async () => {
+  const held = [
+    { address, scope: 'eip155:1', tags: ['Ethereum treasury'], version: 'one' },
+    { address: other, scope: 'global', tags: ['Everywhere'], version: 'two' },
+  ];
+  const outcome = reviewImport([
+    { row: 2, address, tags: ['Base treasury'], scope: 'eip155:8453' },
+    { row: 3, address, tags: ['On every network'], scope: 'global' },
+    { row: 4, address: other, tags: ['Base payroll'], scope: 'eip155:8453' },
+  ], held);
+  assert.deepEqual(outcome.add.map(item => [item.scope, item.tags[0]]),
+    [['eip155:8453', 'Base treasury'], ['global', 'On every network']]);
+  assert.equal(outcome.kept, 1, 'a name on every network already covers that one');
 });
 
 test('a review keeps the rest when one row cannot be read, and counts a repeat once', async () => {
@@ -696,11 +744,27 @@ test('a review keeps the rest when one row cannot be read, and counts a repeat o
   assert.match(outcome.invalid[0].reason, /already in the file/);
 });
 
-test('a review of a Safe signer export carries its source and names every network', async () => {
-  const { records } = readBookFile([`${address},dudesahn`, `${other},wavey`].join('\n'));
-  const outcome = reviewImport(records.map(item => ({ ...item, source: 'safe:address-book' })), []);
-  assert.deepEqual(outcome.add.map(item => [item.scope, item.source]),
-    [['global', 'safe:address-book'], ['global', 'safe:address-book']]);
+// Both of Safe's files are Safe's own address book, so reading one says so.
+// Nothing downstream has to be told what it was reading.
+test('a Safe file says where its names came from, without being told', async () => {
+  for (const text of [[`${address},dudesahn`, `${other},wavey`].join('\n'),
+    ['address,name,chainId', `${address},dudesahn,1`, `${other},wavey,`].join('\n')]) {
+    const { records } = readBookFile(text);
+    assert.deepEqual(records.map(item => item.source), ['safe:address-book', 'safe:address-book']);
+    const outcome = reviewImport(records, []);
+    assert.ok(outcome.add.every(item => item.source === 'safe:address-book'));
+  }
+  // A signer export names no network, because a signer is a person.
+  const { records } = readBookFile(`${address},dudesahn`);
+  assert.equal(records[0].scope, 'global');
+});
+
+test('a source read from a file survives all the way into the book', async () => {
+  const { store } = harness();
+  await store.init();
+  const { records } = readBookFile(`${address},dudesahn`);
+  await store.merge(records);
+  assert.equal(store.state().records[0].source, 'safe:address-book');
 });
 
 // A review is a decision about one book. Switching books between reading the

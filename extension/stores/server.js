@@ -19,14 +19,23 @@ export function createServerBook({ url, token, fetch: fetcher = globalThis.fetch
         headers: { Authorization: `Bearer ${token}`, ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...headers },
       });
     } catch {
-      throw new Error('That server could not be reached. Your saved book is unchanged.');
+      // A read that never arrived changed nothing, and can say so. A write
+      // that never answered may well have landed: claiming otherwise is a
+      // guess dressed as a fact, and the store reconciles before retrying.
+      throw new Error(options.method
+        ? 'That server did not answer. Whether this landed is checked before anything is tried again.'
+        : 'That server could not be reached. Your saved book is unchanged.');
     }
     const mark = response.headers?.get?.('ETag') || null;
     // The book has not changed since the copy we hold, so there is no body.
     if (response.status === 304) return { unchanged: true, mark };
     let body;
     try { body = await response.json(); }
-    catch { throw new Error('That server returned an unreadable reply. Your saved book is unchanged.'); }
+    catch {
+      throw new Error(options.method
+        ? 'That server returned an unreadable reply. Whether this landed is checked before anything is tried again.'
+        : 'That server returned an unreadable reply. Your saved book is unchanged.');
+    }
     if (!response.ok) {
       const error = new Error(response.status === 401 ? 'That server rejected the access key. Paste its link again.' :
         typeof body.detail === 'string' ? body.detail : 'That server rejected the request.');

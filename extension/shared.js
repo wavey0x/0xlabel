@@ -224,6 +224,9 @@ export function readBookFile(text) {
     }
   }
   const records = rows.map(([address, name, chain], at) => ({
+    // Both of Safe's files are Safe's own address book, however they are laid
+    // out, so a record read from one says where it came from.
+    source: 'safe:address-book',
     // The line a spreadsheet shows this on, carried so that dropping an unnamed
     // row above a broken one cannot renumber the complaint about the broken one.
     row: at + (headerless ? 1 : 2),
@@ -275,19 +278,31 @@ export function validateImport(records) {
 // else, and comparing two names is a job for the editor rather than for the
 // busiest screen in the app. A row nobody can read does not stop the rest —
 // it is set aside with its reason, and the readable rows still come in.
+// A name already in a book covers an incoming one when it stands on the same
+// network, or on every network. A name on some other chain covers nothing
+// here: an address named on Ethereum is still nameless on Base, and leaving it
+// that way would be the import quietly deciding it knew better.
+export function alreadyNamed(index, { address, scope }) {
+  return index.has(recordKey(address, scope)) || index.has(recordKey(address, 'global'));
+}
+
 export function reviewImport(records, held = []) {
   if (!Array.isArray(records)) throw new Error('That file is not an address book.');
-  const known = new Set(held.map(record => record.address));
+  const known = new Set(held.map(record => recordKey(record.address, record.scope)));
   const seen = new Set();
   const add = [];
   const invalid = [];
   let kept = 0;
   records.forEach((item, at) => {
+    const row = item?.row ?? at + 1;
     let entry;
     try { entry = entryOf(item, seen); }
-    catch (failure) { invalid.push({ row: item?.row ?? at + 1, reason: failure.message }); return; }
-    if (known.has(entry.address)) kept += 1;
-    else add.push(entry);
+    catch (failure) { invalid.push({ row, reason: failure.message }); return; }
+    if (alreadyNamed(known, entry)) kept += 1;
+    // The row this came in on, carried through: a screen that lets one be left
+    // out needs to say which one, and a position in a list that is worked out
+    // again on every change is not a name for anything.
+    else add.push({ ...entry, row });
   });
   return { add, kept, invalid };
 }

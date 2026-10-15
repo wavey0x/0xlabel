@@ -1,4 +1,4 @@
-import { difference, findRecord, normalizeTags, normalizeScope, normalizeSource, parseAddress, recordKey, sameTags, validateImport } from './shared.js';
+import { alreadyNamed, difference, findRecord, normalizeTags, normalizeScope, normalizeSource, parseAddress, recordKey, sameTags, validateImport } from './shared.js';
 import { createRecords } from './records.js';
 import { createServerBook } from './stores/server.js';
 
@@ -274,14 +274,44 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
     return serial(async () => {
       if (book !== active) throw new Error('You switched address books. Review these names again.');
       if (unreadable) throw new Error('This address book could not be read, so nothing was added to it.');
+      // An import that may already have landed is checked, never repeated: the
+      // same reasoning as a single save, and the same machinery.
+      if (remote && needsRefresh) {
+        const answer = await remote.load();
+        const changes = answer.records ? difference(records, answer.records) : [];
+        if (changes.length) {
+          ({ revision } = await local.write(active, changes));
+          records = answer.records;
+        }
+        mark = answer.mark ?? mark;
+        syncedAt = now();
+        pulledAt = now();
+        needsRefresh = false;
+        await saveSync();
+        changed();
+      }
       const index = new Map(records.map(item => [recordKey(item.address, item.scope), item]));
+      // What was reviewed was an absence: every one of these was a name the
+      // book did not have. A save landing in between makes that review stale,
+      // so it is read again rather than written over.
+      const taken = wanted.filter(draft => alreadyNamed(index, draft));
+      if (taken.length) {
+        const stale = new Error('Some names changed. Review and import again.');
+        stale.status = 409;
+        throw stale;
+      }
       // Versions belong to the receiving book, and a file never carries one.
       const drafts = wanted;
       let saved;
       if (remote) {
-        saved = await remote.putMany(drafts.map(draft => ({ ...draft,
-          version: index.get(recordKey(draft.address, draft.scope))?.version ?? null })));
+        needsRefresh = true;
+        await saveSync();
+        // Named as the new records they were reviewed as being; a server that
+        // has since been given one of them refuses the batch whole.
+        saved = await remote.putMany(drafts.map(draft => ({ ...draft, version: null })));
         ({ revision } = await local.write(active, saved));
+        needsRefresh = false;
+        await saveSync();
       } else {
         ({ records: saved, revision } = await local.write(active, drafts));
       }
