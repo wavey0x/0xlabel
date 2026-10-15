@@ -1,5 +1,7 @@
-/* The browser supplies the popup frame; use one continuous surface inside it. */
-body { width: 320px; padding: 20px; background: radial-gradient(ellipse at top left, var(--0xtagger-accent-wash), transparent 70%), var(--0xtagger-panel); }
+/* A card on canvas, the same as the book page: the browser's frame cannot be
+   rounded or seen through, so the mat around the card is ours to colour. The
+   wash sits under the glass rather than in it, and reads through. */
+body { width: 320px; padding: 10px; background: radial-gradient(ellipse at top left, var(--0xtagger-accent-wash), transparent 70%), var(--0xtagger-canvas); }
 #sync { margin: 5px 0 12px; font-size: 10px; }
 #sync[data-offline="true"] { color: var(--0xtagger-warning); }
 .site { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-block: 1px solid var(--0xtagger-line); }
