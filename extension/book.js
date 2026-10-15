@@ -178,10 +178,9 @@ $('#refresh').onclick = async () => {
   } catch (error) { tell(error); }
   finally { $('#refresh').removeAttribute('aria-busy'); render(); }
 };
-$('#import').onclick = () => $('#import-file').click();
-$('#import-file').onchange = async event => {
-  const [file] = event.target.files;
-  event.target.value = '';
+// A file picked and a file dropped are the same file, so they meet here and
+// go to the same review.
+async function openFile(file) {
   if (!file) return;
   try {
     const { records, unnamed } = readBookFile(await file.text());
@@ -189,7 +188,36 @@ $('#import-file').onchange = async event => {
   } catch (error) {
     tell(error instanceof SyntaxError ? 'That file is not a 0xtagger export or a Safe address book.' : error);
   }
+}
+$('#import').onclick = () => $('#import-file').click();
+$('#import-file').onchange = event => {
+  const [file] = event.target.files;
+  event.target.value = '';
+  openFile(file);
 };
+
+// Dragging anything else over the page is somebody passing through, so only a
+// drag carrying files is answered. Enter and leave fire once per element the
+// pointer crosses, so they are counted rather than trusted one at a time.
+let carried = 0;
+const carriesFile = event => [...(event.dataTransfer?.types || [])].includes('Files');
+const showDrop = on => { carried = on ? carried : 0; $('#drop').hidden = !on; };
+addEventListener('dragenter', event => { if (carriesFile(event)) { carried += 1; showDrop(true); } });
+// Without this the browser leaves the page and opens the file on its own.
+addEventListener('dragover', event => { if (carriesFile(event)) event.preventDefault(); });
+addEventListener('dragleave', event => {
+  if (carriesFile(event) && (carried = Math.max(0, carried - 1)) === 0) showDrop(false);
+});
+addEventListener('drop', event => {
+  if (!carriesFile(event)) return;
+  event.preventDefault();
+  showDrop(false);
+  // One book is one decision. A handful dropped together is not an order to
+  // guess which, so the first is read and the rest are said out loud.
+  const files = [...event.dataTransfer.files];
+  if (files.length > 1) tell(`Reading ${files[0].name}. Drop one book at a time.`);
+  openFile(files[0]);
+});
 $('#export').onclick = () => {
   const blob = new Blob([JSON.stringify({ records: state.records }, null, 2) + '\n'], { type: 'application/json' });
   const url = URL.createObjectURL(blob);

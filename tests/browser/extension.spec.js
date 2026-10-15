@@ -396,6 +396,24 @@ test('installed extension: a file is reviewed before it lands, and a page cannot
     }, address);
     await expect(book.locator('#results tr')).toHaveCount(1);
 
+    // A file carried onto the page is the same file as one picked from a
+    // dialog, and the page itself is the target: no small area to find, and
+    // nothing on screen until something is actually being carried over it.
+    await expect(book.locator('#drop')).toBeHidden();
+    const carried = await book.evaluateHandle(text => {
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([text], 'carried.json', { type: 'application/json' }));
+      return transfer;
+    }, JSON.stringify({ records: [{ address: '0x' + '34'.repeat(20), scope: 'global', tags: ['Dropped in'] }] }));
+    await book.dispatchEvent('body', 'dragenter', { dataTransfer: carried });
+    await expect(book.locator('#drop')).toBeVisible();
+    await book.dispatchEvent('body', 'drop', { dataTransfer: carried });
+    await expect(book.locator('#drop')).toBeHidden();
+    await expect(book.locator('#review')).toBeVisible();
+    await expect(book.locator('#review-into')).toContainText('carried.json');
+    await expect(book.locator('#review-rows')).toContainText('Dropped in');
+    await book.locator('#cancel-import').click();
+
     // Safe's signer export: no header, no network, and a signer nobody named.
     const file = [`${address},Safe calls it this`, `${other},dudesahn`, `${'0x' + 'ef'.repeat(20)},`].join('\n');
     await book.locator('#import-file').setInputFiles({ name: '1-signers.csv', mimeType: 'text/csv', buffer: Buffer.from(file) });
