@@ -42,7 +42,7 @@ dialog::backdrop { background: var(--0xtagger-backdrop); backdrop-filter: blur(2
 .switch span { display: block; width: 14px; height: 14px; background: var(--0xtagger-on-accent); border-radius: 50%; }
 .switch[aria-checked="true"] { background: var(--0xtagger-accent-fill); }
 .switch[aria-checked="true"] span { transform: translateX(14px); }
-#location { anchor-name: --location; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex: 1; min-width: 0; text-align: left; font-weight: 750; color: var(--0xtagger-ink); background: var(--0xtagger-soft); padding: 8px 10px; }
+#location { anchor-name: --location; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex: 1; min-width: 0; text-align: left; font-weight: 650; color: var(--0xtagger-ink); background: var(--0xtagger-soft); padding: 8px 10px; }
 #location span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #location svg { width: 14px; height: 14px; flex-shrink: 0; color: var(--0xtagger-muted); }
 #location[aria-expanded="true"] svg { transform: rotate(180deg); }
@@ -52,7 +52,7 @@ dialog::backdrop { background: var(--0xtagger-backdrop); backdrop-filter: blur(2
 #location-menu button[aria-checked="true"] { background: var(--0xtagger-accent-soft); }
 #location-menu button span { flex: 1; min-width: 0; }
 #location-menu strong,#location-menu small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#location-menu strong { font-size: 12px; font-weight: 750; }
+#location-menu strong { font-size: 12px; font-weight: 650; }
 #location-menu small { font-size: 10px; font-weight: 400; color: var(--0xtagger-muted); }
 #location-menu svg { width: 14px; height: 14px; flex-shrink: 0; color: var(--0xtagger-accent); }
 #location-menu button[data-book]:not([aria-checked="true"]) > svg { visibility: hidden; }
@@ -66,9 +66,15 @@ dialog::backdrop { background: var(--0xtagger-backdrop); backdrop-filter: blur(2
 #location-menu .rename:hover { color: var(--0xtagger-ink); }
 #location-menu .rename svg { width: 14px; height: 14px; }
 #location-menu .editing { gap: 8px; padding: 4px 8px; }
-#location-menu .name-edit { padding: 5px 7px; font-size: 12px; font-weight: 750; }
+#location-menu .name-edit { padding: 5px 7px; font-size: 12px; font-weight: 650; }
 #location-menu .message { margin: 4px 8px 2px; }
-#location-menu .new-book { font-size: 11px; font-weight: 700; color: var(--0xtagger-accent); }
+/* What this list is for is choosing a book; the two below it make one. They
+   sit under a rule, in the weight of a label rather than an entry, and lead
+   with a plus where a book shows what it is kept on — so a glance at the
+   column says which rows are things and which are actions. */
+#location-menu .new-book { font-size: 11px; font-weight: 550; color: var(--0xtagger-muted); }
+#location-menu .new-book::before { content: '+'; flex-shrink: 0; width: 13px; font-size: 13px; font-weight: 500; line-height: 13px; text-align: center; }
+#location-menu .new-book:hover,#location-menu .new-book:focus-visible { color: var(--0xtagger-ink); }
 #location-menu .book-option + .new-book { margin-top: 4px; border-top: 1px solid var(--0xtagger-line); border-radius: 0 0 7px 7px; }
 .form-actions .spacer { flex: 1; }
 .quiet.danger { color: var(--0xtagger-warning); }
