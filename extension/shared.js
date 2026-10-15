@@ -21,10 +21,14 @@ export function query(root, selector) {
   return children;
 }
 
+// A server on this machine. Its hostname is a poor name for a book — nobody
+// calls their own computer 127.0.0.1 — so the books name it for what it is.
+export const isLoopback = hostname => ['localhost', '127.0.0.1', '[::1]'].includes(hostname);
+
 export function normalizeAPI(value) {
   const url = new URL(String(value).trim());
   if (url.username || url.password || url.search || url.hash) throw new Error('Use an API address without credentials, a query, or a fragment.');
-  const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+  const loopback = isLoopback(url.hostname);
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) throw new Error('Remote APIs require HTTPS. HTTP is allowed only on localhost.');
   return url.origin + url.pathname.replace(/\/+$/, '');
 }

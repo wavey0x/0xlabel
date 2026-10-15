@@ -81,11 +81,15 @@ export function dismissDialog(dialog, close) {
 // One control for the book in use, and the list of books it opens. A book is
 // renamed in its own row, so a name has nowhere else to be changed. Editing is
 // a local swap of that row: the list is rebuilt only once the edit is over.
-export function bookPicker({ choose, add, rename }) {
+export function bookPicker({ choose, create, connect, rename }) {
   const trigger = $('#location');
   const menu = $('#location-menu');
   let latest = emptyState;
   let editing = null;
+  // A book just made on this device opens straight into its own name, in the
+  // row it was made in: one field is not worth a dialog, and the name is
+  // editable there for the rest of its life anyway.
+  let naming = null;
   const find = id => latest.books.find(item => item.id === id);
   const mark = item => `<i class="kept">${item.kind === 'server' ? SERVER_ICON : DEVICE_ICON}</i>`;
 
@@ -117,8 +121,16 @@ export function bookPicker({ choose, add, rename }) {
     const option = event.target.closest('button');
     if (!option) return;
     if (option.dataset.rename) { startEdit(option.dataset.rename); return; }
+    if (option.dataset.make) {
+      // The menu stays open: the list grows a row and that row is the name.
+      // Drawn again on the way out, because the book may have arrived before
+      // this knew what to call it — and if it has not yet, the draw that
+      // brings it finds the note still waiting.
+      create().then(book => { naming = book; draw(); }).catch(() => {});
+      return;
+    }
     menu.hidePopover();
-    if (option.dataset.book) choose(option.dataset.book); else add();
+    if (option.dataset.book) choose(option.dataset.book); else connect();
   });
 
   function makeRoom() {
@@ -208,102 +220,132 @@ export function bookPicker({ choose, add, rename }) {
     trigger.setAttribute('aria-label', `Address book: ${latest.bookName}`);
     // A row being renamed owns the list until the name is settled.
     if (editing) return;
-    const create = document.createElement('button');
-    create.type = 'button';
-    create.className = 'new-book';
-    create.setAttribute('role', 'menuitem');
-    create.textContent = '+ Add an address book';
-    menu.replaceChildren(...latest.books.map(optionRow), create);
+    const actions = [['make', 'New on this device'], ['connect', 'Connect to a server']].map(([what, label]) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'new-book';
+      button.dataset[what] = 'yes';
+      button.setAttribute('role', 'menuitem');
+      button.textContent = label;
+      return button;
+    });
+    menu.replaceChildren(...latest.books.map(optionRow), ...actions);
     makeRoom();
+    // Drawn first, then opened for its name: the row has to exist to be typed in.
+    if (naming && find(naming)) { const id = naming; naming = null; startEdit(id); }
   }
   return state => { latest = state; draw(); };
 }
 
 // Making a book is the one moment its storage is chosen, and the one moment
 // another book's addresses are copied into it.
-export function newBookForm({ container, state, created, busy, error, visible = () => {} }) {
+export function connectForm({ container, state, created, busy, error, visible = () => {} }) {
   const modal = container instanceof HTMLDialogElement;
   let pending = false;
-  let named = false;
-  container.innerHTML = `<header class="view-heading"><h2>New address book</h2><button type="button" class="quiet icon" data-cancel aria-label="Close">×</button></header>
-    <form id="new-book" novalidate>
-      <input id="book-name" maxlength="40" autocomplete="off" aria-label="Address book name" placeholder="Address book name">
-      <fieldset class="choices">
-        <legend>Where to keep it</legend>
-        <label><input type="radio" name="where" value="device" checked><i class="kept">${DEVICE_ICON}</i><strong>On this device</strong><small>Nothing leaves your computer.</small></label>
-        <label><input type="radio" name="where" value="server"><i class="kept">${SERVER_ICON}</i><strong>On a server</strong><small>Share it between your devices.</small></label>
-      </fieldset>
-      <div id="server-fields">
-        <label for="connect-link">Link from your server</label>
-        <input id="connect-link" type="text" autocomplete="off" spellcheck="false" placeholder="http://127.0.0.1:8712#key=…">
-        <p class="muted setup-note">Run <code>uv run 0xtagger</code> and copy the line it prints.</p>
-      </div>
-      <label id="copy-row" class="check"><input type="checkbox" id="copy-current"> <span></span></label>
+  let checking;
+  // The book that was open when this started, held because the offer at the
+  // end is about copying out of it, and by then it is no longer the open one.
+  let came = null;
+  container.innerHTML = `<header class="view-heading"><h2>Connect a server</h2><button type="button" class="quiet icon" data-cancel aria-label="Close">\u00d7</button></header>
+    <form id="connect-book" novalidate>
+      <label for="connect-link">Server link</label>
+      <input id="connect-link" type="text" autocomplete="off" spellcheck="false" autocorrect="off" autocapitalize="off" placeholder="http://127.0.0.1:8712#key=\u2026">
       <p id="server-error" class="message" role="alert"></p>
-      <footer class="form-actions"><button type="button" class="quiet" data-cancel>Cancel</button><button id="connect" type="submit" class="primary">Create</button></footer>
-    </form>`;
+      <details class="setup-note"><summary>Need a link?</summary>
+        <p class="muted">Run <code>uv run 0xtagger</code> and copy the line it prints.</p></details>
+      <footer class="form-actions"><button type="button" class="quiet" data-cancel>Cancel</button><button id="connect" type="submit" class="primary">Connect</button></footer>
+    </form>
+    <div id="copy-offer" hidden>
+      <p id="copy-ask"></p>
+      <footer class="form-actions"><button type="button" class="quiet" data-cancel>Not now</button><button id="copy-in" type="button" class="quiet accent">Copy</button></footer>
+    </div>`;
   const get = selector => container.querySelector(selector);
   const form = get('form');
-  const kind = () => form.querySelector('input[name="where"]:checked').value;
-  const opened = () => modal ? container.open : !container.hidden;
-  function refit() {
-    get('#server-fields').hidden = kind() !== 'server';
-    const source = state();
-    const copyable = source.records.length > 0;
-    get('#copy-row').hidden = !copyable;
-    get('#copy-row').querySelector('span').textContent = `Start with a copy of ${source.bookName}`;
-  }
+  const opened = () => (modal ? container.open : !container.hidden);
+  const show = offer => { form.hidden = offer; get('#copy-offer').hidden = !offer; };
   function close() {
     if (modal) container.close(); else container.hidden = true;
-    form.reset(); named = false; get('#server-error').textContent = '';
+    // The link carries the key to a book. It has no reason to outlive the
+    // moment it was used in.
+    clearTimeout(checking); form.reset(); get('#server-error').textContent = '';
+    came = null; show(false);
     visible(false); $('#location').focus();
   }
   container.querySelectorAll('[data-cancel]').forEach(button => { button.onclick = close; });
   if (modal) dismissDialog(container, close);
   else container.addEventListener('keydown', event => { if (event.key === 'Escape') { event.preventDefault(); close(); } });
-  form.addEventListener('change', refit);
-  get('#book-name').oninput = () => { named = true; };
-  // The hostname is almost always the name people would have typed anyway.
+  // Read as it is typed, never reached for: the link is checked for being one,
+  // and nothing is sent anywhere until Connect says so. Complaining mid-word
+  // helps nobody, so the field is given a moment to be finished in first.
   get('#connect-link').oninput = () => {
-    if (named) return;
-    try { get('#book-name').value = new URL(parseConnectLink(get('#connect-link').value).url).hostname; }
-    catch { get('#book-name').value = ''; }
+    clearTimeout(checking);
+    get('#server-error').textContent = '';
+    const value = get('#connect-link').value.trim();
+    if (!value) return;
+    checking = setTimeout(() => {
+      try { parseConnectLink(value); }
+      catch (failure) { get('#server-error').textContent = failure.message; }
+    }, 400);
   };
   form.onsubmit = async event => {
     event.preventDefault();
     if (pending) return;
     let where;
-    try {
-      where = kind() === 'server'
-        ? { kind: 'server', ...parseConnectLink(get('#connect-link').value) }
-        : { kind: 'device' };
-    } catch (failure) { get('#server-error').textContent = failure.message; return; }
-    const permission = where.kind === 'server'
-      ? chrome.permissions.request({ origins: [hostPermission(where.url)] })
-      : Promise.resolve(true);
-    pending = true; busy(true); get('#connect').disabled = true; get('#connect').textContent = 'Creating…';
+    try { where = { kind: 'server', ...parseConnectLink(get('#connect-link').value) }; }
+    catch (failure) { get('#server-error').textContent = failure.message; return; }
+    // Asked for before anything is awaited: Chrome grants access only while
+    // the click that asked for it is still the reason, and the first await
+    // ends that. Everything else can wait for the answer.
+    const permission = chrome.permissions.request({ origins: [hostPermission(where.url)] });
+    clearTimeout(checking);
+    pending = true; busy(true); get('#connect').disabled = true; get('#connect').textContent = 'Connecting\u2026';
     get('#server-error').textContent = '';
     form.querySelectorAll('input').forEach(input => { input.disabled = true; });
     try {
       if (!await permission) throw new Error('Access to that server was not granted.');
-      await rpc({ type: 'AddBook', name: get('#book-name').value, storage: where,
-        copyFrom: get('#copy-current').checked && !get('#copy-row').hidden ? state().activeBook : null });
+      came = { name: state().bookName, records: state().records };
+      const result = await rpc({ type: 'AddBook', name: '', storage: where });
       created();
-      if (opened()) close();
+      // The book opening is the proof it worked, so nothing else says so. An
+      // empty one is the only moment copying into it is worth offering, and it
+      // is offered here rather than remembered about the book: asked once,
+      // answered once, and never raised again by itself.
+      const fresh = (await rpc({ type: 'State' })).state;
+      if (!result?.opened && !fresh.records.length && came.records.length) {
+        const many = came.records.length;
+        get('#copy-ask').textContent = `${fresh.bookName} is empty. Copy ${many.toLocaleString()} address${many === 1 ? '' : 'es'} from ${came.name}?`;
+        get('#copy-offer').dataset.book = fresh.activeBook;
+        form.reset(); show(true); get('#copy-in').focus();
+      } else if (opened()) close();
     } catch (failure) {
       if (opened()) get('#server-error').textContent = failure.message; else error(failure);
     } finally {
-      pending = false; busy(false); get('#connect').disabled = false; get('#connect').textContent = 'Create';
+      pending = false; busy(false); get('#connect').disabled = false; get('#connect').textContent = 'Connect';
       form.querySelectorAll('input').forEach(input => { input.disabled = false; });
+    }
+  };
+  get('#copy-in').onclick = async () => {
+    if (pending || !came) return;
+    pending = true; busy(true); get('#copy-in').disabled = true; get('#copy-in').textContent = 'Copying\u2026';
+    try {
+      // The same write a file gets: one transaction, bound to the book it was
+      // offered for, refusing anything that arrived in the meantime.
+      await rpc({ type: 'Import', records: came.records, book: get('#copy-offer').dataset.book });
+      created();
+      close();
+    } catch (failure) {
+      if (opened()) get('#copy-ask').textContent = failure.message; else error(failure);
+    } finally {
+      pending = false; busy(false); get('#copy-in').disabled = false; get('#copy-in').textContent = 'Copy';
     }
   };
   return {
     open() {
       if (pending) return;
-      form.reset(); named = false; get('#server-error').textContent = '';
-      refit();
+      clearTimeout(checking); form.reset(); get('#server-error').textContent = '';
+      came = null; show(false);
       if (modal) container.showModal(); else container.hidden = false;
-      visible(true); get('#book-name').focus();
+      visible(true); get('#connect-link').focus();
     },
   };
 }

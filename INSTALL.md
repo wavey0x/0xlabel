@@ -54,7 +54,9 @@ tags.example.com {
 
 Use a reachable hostname and valid certificate. If serving under a path, pass the full base URL to `--public-url` and strip that path at the proxy. Requests reject redirects, so use the API's final URL.
 
-The helper prints one line. In either view, open the address book menu, choose **+ Add an address book**, and paste it; the name fills in from the server's hostname. The key travels in the link's fragment, which your browser never sends to the server. Keep the line private.
+The helper prints one line. In either view, open the address book menu, choose **Connect to a server**, and paste it. The book is named for where it is kept — **Local server** for one on this machine, the hostname otherwise — and can be renamed in its own row afterwards. A server that is already one of your books opens rather than being added twice. The key travels in the link's fragment, which your browser never sends to the server, and the field is cleared as soon as it has been used. Keep the line private.
+
+Connecting and copying are separate: a book opens as it is. If it turns out to be empty and the one you were looking at was not, you are asked once whether to carry those addresses over, and the copy is the same single transaction a file import gets.
 
 Books are separate and switching between them changes neither, so the book on your device stays exactly as it was while you use one kept on a server. A book is renamed in its own row in the list: hover it and click the pencil, or press F2 with the row focused. The trash button beside the book name removes the book that is open — removing one kept on a server only forgets it here, while removing one kept on this device deletes its addresses. **Import** in the full-page book carries addresses from an exported file into the book that is open.
 

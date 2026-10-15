@@ -34,7 +34,7 @@ Run a server, with Python 3.10+ and [uv](https://docs.astral.sh/uv/getting-start
 uv run 0xtagger
 ```
 
-Open the address book menu → **+ Add an address book**, then paste the link the server prints.
+Open the address book menu → **Connect to a server**, then paste the link the server prints.
 
 ![The compact translucent editor adding a tag directly to a transfer list](docs/images/editor.png)
 

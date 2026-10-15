@@ -35,7 +35,6 @@ textarea { resize: vertical; font: 11px/1.5 ui-monospace, monospace; }
 form > input,form > textarea,details > input { margin-bottom: 10px; }
 summary { cursor: pointer; color: var(--0xtagger-muted); font-size: 11px; padding: 3px 0; }
 details[open] summary { margin-bottom: 8px; }
-.setup-note { margin: 8px 0 0; }
 .form-actions { justify-content: flex-end; margin-top: 12px; }
 dialog.panel { width: 360px; max-width: calc(100vw - 24px); max-height: calc(100vh - 24px); overflow: auto; color: var(--0xtagger-ink); }
 dialog::backdrop { background: var(--0xtagger-backdrop); backdrop-filter: blur(2px); }
@@ -71,28 +70,17 @@ dialog::backdrop { background: var(--0xtagger-backdrop); backdrop-filter: blur(2
 #location-menu .message { margin: 4px 8px 2px; }
 #location-menu .new-book { font-size: 11px; font-weight: 700; color: var(--0xtagger-accent); }
 #location-menu .book-option + .new-book { margin-top: 4px; border-top: 1px solid var(--0xtagger-line); border-radius: 0 0 7px 7px; }
-fieldset.choices { display: grid; gap: 8px; margin: 0 0 4px; padding: 0; border: 0; }
-fieldset.choices legend { padding: 0; font-size: 11px; font-weight: 700; color: var(--0xtagger-muted); }
-fieldset.choices label { display: grid; grid-template-columns: auto auto 1fr; gap: 2px 8px; align-items: center; font-size: 12px; font-weight: 700; cursor: pointer; }
-fieldset.choices input { grid-row: span 2; accent-color: var(--0xtagger-accent); }
-fieldset.choices .kept { grid-row: span 2; display: flex; width: 14px; height: 14px; color: var(--0xtagger-muted); }
-fieldset.choices input:checked + .kept { color: var(--0xtagger-accent); }
-fieldset.choices small { font-size: 10px; font-weight: 400; color: var(--0xtagger-muted); }
-label.check { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 600; cursor: pointer; }
-label.check input { accent-color: var(--0xtagger-accent); }
 .form-actions .spacer { flex: 1; }
 .quiet.danger { color: var(--0xtagger-warning); }
 .quiet.danger:disabled { color: var(--0xtagger-muted); }
 /* One rhythm for the whole form: fields are spaced apart, and the parts of a
    single field stay close to each other. */
 dialog.panel { padding: 16px; }
-#new-book label { margin-bottom: 0; }
-#new-book > * + * { margin-top: 14px; }
-#new-book > .form-actions { margin-top: 18px; }
-#new-book label + input, #server-fields > * + * { margin-top: 5px; }
-#server-fields > .setup-note { margin-top: 7px; }
-#new-book .message:empty { display: none; }
-.setup-note { margin: 0; font-size: 10px; line-height: 1.5; color: var(--0xtagger-muted); }
+#connect-book label { margin-bottom: 0; }
+#connect-book > * + * { margin-top: 10px; }
+#connect-book > .form-actions, #copy-offer > .form-actions { margin-top: 18px; }
+#connect-book label + input { margin-top: 5px; }
+#connect-book .message:empty { display: none; }
 .setup-note code { font-size: 10px; }
 #location-menu .kept { display: flex; flex-shrink: 0; width: 13px; height: 13px; color: var(--0xtagger-muted); }
 #location-menu button[aria-checked="true"] .kept { color: var(--0xtagger-accent); }
@@ -109,3 +97,12 @@ dialog.panel { padding: 16px; }
    is both the wrong thing to say and the reason the tick had nothing to be
    read against — the fill under it washed out to the panel behind. */
 button.confirmed:disabled { opacity: 1; }
+
+/* One disclosure pattern across the app: the same shape the import review
+   uses for rows it could not read. */
+.setup-note { margin-top: 10px; font-size: 11px; }
+.setup-note summary { cursor: pointer; color: var(--0xtagger-muted); font-weight: 600; }
+.setup-note p { margin: 6px 0 0; }
+#copy-ask { margin: 0 0 12px; font-size: 13px; line-height: 1.45; }
+/* An offer, not a demand: accent in the text, not a filled button. */
+.quiet.accent { color: var(--0xtagger-accent); font-weight: 700; }

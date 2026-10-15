@@ -160,28 +160,57 @@ test('books are separate, and switching between them changes neither', async () 
   assert.deepEqual(remote().map(entry => entry.tags[0]), ['Shared'], 'the server holds only its own book');
 });
 
-test('a server book is named after its host unless it is given a name', async () => {
+// Nobody calls their own computer 127.0.0.1, so a book kept on it is named
+// for what it is. A book somewhere else is named for where that is.
+test('a server book is named for its host, and one kept here for being here', async () => {
+  const near = harness();
+  await near.store.init();
+  await near.store.add({ storage: onServer });
+  assert.equal(near.store.state().bookName, 'Local server');
+
+  const far = harness();
+  await far.store.init();
+  await far.store.add({ storage: { kind: 'server', url: 'https://book.example', token } });
+  assert.equal(far.store.state().bookName, 'book.example');
+});
+
+// Two servers on this machine are two books, and the second is not refused
+// for wanting the same obvious name — it is told apart by the port, which is
+// the only thing that tells them apart anyway.
+test('a second local server gets a name of its own', async () => {
   const { store } = harness();
   await store.init();
   await store.add({ storage: onServer });
-  assert.equal(store.state().bookName, '127.0.0.1');
+  await store.add({ storage: { kind: 'server', url: 'http://127.0.0.1:8713', token } });
+  assert.deepEqual(store.state().books.map(item => item.name),
+    ['default', 'Local server', '127.0.0.1:8713']);
 });
 
-test('a new book can start as a copy, and will not be poured into one already in use', async () => {
-  const copied = harness({ remote: [] });
-  await copied.store.init();
-  const device = copied.store.state().activeBook;
-  await write(copied.store, ['Treasury']);
-  await copied.store.add({ name: 'Team', storage: onServer, copyFrom: device });
-  assert.deepEqual(copied.remote().map(entry => entry.tags[0]), ['Treasury']);
+// Connecting and copying are two things. A book is opened as it is, and what
+// was in the last one is carried over afterwards, by the same write a file
+// gets: into the book it was offered for, refusing anything already named.
+test('what was in the last book is carried into an empty one it connects to', async () => {
+  const { store, remote } = harness({ remote: [] });
+  await store.init();
+  await write(store, ['Treasury'], { source: 'safe:address-book' });
+  const came = store.state().records;
+  await store.add({ storage: onServer });
+  assert.equal(store.state().records.length, 0, 'the book opens as it is');
 
-  const occupied = harness({ remote: [{ address: other, scope: 'global', tags: ['Theirs'], version: 'one' }] });
-  await occupied.store.init();
-  await write(occupied.store, ['Mine']);
-  await assert.rejects(
-    occupied.store.add({ name: 'Team', storage: onServer, copyFrom: occupied.store.state().activeBook }),
-    /already holds a book/);
-  assert.equal(occupied.store.state().books.length, 1, 'a refused book is not half made');
+  await store.merge(came, store.state().activeBook);
+  assert.deepEqual(remote().map(entry => entry.tags[0]), ['Treasury']);
+  assert.equal(store.state().records[0].source, 'safe:address-book', 'origins travel with the names');
+});
+
+test('carrying a book over never writes across a name the far side already has', async () => {
+  const { store } = harness({ remote: [{ address, scope: 'global', tags: ['Theirs'], version: 'one' }] });
+  await store.init();
+  await write(store, ['Mine']);
+  const came = store.state().records;
+  await store.add({ storage: onServer });
+  assert.deepEqual(store.state().records.map(item => item.tags[0]), ['Theirs']);
+  await assert.rejects(store.merge(came, store.state().activeBook), /Some names changed/);
+  assert.deepEqual(store.state().records.map(item => item.tags[0]), ['Theirs']);
 });
 
 test('a draft written for one book is never saved into another', async () => {
@@ -523,11 +552,19 @@ test('two address books cannot share a name, however they are kept', async () =>
   assert.deepEqual(store.state().books.map(item => item.name), ['Work', 'Team']);
 });
 
-test('the same server is never two address books', async () => {
+// A server already in the books is one to open, not one to add again: it is
+// the same book either way, and refusing was a dead end.
+test('connecting to a server already in the books opens it', async () => {
   const { store } = harness();
   await store.init();
-  await store.add({ name: 'Team', storage: onServer });
-  await assert.rejects(store.add({ name: 'Team again', storage: onServer }), /already one of your address books/);
+  const { book } = await store.add({ name: 'Team', storage: onServer });
+  await store.use(store.state().books.find(item => item.id !== book).id);
+
+  const again = await store.add({ name: 'Team again', storage: onServer });
+  assert.deepEqual(again, { book, opened: true });
+  assert.equal(store.state().books.length, 2, 'and does not make a second one');
+  assert.equal(store.state().activeBook, book, 'and is the book you are looking at');
+  assert.equal(store.state().bookName, 'Team', 'keeping the name it already had');
 });
 
 test('a name we chose, rather than one you typed, gives way to a free one', async () => {
@@ -783,11 +820,4 @@ test('an import lands in the book it was reviewed against, or it does not land',
 });
 
 // A copy of a book is the same book somewhere else, origins included.
-test('copying a book carries where each name came from', async () => {
-  const { store } = harness();
-  await store.init();
-  await write(store, ['Treasury'], { source: 'safe:address-book' });
-  const from = store.state().activeBook;
-  await store.add({ name: 'Copy', storage: onServer, copyFrom: from });
-  assert.equal(store.state().records[0].source, 'safe:address-book');
-});
+

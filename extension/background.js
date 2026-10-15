@@ -133,7 +133,7 @@ async function handle(message, sender) {
         throw new Error('Allow access to that server first.');
       }
     }
-    return store.add({ name: message.name, storage: where, copyFrom: message.copyFrom });
+    return store.add({ name: message.name, storage: where });
   }
   if (message.type === 'Import') return store.merge(message.records, message.book);
   // A website is asked what names it keeps; it never says what to do with

@@ -78,21 +78,35 @@ test('installed extension: a book that works with no setup, moving it to a serve
     await expect(website.locator('#wallet')).toHaveAttribute('data-0xtagger-tag', 'Kept on this device');
     expect(await popup.evaluate(() => window.heard)).toEqual(['record']);
 
-    // Moving the book onto a server takes one pasted line and nothing else.
-    const addBook = async (url, key, name) => {
+    // Connecting a server takes one pasted line and nothing else: no name to
+    // invent before seeing what is there, and no decision about copying.
+    const addBook = async (url, key) => {
       await popup.locator('#location').click();
-      await popup.getByRole('menuitem', { name: /Add an address book/ }).click();
-      await popup.getByRole('radio', { name: /On a server/ }).check();
+      await popup.getByRole('menuitem', { name: 'Connect to a server' }).click();
       await popup.locator('#connect-link').fill(`${url}#key=${key}`);
-      if (name) await popup.locator('#book-name').fill(name);
       await popup.locator('#connect').click();
+    };
+    // A book is named in its own row, wherever it is kept.
+    const renameBook = async name => {
+      await popup.locator('#location').click();
+      await popup.locator('.book-option:has([aria-checked="true"]) .rename').click();
+      await popup.locator('.name-edit').fill(name);
+      await popup.locator('.name-edit').press('Enter');
+      // The list stays open after a rename, so it is put away deliberately.
+      await expect(popup.locator('.name-edit')).toHaveCount(0);
+      await popup.keyboard.press('Escape');
+      await expect(popup.locator('#location-menu')).toBeHidden();
     };
     const switchTo = async name => {
       await popup.locator('#location').click();
       await popup.getByRole('menuitemradio', { name: new RegExp(name) }).click();
     };
-    await addBook(local, 'test-only-token', 'Local');
+    await addBook(local, 'test-only-token');
+    // The server already holds a book, so nothing is offered and it just opens,
+    // named for being on this machine until it is called something else.
     await expect(popup.locator('#server')).toBeHidden({ timeout: 10000 });
+    await expect(popup.locator('#location')).toHaveText('Local server');
+    await renameBook('Local');
     await expect(popup.locator('#location')).toHaveText('Local');
     // The new book holds what its server holds, and nothing was copied into it.
     expect((await (await api.get(local+'/tags')).json()).records).toEqual([localRecord]);
@@ -134,14 +148,21 @@ test('installed extension: a book that works with no setup, moving it to a serve
     await foreign.close(); await website.bringToFront();
 
     // A key the server refuses never becomes a book.
-    await addBook(remote, 'wrong-token', 'Remote');
+    await addBook(remote, 'wrong-token');
     await expect(popup.locator('#server-error')).toContainText('rejected');
     await popup.locator('#connect-link').press('Escape');
     await expect(popup.locator('#server')).toBeHidden();
     await expect(popup.locator('#location')).toHaveText('Local');
     // Books are separate: a second one shows what its own server holds.
-    await addBook(remote, 'test-only-token', 'Remote');
+    await addBook(remote, 'test-only-token');
+    // This one is empty and the last one was not, which is the only moment
+    // carrying names over is worth asking about. Asked once, here, and never
+    // raised again by itself.
+    await expect(popup.locator('#copy-ask')).toContainText('is empty. Copy 1 address from Local?');
+    await popup.getByRole('button', { name: 'Not now' }).click();
     await expect(popup.locator('#server')).toBeHidden({ timeout: 10000 });
+    expect((await (await api.get(remote+'/tags')).json()).records).toEqual([]);
+    await renameBook('Remote');
     await expect(popup.locator('#location')).toHaveText('Remote');
     // A browser popup is only as tall as its document, so an open menu has to
     // fit inside it: every book stays reachable rather than clipped by the frame.
@@ -472,6 +493,32 @@ test('installed extension: a file is reviewed before it lands, and a page cannot
     // the answer. The extension declares no externally_connectable, so a page
     // has nothing to send with, and the worker refuses these verbs from
     // anything that is not one of its own views regardless.
+    // Making a book on this device is one click and a name typed where the
+    // name lives. No dialog stands between the two.
+    await book.locator('#location').click();
+    await book.getByRole('menuitem', { name: 'New on this device' }).click();
+    await expect(book.locator('.name-edit')).toBeFocused();
+    await book.locator('.name-edit').fill('Scratch');
+    await book.locator('.name-edit').press('Enter');
+    await expect(book.locator('#location')).toHaveText('Scratch');
+    await expect(book.locator('#results tr')).toHaveCount(0);
+    await book.keyboard.press('Escape');
+
+    // A link is read as it is typed and never reached for: a bad one is named
+    // before Connect, and Connect is the only thing that goes anywhere.
+    await book.locator('#location').click();
+    await book.getByRole('menuitem', { name: 'Connect to a server' }).click();
+    await expect(book.locator('#connect-link')).toBeFocused();
+    await book.locator('#connect-link').fill('http://127.0.0.1:8712');
+    await expect(book.locator('#server-error')).toContainText('no access key');
+    await expect(book.locator('#location')).toHaveText('Scratch');
+    // The key goes with the dialog rather than lingering in the field.
+    await book.getByRole('button', { name: 'Cancel' }).click();
+    await book.locator('#location').click();
+    await book.getByRole('menuitem', { name: 'Connect to a server' }).click();
+    await expect(book.locator('#connect-link')).toHaveValue('');
+    await book.keyboard.press('Escape');
+
     const site = await context.newPage();
     await site.goto('http://127.0.0.1:8719/tests/fixtures/generic.html');
     expect(await site.evaluate(() => typeof chrome === 'undefined' || !chrome.runtime?.sendMessage)).toBe(true);

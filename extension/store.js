@@ -1,4 +1,4 @@
-import { alreadyNamed, difference, findRecord, normalizeTags, normalizeScope, normalizeSource, parseAddress, recordKey, sameTags, validateImport } from './shared.js';
+import { alreadyNamed, difference, findRecord, isLoopback, normalizeTags, normalizeScope, normalizeSource, parseAddress, recordKey, sameTags, validateImport } from './shared.js';
 import { createRecords } from './records.js';
 import { createServerBook } from './stores/server.js';
 
@@ -186,30 +186,26 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
 
   // Making a book is the only moment its storage is chosen, and the only moment
   // one book's addresses are ever copied into another.
-  async function add({ name, storage: where, copyFrom }) {
+  async function add({ name, storage: where }) {
     if (!where || (where.kind !== 'device' && where.kind !== 'server')) throw new Error('Choose where to keep this book.');
     if (where.kind === 'server' && (!where.url || !where.token)) throw new Error('Paste the link your server printed.');
+    // A server already in the books is one to open, not one to add again. It
+    // is the same book either way, and refusing was a dead end.
+    if (where.kind === 'server') {
+      const already = books.find(other => other.storage.url === where.url);
+      if (already) { await use(already.id); return { book: already.id, opened: true }; }
+    }
     return serial(async () => {
       if (books.length >= 20) throw new Error('That is as many address books as 0xtagger keeps.');
-      if (where.kind === 'server' && books.some(other => other.storage.url === where.url)) {
-        throw new Error('That server is already one of your address books.');
-      }
       const chosen = cleanName(name, '');
       if (chosen && taken(chosen)) throw new Error(`You already have an address book called ${chosen}.`);
       const host = where.kind === 'server' ? new URL(where.url) : null;
-      const item = { id: uuid(), name: chosen || freeName(host ? [host.hostname, host.host] : ['Address book']), storage: where };
+      const names = !host ? ['Address book']
+        : isLoopback(host.hostname) ? ['Local server', host.host] : [host.hostname, host.host];
+      const item = { id: uuid(), name: chosen || freeName(names), storage: where };
       const candidate = server(item);
       const answer = candidate ? await candidate.load() : { records: [], mark: null };
-      if (copyFrom && answer.records.length) throw new Error('That server already holds a book, so nothing was copied into it.');
       let held = answer.records;
-      if (copyFrom) {
-        const source = entry(copyFrom);
-        if (!source) throw new Error('There is nothing to copy.');
-        const from = source.id === active ? records : (await local.load(source.id)).records;
-        // The receiving book issues its own versions, wherever it is kept.
-        const wanted = from.map(({ address, scope, tags, source }) => ({ address, scope, tags, ...(source ? { source } : {}) }));
-        held = candidate ? await candidate.putMany(wanted.map(record => ({ ...record, version: null }))) : wanted;
-      }
       if (held.length || !candidate) ({ records: held, revision } = await local.write(item.id, held));
       books = [...books, item];
       active = item.id;
@@ -218,13 +214,13 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
       needsRefresh = false;
       // The new book was just read to make it; reading it again proves nothing.
       records = held.filter(Boolean);
-      mark = copyFrom ? null : answer.mark;
+      mark = answer.mark;
       pulledAt = now();
       syncedAt = candidate ? now() : null;
       await saveBooks();
       await saveSync();
       changed();
-      return {};
+      return { book: item.id };
     });
   }
 

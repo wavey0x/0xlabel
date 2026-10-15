@@ -1,5 +1,5 @@
 import { hostPermission } from './shared.js';
-import { $, rpc, emptyState, currentSnapshot, syncText, bookPicker, newBookForm, watchBook, tooltips } from './ui.js';
+import { $, rpc, emptyState, currentSnapshot, syncText, bookPicker, connectForm, watchBook, tooltips } from './ui.js';
 
 let state = emptyState;
 let sites = {};
@@ -9,12 +9,19 @@ let busy = false;
 let siteBusy = false;
 let health = null;
 const tell = error => { $('#message').textContent = error?.message || String(error || ''); };
-const setup = newBookForm({ container: $('#server'), state: () => state, created: render,
+const setup = connectForm({ container: $('#server'), state: () => state, created: render,
   busy: value => { busy = value; render(); }, error: tell,
   visible: open => { $('#home').hidden = open; tell(''); },
 });
 const picker = bookPicker({
-  add: () => setup.open(),
+  connect: () => setup.open(),
+  // One field is not worth a dialog: the book is made and its row opens on its
+  // own name. A refusal — twenty books already — lands where every other one
+  // does, on the page behind the menu.
+  create: async () => {
+    try { const { book } = await rpc({ type: 'AddBook', name: '', storage: { kind: 'device' } }); tell(''); return book; }
+    catch (error) { tell(error); throw error; }
+  },
   choose: async book => {
     try { await rpc({ type: 'Use', book }); tell(''); } catch (error) { tell(error); }
   },

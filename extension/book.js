@@ -1,4 +1,4 @@
-import { $, rpc, emptyState, currentSnapshot, syncText, bookPicker, newBookForm, watchBook, dismissDialog, tooltips } from './ui.js';
+import { $, rpc, emptyState, currentSnapshot, syncText, bookPicker, connectForm, watchBook, dismissDialog, tooltips } from './ui.js';
 import { parseAddress, normalizeScope, readBookFile, reviewImport, sourceName } from './shared.js';
 import { scopeName } from './networks.js';
 import { checksumAddress } from './checksum.js';
@@ -17,11 +17,18 @@ const ready = Promise.all([editorStyles(shadow), rpc({ type: 'State' })]);
 const theme = matchMedia('(prefers-color-scheme: dark)');
 const applyTheme = () => $('#editor-host').toggleAttribute('data-dark', theme.matches);
 theme.addEventListener('change', applyTheme); applyTheme();
-const setup = newBookForm({ container: $('#server'), state: () => state, created: render,
+const setup = connectForm({ container: $('#server'), state: () => state, created: render,
   busy: value => { busy = value; render(); }, error: tell,
 });
 const picker = bookPicker({
-  add: () => setup.open(),
+  connect: () => setup.open(),
+  // One field is not worth a dialog: the book is made and its row opens on its
+  // own name. A refusal — twenty books already — lands where every other one
+  // does, on the page behind the menu.
+  create: async () => {
+    try { const { book } = await rpc({ type: 'AddBook', name: '', storage: { kind: 'device' } }); tell(''); return book; }
+    catch (error) { tell(error); throw error; }
+  },
   choose: async book => {
     try { await rpc({ type: 'Use', book }); tell(''); } catch (error) { tell(error); }
   },
@@ -352,7 +359,10 @@ $('#confirm-import').onclick = async () => {
     // The screen and what was left out stay exactly as they were; only the
     // comparison against the book is worth doing again.
     tell(error?.status === 409 ? 'Some names changed. Review and import again.' : error);
-  } finally { busy = false; renderReview(); }
+    // Everything the wait disabled comes back, not only the review: the book
+    // picker is switched off while a write is in flight and had nothing to
+    // switch it on again.
+  } finally { busy = false; render(); }
 };
 
 tooltips();
