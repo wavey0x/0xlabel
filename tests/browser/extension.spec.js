@@ -378,6 +378,37 @@ test('installed extension: a book that works with no setup, moving it to a serve
     await expect(reopened.locator('#results tr')).toHaveCount(1);
     await expect(reopened.locator('#shown')).toBeHidden();
 
+    // Connecting and copying stay separate, and the copy is a real one. The
+    // remote server was emptied above, so forgetting that book and connecting
+    // to it again is a book opening empty beside one that is not — the only
+    // moment carrying names over is worth asking about.
+    const pick = async name => {
+      await reopened.locator('#location').click();
+      await reopened.getByRole('menuitemradio', { name: new RegExp(name) }).click();
+    };
+    await pick('Remote');
+    await reopened.locator('#remove-book').click();
+    // Forgetting a server book loses nothing, so it asks for nothing typed.
+    await expect(reopened.locator('#remove-name')).toBeHidden();
+    await reopened.locator('#confirm-remove').click();
+    await expect(reopened.locator('#remove-dialog')).toBeHidden();
+    await expect(reopened.locator('#shown')).toContainText('Showing 250 of 301');
+
+    await reopened.locator('#location').click();
+    await reopened.getByRole('menuitem', { name: 'Connect to a server' }).click();
+    await reopened.locator('#connect-link').fill(`${remote}#key=test-only-token`);
+    await reopened.locator('#connect').click();
+    await expect(reopened.locator('#copy-ask'))
+      .toContainText('is empty. Copy 301 addresses from default?', { timeout: 10000 });
+    await reopened.getByRole('button', { name: 'Copy', exact: true }).click();
+    await expect(reopened.locator('#server')).toBeHidden({ timeout: 15000 });
+    // Carried over into the book it was offered for, and the one it came from
+    // still holds every name it had.
+    expect((await (await api.get(remote+'/tags')).json()).records).toHaveLength(301);
+    await expect(reopened.locator('#shown')).toContainText('Showing 250 of 301');
+    await pick('default');
+    await expect(reopened.locator('#shown')).toContainText('Showing 250 of 301');
+
     expect(errors).toEqual([]);
   } finally {
     await context.close(); await api.dispose(); await rm(profile,{recursive:true,force:true});
