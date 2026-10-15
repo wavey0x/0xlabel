@@ -821,3 +821,32 @@ test('an import lands in the book it was reviewed against, or it does not land',
 
 // A copy of a book is the same book somewhere else, origins included.
 
+
+// A link is pasted a second time when the key behind it has changed. Reopening
+// the old one walks straight back into the refusal that prompted it.
+test('pasting a link again for a server already here replaces its key', async () => {
+  const { store, calls } = harness();
+  await store.init();
+  const { book } = await store.add({ storage: onServer });
+  await store.add({ storage: { kind: 'server', url: host, token: 'rotated-secret' } });
+  assert.equal(store.state().books.length, 2, 'and does not make a second book for it');
+
+  await store.refresh();
+  const asked = calls.filter(call => call.headers?.Authorization).at(-1);
+  assert.equal(asked.headers.Authorization, 'Bearer rotated-secret');
+  assert.equal(store.state().activeBook, book);
+});
+
+// Two views asking at once both looked, both found nothing, and both made a
+// book for the same server. The looking belongs in the queue with the making.
+test('two connections to one server at the same moment make one book', async () => {
+  const { store } = harness();
+  await store.init();
+  const [first, second] = await Promise.all([
+    store.add({ storage: onServer }),
+    store.add({ storage: onServer }),
+  ]);
+  assert.equal(store.state().books.length, 2, 'the one it started with, and one more');
+  assert.equal(first.book, second.book);
+  assert.ok(first.opened || second.opened, 'one of them opened what the other made');
+});

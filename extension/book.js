@@ -7,6 +7,13 @@ import { COPY_ICON, TRASH_ICON, confirmCopied } from './icons.js';
 
 let state = emptyState;
 let busy = false;
+// The book that was open before this one, and what was in it. A book that
+// opens empty beside one that is not is the only time carrying names over is
+// worth offering, and it is offered where the emptiness is rather than in a
+// dialog that has to be answered: it waits, it never interrupts, and it goes
+// when the book stops being empty. Held for this page only, so there is no
+// dismissal to remember and nothing to nag with.
+let before = null;
 let editor;
 let entries = [];
 let visibleRows = [];
@@ -37,7 +44,10 @@ const picker = bookPicker({
 });
 function render(next = state) {
   if (!currentSnapshot(next, state)) return;
-  if (next.activeBook !== state.activeBook) $('#search').value = '';
+  if (next.activeBook !== state.activeBook) {
+    $('#search').value = '';
+    if (state.records.length) before = { name: state.bookName, records: state.records };
+  }
   state = next;
   picker(state);
   $('#location').disabled = busy;
@@ -124,9 +134,32 @@ function search() {
   $('#empty p').textContent = state.records.length ? 'No matching tags or addresses.' : 'No addresses tagged yet.';
   // A search that found nothing is not the moment to explain importing.
   $('#empty-hint').hidden = Boolean(state.records.length);
+  // Offered while this book is empty and the last one was not; gone the moment
+  // either stops being true, without anyone having to say no to it.
+  const carry = !state.records.length && before?.records.length ? before : null;
+  $('#copy-in').hidden = Boolean(state.records.length) || !carry;
+  if (carry) {
+    const many = carry.records.length;
+    $('#copy-in').textContent = busy ? 'Copying…'
+      : `Copy ${many.toLocaleString()} address${many === 1 ? '' : 'es'} from ${carry.name}`;
+    $('#copy-in').disabled = busy;
+  }
   $('#shown').hidden = matches.length <= SHOWN;
   $('#shown').textContent = `Showing ${SHOWN} of ${matches.length.toLocaleString()}. Search to narrow.`;
 }
+// The same write a file gets: one transaction, bound to the book it is offered
+// for, refusing anything that arrived in the meantime.
+$('#copy-in').onclick = async () => {
+  const carry = before;
+  if (busy || !carry?.records.length) return;
+  busy = true; render();
+  try {
+    const result = await rpc({ type: 'Import', records: carry.records, book: state.activeBook });
+    tell(`${result.added.toLocaleString()} name${result.added === 1 ? '' : 's'} copied from ${carry.name}.`);
+  } catch (error) {
+    tell(error?.status === 409 ? 'That book changed. Open it again to see what is there.' : error);
+  } finally { busy = false; render(); }
+};
 $('#search').oninput = search;
 
 // Removing a book kept here destroys its addresses; removing one kept on a

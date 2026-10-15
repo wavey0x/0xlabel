@@ -61,3 +61,6 @@ td code { display: block; font: 12px/1.6 ui-monospace, monospace; overflow-wrap:
 #drop p { margin: 0; padding: 26px 38px; border: 2px dashed var(--0xtagger-accent); border-radius: 14px;
   background: var(--0xtagger-panel); color: var(--0xtagger-ink); font-size: 14px; font-weight: 700;
   box-shadow: var(--0xtagger-shadow); }
+
+/* Offered where the emptiness is, and only while it lasts. */
+#copy-in { display: block; margin: 10px auto 0; font-size: 12px; }

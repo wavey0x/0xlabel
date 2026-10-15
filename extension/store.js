@@ -184,18 +184,27 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
     });
   }
 
-  // Making a book is the only moment its storage is chosen, and the only moment
-  // one book's addresses are ever copied into another.
+  // Making a book is the only moment its storage is chosen.
   async function add({ name, storage: where }) {
     if (!where || (where.kind !== 'device' && where.kind !== 'server')) throw new Error('Choose where to keep this book.');
     if (where.kind === 'server' && (!where.url || !where.token)) throw new Error('Paste the link your server printed.');
-    // A server already in the books is one to open, not one to add again. It
-    // is the same book either way, and refusing was a dead end.
-    if (where.kind === 'server') {
-      const already = books.find(other => other.storage.url === where.url);
-      if (already) { await use(already.id); return { book: already.id, opened: true }; }
-    }
-    return serial(async () => {
+    const outcome = await serial(async () => {
+      // A server already in the books is one to open, not one to add again —
+      // asked here, inside the queue, because two views asking at once would
+      // otherwise both find nothing and both make a book for the same server.
+      if (where.kind === 'server') {
+        const already = books.find(other => other.storage.url === where.url);
+        if (already) {
+          // A link pasted for a server already here is its key being replaced,
+          // which is the only reason to paste one twice. Reopening the old key
+          // would walk straight back into the refusal that prompted it.
+          if (already.storage.token !== where.token) {
+            books = books.map(item => (item.id === already.id ? { ...item, storage: where } : item));
+            await saveBooks();
+          }
+          return { book: already.id, opened: true };
+        }
+      }
       if (books.length >= 20) throw new Error('That is as many address books as 0xtagger keeps.');
       const chosen = cleanName(name, '');
       if (chosen && taken(chosen)) throw new Error(`You already have an address book called ${chosen}.`);
@@ -222,6 +231,10 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
       changed();
       return { book: item.id };
     });
+    // Opening is its own queued step: it cannot run inside the one above
+    // without waiting on a queue it is already holding.
+    if (outcome.opened) await use(outcome.book);
+    return outcome;
   }
 
   function rename(id, name) {

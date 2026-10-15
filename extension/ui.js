@@ -239,13 +239,10 @@ export function bookPicker({ choose, create, connect, rename }) {
 
 // Making a book is the one moment its storage is chosen, and the one moment
 // another book's addresses are copied into it.
-export function connectForm({ container, state, created, busy, error, visible = () => {} }) {
+export function connectForm({ container, created, busy, error, visible = () => {} }) {
   const modal = container instanceof HTMLDialogElement;
   let pending = false;
   let checking;
-  // The book that was open when this started, held because the offer at the
-  // end is about copying out of it, and by then it is no longer the open one.
-  let came = null;
   container.innerHTML = `<header class="view-heading"><h2>Connect a server</h2><button type="button" class="quiet icon" data-cancel aria-label="Close">\u00d7</button></header>
     <form id="connect-book" novalidate>
       <label for="connect-link">Server link</label>
@@ -254,21 +251,15 @@ export function connectForm({ container, state, created, busy, error, visible = 
       <details class="setup-note"><summary>Need a link?</summary>
         <p class="muted">Run <code>uv run 0xtagger</code> and copy the line it prints.</p></details>
       <footer class="form-actions"><button type="button" class="quiet" data-cancel>Cancel</button><button id="connect" type="submit" class="primary">Connect</button></footer>
-    </form>
-    <div id="copy-offer" hidden>
-      <p id="copy-ask"></p>
-      <footer class="form-actions"><button type="button" class="quiet" data-cancel>Not now</button><button id="copy-in" type="button" class="quiet accent">Copy</button></footer>
-    </div>`;
+    </form>`;
   const get = selector => container.querySelector(selector);
   const form = get('form');
   const opened = () => (modal ? container.open : !container.hidden);
-  const show = offer => { form.hidden = offer; get('#copy-offer').hidden = !offer; };
   function close() {
     if (modal) container.close(); else container.hidden = true;
     // The link carries the key to a book. It has no reason to outlive the
     // moment it was used in.
     clearTimeout(checking); form.reset(); get('#server-error').textContent = '';
-    came = null; show(false);
     visible(false); $('#location').focus();
   }
   container.querySelectorAll('[data-cancel]').forEach(button => { button.onclick = close; });
@@ -303,20 +294,12 @@ export function connectForm({ container, state, created, busy, error, visible = 
     form.querySelectorAll('input').forEach(input => { input.disabled = true; });
     try {
       if (!await permission) throw new Error('Access to that server was not granted.');
-      came = { name: state().bookName, records: state().records };
-      const result = await rpc({ type: 'AddBook', name: '', storage: where });
+      await rpc({ type: 'AddBook', name: '', storage: where });
       created();
-      // The book opening is the proof it worked, so nothing else says so. An
-      // empty one is the only moment copying into it is worth offering, and it
-      // is offered here rather than remembered about the book: asked once,
-      // answered once, and never raised again by itself.
-      const fresh = (await rpc({ type: 'State' })).state;
-      if (!result?.opened && !fresh.records.length && came.records.length) {
-        const many = came.records.length;
-        get('#copy-ask').textContent = `${fresh.bookName} is empty. Copy ${many.toLocaleString()} address${many === 1 ? '' : 'es'} from ${came.name}?`;
-        get('#copy-offer').dataset.book = fresh.activeBook;
-        form.reset(); show(true); get('#copy-in').focus();
-      } else if (opened()) close();
+      // The book opening is the proof it worked, so nothing else says so — and
+      // nothing is asked about carrying names over. A book that opens empty
+      // says so itself, where it is empty, for as long as it stays that way.
+      if (opened()) close();
     } catch (failure) {
       if (opened()) get('#server-error').textContent = failure.message; else error(failure);
     } finally {
@@ -324,26 +307,10 @@ export function connectForm({ container, state, created, busy, error, visible = 
       form.querySelectorAll('input').forEach(input => { input.disabled = false; });
     }
   };
-  get('#copy-in').onclick = async () => {
-    if (pending || !came) return;
-    pending = true; busy(true); get('#copy-in').disabled = true; get('#copy-in').textContent = 'Copying\u2026';
-    try {
-      // The same write a file gets: one transaction, bound to the book it was
-      // offered for, refusing anything that arrived in the meantime.
-      await rpc({ type: 'Import', records: came.records, book: get('#copy-offer').dataset.book });
-      created();
-      close();
-    } catch (failure) {
-      if (opened()) get('#copy-ask').textContent = failure.message; else error(failure);
-    } finally {
-      pending = false; busy(false); get('#copy-in').disabled = false; get('#copy-in').textContent = 'Copy';
-    }
-  };
   return {
     open() {
       if (pending) return;
       clearTimeout(checking); form.reset(); get('#server-error').textContent = '';
-      came = null; show(false);
       if (modal) container.showModal(); else container.hidden = false;
       visible(true); get('#connect-link').focus();
     },

@@ -158,8 +158,7 @@ test('installed extension: a book that works with no setup, moving it to a serve
     // This one is empty and the last one was not, which is the only moment
     // carrying names over is worth asking about. Asked once, here, and never
     // raised again by itself.
-    await expect(popup.locator('#copy-ask')).toContainText('is empty. Copy 1 address from Local?');
-    await popup.getByRole('button', { name: 'Not now' }).click();
+    // Connecting asks nothing about copying: the book opens as it is.
     await expect(popup.locator('#server')).toBeHidden({ timeout: 10000 });
     expect((await (await api.get(remote+'/tags')).json()).records).toEqual([]);
     await renameBook('Remote');
@@ -378,10 +377,10 @@ test('installed extension: a book that works with no setup, moving it to a serve
     await expect(reopened.locator('#results tr')).toHaveCount(1);
     await expect(reopened.locator('#shown')).toBeHidden();
 
-    // Connecting and copying stay separate, and the copy is a real one. The
-    // remote server was emptied above, so forgetting that book and connecting
-    // to it again is a book opening empty beside one that is not — the only
-    // moment carrying names over is worth asking about.
+    // Connecting and copying stay separate, and the copy waits where the
+    // emptiness is rather than demanding an answer on the way in. The remote
+    // server was emptied above, so forgetting that book and connecting again
+    // is a book opening empty beside one holding three hundred names.
     const pick = async name => {
       await reopened.locator('#location').click();
       await reopened.getByRole('menuitemradio', { name: new RegExp(name) }).click();
@@ -398,14 +397,14 @@ test('installed extension: a book that works with no setup, moving it to a serve
     await reopened.getByRole('menuitem', { name: 'Connect to a server' }).click();
     await reopened.locator('#connect-link').fill(`${remote}#key=test-only-token`);
     await reopened.locator('#connect').click();
-    await expect(reopened.locator('#copy-ask'))
-      .toContainText('is empty. Copy 301 addresses from default?', { timeout: 10000 });
-    await reopened.getByRole('button', { name: 'Copy', exact: true }).click();
-    await expect(reopened.locator('#server')).toBeHidden({ timeout: 15000 });
+    await expect(reopened.locator('#server')).toBeHidden({ timeout: 10000 });
+    await expect(reopened.locator('#copy-in')).toHaveText('Copy 301 addresses from default');
+    await reopened.locator('#copy-in').click();
     // Carried over into the book it was offered for, and the one it came from
     // still holds every name it had.
+    await expect(reopened.locator('#shown')).toContainText('Showing 250 of 301', { timeout: 15000 });
+    await expect(reopened.locator('#copy-in')).toBeHidden();
     expect((await (await api.get(remote+'/tags')).json()).records).toHaveLength(301);
-    await expect(reopened.locator('#shown')).toContainText('Showing 250 of 301');
     await pick('default');
     await expect(reopened.locator('#shown')).toContainText('Showing 250 of 301');
 
