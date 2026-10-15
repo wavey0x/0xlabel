@@ -60,6 +60,26 @@ export async function createPageController({
     const style = win.getComputedStyle(parent);
     return style.display.includes('flex') && !style.flexDirection.startsWith('column');
   }
+  // An adapter matches the element that proves identity, which on some sites is
+  // only a wrapper: a search suggestion matches the link, whose address sits two
+  // boxes further in. Annotating the wrapper gives the name and the glyph a line
+  // of their own under the row, because the wrapper's content is block-level. So
+  // follow the address down to the innermost box that still holds all of it, and
+  // annotate that. Where the match already is that box, nothing moves.
+  function displayBox(element) {
+    for (let box = element; ; ) {
+      const inside = [...box.children].filter(child => !child.matches(UI) && child.textContent.trim());
+      if (inside.length !== 1 || inside[0].textContent.trim() !== box.textContent.trim()) return box;
+      // An inline child shares the line it was given, so the annotation is
+      // already on the right one. Only a block-level child takes a line of its
+      // own, and that is the line the name and the glyph have to follow it onto.
+      if (win.getComputedStyle(inside[0]).display.startsWith('inline')) return box;
+      box = inside[0];
+    }
+  }
+  // A rescan replaces the box whenever the site rebuilds it; until one happens,
+  // the match itself is always still there to fall back on.
+  const shownOn = target => (target.display?.isConnected ? target.display : target.element);
   function addEditButton(target) {
     const slot = doc.createElement('span');
     slot.setAttribute(UI_ATTRIBUTE, '');
@@ -82,16 +102,24 @@ export async function createPageController({
     // a cell, a column or a grid — would give it a line of its own, so there it
     // goes inside the box that shows the address. Its SVG lives in a shadow
     // root and so contributes no text to the site's own copy sources.
-    const anchor = target.element.closest('a[href]') || target.element;
-    const beside = win.getComputedStyle(anchor).display.startsWith('inline') || row(anchor.parentElement);
+    const shown = shownOn(target);
+    const anchor = shown === target.element ? (target.element.closest('a[href]') || target.element) : shown;
+    const style = win.getComputedStyle(anchor);
+    // A box that clips what overflows it — a truncating cell — would swallow the
+    // glyph, so there it goes beside the box rather than inside it.
+    const beside = style.display.startsWith('inline') || style.overflow !== 'visible' || row(anchor.parentElement);
     if (beside) anchor.after(slot); else anchor.append(slot);
     target.editButton = slot;
   }
   function remove(element) {
     const target = targets.get(element);
     if (!target) return;
-    element.removeAttribute(LABEL);
-    element.removeAttribute(SHORT);
+    // The name may have been painted on a box further in, and a rescan may have
+    // moved it since, so clear both candidates rather than guessing.
+    for (const box of new Set([element, target.display])) {
+      box?.removeAttribute(LABEL);
+      box?.removeAttribute(SHORT);
+    }
     element.removeAttribute(ADDRESS);
     if (target.description && element.getAttribute('aria-description') === target.description) element.removeAttribute('aria-description');
     targets.delete(element);
@@ -109,22 +137,24 @@ export async function createPageController({
     if (!target.editButton?.isConnected) addEditButton(target);
     const name = target.naming !== false && !hiddenLabels.has(recordKey(target.address, target.network)) &&
       recordFor(target)?.labels[0];
+    const shown = shownOn(target);
+    if (shown !== target.element) { target.element.removeAttribute(LABEL); target.element.removeAttribute(SHORT); }
     if (name) {
       // Preserve native nodes and copy sources; CSS substitutes only their
       // visible glyphs with the shared custom-label typography.
-      if (target.element.getAttribute(LABEL) !== name) target.element.setAttribute(LABEL, name);
+      if (shown.getAttribute(LABEL) !== name) shown.setAttribute(LABEL, name);
       const trailer = adapter.subject && target.element.matches(adapter.subject)
         ? abbreviate(checksumAddress(target.address)) : null;
-      if (trailer) { if (target.element.getAttribute(SHORT) !== trailer) target.element.setAttribute(SHORT, trailer); }
-      else target.element.removeAttribute(SHORT);
+      if (trailer) { if (shown.getAttribute(SHORT) !== trailer) shown.setAttribute(SHORT, trailer); }
+      else shown.removeAttribute(SHORT);
       const description = `0xlabel: ${name}`;
       if (!target.element.hasAttribute('aria-description') || target.description === target.element.getAttribute('aria-description')) {
         if (target.element.getAttribute('aria-description') !== description) target.element.setAttribute('aria-description', description);
         target.description = description;
       }
     } else {
-      target.element.removeAttribute(LABEL);
-      target.element.removeAttribute(SHORT);
+      shown.removeAttribute(LABEL);
+      shown.removeAttribute(SHORT);
       if (target.description && target.element.getAttribute('aria-description') === target.description) target.element.removeAttribute('aria-description');
       target.description = null;
     }
@@ -141,7 +171,7 @@ export async function createPageController({
     if (!element.hasAttribute(LABEL) && nativePrefix && !['none', 'normal', '""'].includes(nativePrefix)) return null;
     const network = item.network || health.network;
     if (network) { normalizeScope(network); if (network === 'global') throw new Error('adapter-network-invalid'); }
-    return { element, address, network, naming: item.naming !== false };
+    return { element, address, network, naming: item.naming !== false, display: displayBox(element) };
   }
   function scan(root) {
     const claims = new Map();
@@ -167,6 +197,9 @@ export async function createPageController({
         target.description = previous.description; target.editButton = previous.editButton;
       }
       else if (previous) remove(element);
+      // What the display said when the adapter last vouched for it, so a repaint
+      // that writes the same text back can be told from one that does not.
+      target.text = element.textContent.trim();
       targets.set(element, target);
       paint(target);
     }
@@ -276,10 +309,17 @@ export async function createPageController({
         (['class', 'style', 'hidden'].includes(change.attributeName) ||
          ['title', 'aria-label'].includes(change.attributeName) &&
          (!parseAddress(element.getAttribute(change.attributeName)) || parseAddress(element.getAttribute(change.attributeName)) === targets.get(existing)?.address));
+      // A framework repainting a live panel writes the same text back into the
+      // same row. That is not a change of identity, and tearing the annotation
+      // down for it — to rebuild it a frame later — is what makes the panel
+      // flicker. Anything that genuinely reads differently, and every change to
+      // an attribute identity rests on, still clears at once.
+      const rewritten = change.type !== 'attributes' && existing &&
+        targets.get(existing)?.text === existing.textContent.trim();
       if (!presentation) {
         // Targets are never nested, so the annotation attribute is their index.
         // An ancestor is found by one lookup; descendants by a scoped query.
-        if (existing) remove(existing);
+        if (existing && !rewritten) remove(existing);
         if (change.type === 'childList') {
           for (const node of change.removedNodes) {
             if (node.nodeType === 1) for (const gone of query(node, `[${ADDRESS}]`)) remove(gone);
