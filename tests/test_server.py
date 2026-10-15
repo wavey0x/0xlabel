@@ -185,3 +185,32 @@ def test_a_book_from_an_older_build_refuses_to_open(tmp_path):
         )
     with pytest.raises(RuntimeError, match='older 0xtagger'):
         create_app(path, TOKEN)
+
+
+def test_a_name_on_every_network_refuses_an_import_meant_to_be_new(book):
+    """A name added elsewhere after a review opened must not be shadowed by it.
+
+    Only the book can check this without a race: the browser's copy of it can
+    already be out of date by the moment the batch arrives.
+    """
+    covering = put(book, ['Everywhere']).json()['record']
+
+    refused = batch(book, [{'address': ADDRESS, 'scope': 'eip155:8453',
+                            'tags': ['Base treasury'], 'version': None, 'only_if_unnamed': True}])
+    assert refused.status_code == 409
+    assert refused.json()['conflicts'][0]['current']['version'] == covering['version']
+    assert len(book.get('/tags').json()['records']) == 1
+
+    # Copying a book is not an import, so it is free to carry both rows.
+    allowed = batch(book, [{'address': ADDRESS, 'scope': 'eip155:8453',
+                            'tags': ['Base treasury'], 'version': None}])
+    assert allowed.status_code == 200
+    assert len(book.get('/tags').json()['records']) == 2
+
+
+def test_an_import_meant_to_be_new_still_lands_where_nothing_names_it(book):
+    other = '0x' + 'cd' * 20
+    answer = batch(book, [{'address': other, 'scope': 'eip155:8453',
+                           'tags': ['Payroll'], 'version': None, 'only_if_unnamed': True}])
+    assert answer.status_code == 200
+    assert answer.json()['records'][0]['tags'] == ['Payroll']

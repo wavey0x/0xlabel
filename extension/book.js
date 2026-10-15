@@ -205,7 +205,9 @@ function showReview(on) {
   $('.book-panel').hidden = on;
   $('.book-heading').hidden = on;
   $('#review').hidden = !on;
-  if (!on) pending = null;
+  // A second import can arrive while one is being read. It waits rather than
+  // interrupting, so closing this one is the moment to look again.
+  if (!on) { pending = null; readPending().catch(tell); }
 }
 function review(records, { unnamed = 0, what = '' } = {}) {
   // A file that named a network for nothing lands everywhere, and the network

@@ -68,6 +68,11 @@ class TagWrite(BaseModel):
 class TagChange(TagWrite):
     address: str
     scope: str
+    # A name being added rather than replacing one. The version check above
+    # already says nothing stands on this network; this says nothing stands on
+    # every network either. Only the book can answer that without a race,
+    # because only it holds both rows at the same moment.
+    only_if_unnamed: bool = False
 
 
 class BookWrite(BaseModel):
@@ -228,6 +233,11 @@ def create_app(database: str | Path, token: str) -> FastAPI:
                     current = held(connection, address, scope)
                     if change.version != (current["version"] if current else None):
                         conflicts.append({"address": address, "scope": scope, "current": record(current)})
+                        continue
+                    if change.only_if_unnamed and scope != "global":
+                        covering = held(connection, address, "global")
+                        if covering is not None:
+                            conflicts.append({"address": address, "scope": scope, "current": record(covering)})
                 if conflicts:
                     return JSONResponse(status_code=409, content={
                         "detail": "Saved elsewhere while this file was being added.",

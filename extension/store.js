@@ -306,9 +306,12 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
       if (remote) {
         needsRefresh = true;
         await saveSync();
-        // Named as the new records they were reviewed as being; a server that
-        // has since been given one of them refuses the batch whole.
-        saved = await remote.putMany(drafts.map(draft => ({ ...draft, version: null })));
+        // Named as the new records they were reviewed as being, and checked
+        // against a name standing on every network as well — the copy held
+        // here can be out of date, and only the server can answer both at the
+        // same instant. A server already given one of them refuses the batch.
+        saved = await remote.putMany(drafts.map(draft =>
+          ({ ...draft, version: null, only_if_unnamed: true })));
         ({ revision } = await local.write(active, saved));
         needsRefresh = false;
         await saveSync();

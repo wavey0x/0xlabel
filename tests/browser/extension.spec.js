@@ -472,7 +472,21 @@ test('installed extension: a file is reviewed before it lands, and a page cannot
     // Read once and taken away, so the same names cannot arrive twice.
     expect((await book.evaluate(async () =>
       await chrome.runtime.sendMessage({ type: 'PendingImport' }))).result).toBe(null);
+
+    // A second import arriving while this one is being read waits its turn
+    // rather than interrupting, and is not stranded there by waiting: closing
+    // the open review is the moment to look again.
+    const fourth = '0x' + '12'.repeat(20);
+    await worker.evaluate(async records =>
+      chrome.storage.session.set({ pendingImport: { records, origin: 'https://app.safe.global' } }),
+      [{ address: fourth, scope: 'global', tags: ['wavey'], source: 'safe:address-book' }]);
+    await expect(book.locator('#review-rows')).toContainText('dudesahn');
+    await expect(book.locator('#review-rows')).not.toContainText('wavey');
     await book.locator('#cancel-import').click();
+    await expect(book.locator('#review')).toBeVisible({ timeout: 15000 });
+    await expect(book.locator('#review-rows')).toContainText('wavey');
+    await book.locator('#cancel-import').click();
+    await expect(book.locator('#review')).toBeHidden();
 
     // Both extension views load and run clean; a typo in either is a trial
     // that fails on its first morning.
