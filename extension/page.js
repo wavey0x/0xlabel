@@ -66,15 +66,22 @@ export async function createPageController({
   // of their own under the row, because the wrapper's content is block-level. So
   // follow the address down to the innermost box that still holds all of it, and
   // annotate that. Where the match already is that box, nothing moves.
-  function displayBox(element) {
+  function displayBox(element, address) {
+    const shows = box => box.textContent.toLowerCase().replace(/\s/g, '').includes(address);
     for (let box = element; ; ) {
       const inside = [...box.children].filter(child => !child.matches(UI) && child.textContent.trim());
-      if (inside.length !== 1 || inside[0].textContent.trim() !== box.textContent.trim()) return box;
+      // Follow the address wherever exactly one child still shows it: a row that
+      // sets a site's name above the address keeps the two on separate lines,
+      // and only one of those lines is the one being annotated. Failing that,
+      // follow a child that holds everything this box holds.
+      const showing = inside.filter(shows);
+      const next = showing.length === 1 ? showing[0]
+        : inside.length === 1 && inside[0].textContent.trim() === box.textContent.trim() ? inside[0] : null;
       // An inline child shares the line it was given, so the annotation is
       // already on the right one. Only a block-level child takes a line of its
       // own, and that is the line the name and the glyph have to follow it onto.
-      if (win.getComputedStyle(inside[0]).display.startsWith('inline')) return box;
-      box = inside[0];
+      if (!next || win.getComputedStyle(next).display.startsWith('inline')) return box;
+      box = next;
     }
   }
   // A rescan replaces the box whenever the site rebuilds it; until one happens,
@@ -171,7 +178,7 @@ export async function createPageController({
     if (!element.hasAttribute(LABEL) && nativePrefix && !['none', 'normal', '""'].includes(nativePrefix)) return null;
     const network = item.network || health.network;
     if (network) { normalizeScope(network); if (network === 'global') throw new Error('adapter-network-invalid'); }
-    return { element, address, network, naming: item.naming !== false, display: displayBox(element) };
+    return { element, address, network, naming: item.naming !== false, display: displayBox(element, address) };
   }
   function scan(root) {
     const claims = new Map();
