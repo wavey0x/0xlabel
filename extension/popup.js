@@ -1,5 +1,5 @@
 import { hostPermission } from './shared.js';
-import { $, rpc, emptyState, currentSnapshot, syncText, bookPicker, newBookForm, watchBook } from './ui.js';
+import { $, rpc, emptyState, currentSnapshot, syncText, bookPicker, newBookForm, watchBook, tooltips } from './ui.js';
 
 let state = emptyState;
 let sites = {};
@@ -26,7 +26,7 @@ function render(next = state) {
   picker(state);
   $('#location').disabled = busy;
   $('#sync').textContent = busy ? 'Connecting…' : syncText(state);
-  $('#sync').title = state.error || '';
+  $('#sync').dataset.tip = state.error || '';
   $('#sync').dataset.offline = String(Boolean(state.error));
   const enabled = Boolean(siteURL && sites[siteURL.origin]);
   // With no website in front of it the row has nothing to say, so it says
@@ -36,7 +36,7 @@ function render(next = state) {
   // The switch still answers without a book, because a control that silently
   // ignores a click reads as broken rather than unavailable.
   $('#site-toggle').disabled = siteBusy;
-  $('#site-toggle').title = enabled ? 'Show the website originals again' : 'Show my tags on this website';
+  $('#site-toggle').dataset.tip = enabled ? 'Show the website originals again' : 'Show my tags on this website';
 }
 async function enable(enabled) {
   siteBusy = true; render();
@@ -71,6 +71,7 @@ $('#open-book').onclick = async () => {
   } catch (error) { tell(error); }
   finally { button.disabled = false; }
 };
+tooltips();
 watchBook(() => state, render);
 render();
 try {

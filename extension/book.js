@@ -1,4 +1,4 @@
-import { $, rpc, emptyState, currentSnapshot, syncText, bookPicker, newBookForm, watchBook, dismissDialog } from './ui.js';
+import { $, rpc, emptyState, currentSnapshot, syncText, bookPicker, newBookForm, watchBook, dismissDialog, tooltips } from './ui.js';
 import { parseAddress, normalizeScope, readBookFile } from './shared.js';
 import { scopeName } from './networks.js';
 import { checksumAddress } from './checksum.js';
@@ -37,11 +37,11 @@ function render(next = state) {
   // Only a book kept somewhere else can be out of date with what it holds.
   $('#refresh').hidden = state.bookKind !== 'server';
   $('#remove-book').disabled = state.books.length < 2;
-  $('#remove-book').title = state.books.length < 2 ? '0xtagger keeps at least one address book.' : 'Remove this address book';
+  $('#remove-book').dataset.tip = state.books.length < 2 ? '0xtagger keeps at least one address book.' : 'Remove this address book';
   $('#refresh').disabled = busy || $('#refresh').hasAttribute('aria-busy');
   $('#export').disabled = !state.records.length;
   $('#sync').textContent = busy ? 'Connecting…' : syncText(state);
-  $('#sync').title = state.error || '';
+  $('#sync').dataset.tip = state.error || '';
   $('#sync').dataset.offline = String(Boolean(state.error));
   const count = new Set(state.records.map(record => record.address)).size;
   $('#count').textContent = `${count.toLocaleString()} address${count === 1 ? '' : 'es'}`;
@@ -68,11 +68,11 @@ function bookRow(record) {
   const open = row.querySelector('.record');
   open.querySelector('strong').textContent = record.tags.join(' · ');
   open.querySelector('small').textContent = scopeName(record.scope);
-  open.title = displayAddress; open.setAttribute('aria-label', `Edit tags for ${displayAddress}`);
+  open.dataset.tip = displayAddress; open.setAttribute('aria-label', `Edit tags for ${displayAddress}`);
   open.onclick = () => edit(record.address, record.scope);
   row.querySelector('code').textContent = displayAddress;
   const copy = document.createElement('button'); copy.className = 'quiet icon copy'; copy.innerHTML = COPY_ICON;
-  copy.setAttribute('aria-label', `Copy ${displayAddress}`); copy.title = `Copy ${displayAddress}`;
+  copy.setAttribute('aria-label', `Copy ${displayAddress}`); copy.dataset.tip = `Copy ${displayAddress}`;
   copy.onclick = async () => {
     try {
       await navigator.clipboard.writeText(displayAddress);
@@ -187,6 +187,7 @@ $('#export').onclick = () => {
   const link = document.createElement('a'); link.href = url; link.download = '0xtagger-book.json'; link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
+tooltips();
 watchBook(() => state, render);
 try {
   const [, response] = await ready;

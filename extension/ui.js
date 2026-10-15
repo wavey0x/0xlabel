@@ -24,6 +24,41 @@ export function watchBook(held, render) {
   });
 }
 
+// Every control that carries one already has its own accessible name, so this
+// is the sighted reader's half of a tooltip and nothing is announced twice.
+export function tooltips() {
+  const tip = document.createElement('div');
+  tip.className = 'tip';
+  tip.hidden = true;
+  document.body.append(tip);
+  let showing = null;
+  const hide = () => { showing = null; tip.hidden = true; };
+  const show = element => {
+    const text = element.dataset.tip;
+    if (!text) return hide();
+    showing = element;
+    tip.textContent = text;
+    tip.hidden = false;
+    const anchor = element.getBoundingClientRect();
+    const box = tip.getBoundingClientRect();
+    const under = anchor.bottom + 6;
+    const fits = under + box.height < innerHeight;
+    tip.style.left = `${Math.max(6, Math.min(innerWidth - box.width - 6, anchor.left + (anchor.width - box.width) / 2))}px`;
+    tip.style.top = `${Math.max(6, fits ? under : anchor.top - box.height - 6)}px`;
+  };
+  const wanted = event => event.target.closest?.('[data-tip]') || null;
+  document.addEventListener('pointerover', event => {
+    const found = wanted(event);
+    if (found !== showing) found ? show(found) : hide();
+  });
+  // A press is an answer; the hint has done its work.
+  document.addEventListener('pointerdown', hide);
+  document.addEventListener('focusin', event => { const found = wanted(event); found ? show(found) : hide(); });
+  document.addEventListener('focusout', hide);
+  document.addEventListener('keydown', event => { if (event.key === 'Escape') hide(); });
+  window.addEventListener('scroll', hide, { capture: true, passive: true });
+}
+
 export function currentSnapshot(next, current) {
   return Number.isSafeInteger(next?.stateRevision) && next.stateRevision >= current.stateRevision;
 }
@@ -143,7 +178,7 @@ export function bookPicker({ choose, add, rename }) {
     pencil.dataset.rename = item.id;
     pencil.setAttribute('role', 'menuitem');
     pencil.setAttribute('aria-label', `Rename ${item.name}`);
-    pencil.title = `Rename ${item.name}`;
+    pencil.dataset.tip = `Rename ${item.name}`;
     pencil.innerHTML = PENCIL_ICON;
     row.append(button, pencil);
     return row;

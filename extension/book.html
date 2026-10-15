@@ -8,12 +8,12 @@
         <button id="location" aria-label="Address book" aria-haspopup="menu" aria-expanded="false" popovertarget="location-menu"><span>On this device</span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></button>
         <div id="location-menu" popover role="menu" aria-label="Your address books"></div>
         <button id="remove-book" class="quiet icon" aria-label="Remove this address book"></button>
-        <button id="refresh" class="quiet icon" aria-label="Sync address book" title="Sync address book"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 5a5.5 5.5 0 1 0 .3 5M13 2v3H10"/></svg></button>
+        <button id="refresh" class="quiet icon" aria-label="Sync address book" data-tip="Sync address book"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 5a5.5 5.5 0 1 0 .3 5M13 2v3H10"/></svg></button>
       </div>
     </header>
     <section class="book-heading"><div><h2>Address book</h2><p id="count" class="muted"></p></div><button id="add-address" class="primary">+ Add address</button></section>
     <section class="panel book-panel">
-      <div class="book-tools"><input id="search" type="search" aria-label="Search address book" placeholder="Search tags or addresses" autocomplete="off" spellcheck="false" autocorrect="off" autocapitalize="off"><button id="import" class="quiet" title="Bring in a 0xtagger export (.json) or a Safe address book (.csv)">Import</button><input id="import-file" type="file" accept="application/json,.json,text/csv,.csv" hidden><button id="export" class="quiet">Export book</button></div>
+      <div class="book-tools"><input id="search" type="search" aria-label="Search address book" placeholder="Search tags or addresses" autocomplete="off" spellcheck="false" autocorrect="off" autocapitalize="off"><button id="import" class="quiet" data-tip="Brings in a 0xtagger export (.json) or a Safe address book (.csv)">Import</button><input id="import-file" type="file" accept="application/json,.json,text/csv,.csv" hidden><button id="export" class="quiet">Export book</button></div>
       <div class="table-scroll"><table><thead><tr><th>Tags</th><th>Address</th><th><span class="sr-only">Copy address</span></th></tr></thead><tbody id="results"></tbody></table></div>
       <div id="empty"><p></p><small id="empty-hint">Import accepts a 0xtagger export (.json) or a Safe address book (.csv).</small></div>
       <p id="shown" class="muted"></p>

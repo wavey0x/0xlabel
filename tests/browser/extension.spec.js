@@ -265,7 +265,7 @@ test('installed extension: a book that works with no setup, moving it to a serve
     await book.locator('#search').fill('Second alias');
     await expect(book.locator('.record')).toHaveCount(1);
     await expect(book.locator('.record')).toContainText('New Base wallet');
-    await expect(book.locator('.record')).toHaveAttribute('title', checksumAddress(added));
+    await expect(book.locator('.record')).toHaveAttribute('data-tip', checksumAddress(added));
     await book.locator('#search').fill(added.toUpperCase());
     await expect(book.locator('.record')).toHaveCount(1);
     await book.bringToFront();
