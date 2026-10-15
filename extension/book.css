@@ -30,7 +30,6 @@ td code { display: block; font: 12px/1.6 ui-monospace, monospace; overflow-wrap:
 #empty p { margin: 0 0 8px; }
 /* Said where it is wanted: when the book is empty, not on every view of it. */
 #empty small { font-size: 11px; opacity: .75; }
-#connect-empty { color: var(--0xtagger-accent); }
 .book-footer { margin-top: 12px; }
 #sync[data-offline="true"] { color: var(--0xtagger-warning); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }

@@ -78,10 +78,9 @@ dialog::backdrop { background: var(--0xtagger-backdrop); backdrop-filter: blur(2
 dialog.panel { padding: 16px; }
 #connect-book label { margin-bottom: 0; }
 #connect-book > * + * { margin-top: 10px; }
-#connect-book > .form-actions, #copy-offer > .form-actions { margin-top: 18px; }
+#connect-book > .form-actions { margin-top: 18px; }
 #connect-book label + input { margin-top: 5px; }
 #connect-book .message:empty { display: none; }
-.setup-note code { font-size: 10px; }
 #location-menu .kept { display: flex; flex-shrink: 0; width: 13px; height: 13px; color: var(--0xtagger-muted); }
 #location-menu button[aria-checked="true"] .kept { color: var(--0xtagger-accent); }
 
@@ -103,6 +102,6 @@ button.confirmed:disabled { opacity: 1; }
 .setup-note { margin-top: 10px; font-size: 11px; }
 .setup-note summary { cursor: pointer; color: var(--0xtagger-muted); font-weight: 600; }
 .setup-note p { margin: 6px 0 0; }
-#copy-ask { margin: 0 0 12px; font-size: 13px; line-height: 1.45; }
+.setup-note code { font-size: 10px; }
 /* An offer, not a demand: accent in the text, not a filled button. */
 .quiet.accent { color: var(--0xtagger-accent); font-weight: 700; }
