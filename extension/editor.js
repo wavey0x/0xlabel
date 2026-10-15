@@ -1,4 +1,4 @@
-import { findRecord, MAX_TAGS, MAX_TAG_LENGTH, normalizeTags, sameTags, usableName } from './shared.js';
+import { findRecord, MAX_TAGS, MAX_TAG_LENGTH, normalizeTags, sameTags, sourceName, usableName } from './shared.js';
 import { checksumAddress } from './checksum.js';
 import { EDITOR_MARK, COPY_ICON, COPIED_ICON, confirmCopied } from './icons.js';
 
@@ -113,18 +113,31 @@ export function createEditor(container, { address, scope = 'global', state, save
   // A record for one network giving way to a global one is worth saying, because
   // the tag that takes over is not on screen. That emptying the field puts the
   // address back is the field in front of you, said twice.
-  // A name the editor filled in is shown as what it is — the website's words,
-  // not yet anyone's — and nothing says so in a sentence. Which website they
-  // came from is the page behind this panel, so naming it would be narrating
-  // something already on screen. Typing makes the words yours and the mark
-  // goes with them.
+  // A name the editor filled in reads as any other tag would, because it is
+  // one keystroke from being exactly that — setting it in the muted ink of a
+  // placeholder would say the field was empty while it holds the thing a save
+  // would store. What it needs instead is to say whose words these are, and
+  // that belongs beside them rather than on a line of its own: an aside about
+  // the value, not the app accounting for itself.
+  //
+  // It describes the words in the field and nothing else, so it goes the
+  // moment they stop being the website's. A record already saved never shows
+  // it: those words are yours whatever they were read from.
   //
   // The offer below is for an address already named: the site's other name is
   // shown, never substituted, and taking it appends, so the preferred name
   // stays the preferred name.
   function attribution() {
     const live = Boolean(prefill) && draft.tags[0] === prefill.name;
-    panel.querySelector('.row input')?.classList.toggle('offered', live);
+    const row = panel.querySelector('.row');
+    const field = row?.querySelector('input');
+    const shown = row?.querySelector('.from');
+    if (!live) { shown?.remove(); field?.removeAttribute('aria-describedby'); }
+    else if (row && !shown) {
+      const note = element('small', `(from ${sourceName(prefill.source)})`, { class: 'from', id: 'from-site' });
+      row.insertBefore(note, row.querySelector('.rank'));
+      field?.setAttribute('aria-describedby', 'from-site');
+    }
     const spare = offered && !prefill && !draft.tags.some(tag => tag.trim() === offered.name);
     get('.offer').hidden = !spare;
     get('.offer').replaceChildren();

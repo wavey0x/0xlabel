@@ -47,9 +47,10 @@ dialog.editor::backdrop { background: var(--0xtagger-backdrop); backdrop-filter:
 .save[aria-label="Saved"] { background: var(--0xtagger-accent-soft); opacity: 1; }
 .preview,.notice,.offer { font-size: 11px; margin: 8px 0 0; overflow-wrap: anywhere; }
 .preview { color: var(--0xtagger-muted); }
-/* A name the editor filled in rather than one anybody typed: the website's
-   words, shown as theirs until they are taken. */
-.row input.offered { color: var(--0xtagger-muted); }
+/* Whose words are in the field, said beside them and never saved with them.
+   It shrinks before the tag does, so a long name scrolls rather than fighting
+   it for room. */
+.row .from { flex-shrink: 0; margin-right: 2px; color: var(--0xtagger-muted); font-size: 10px; font-weight: 600; white-space: nowrap; }
 /* What a site calls an address you have already named: available, never loud. */
 .offer { display: flex; align-items: baseline; gap: 8px; color: var(--0xtagger-muted); }
 .offer span { overflow-wrap: anywhere; }

@@ -503,17 +503,21 @@ test.describe('a name the website already shows', () => {
     `<p><a id="${id}" href="/address/${at}"><span class="hash-tag">${name}</span></a></p>`;
   const open = (page, html, records) =>
     start(page, { html: `<header>Explorer</header><main>${html}</main>`, records });
-  const offeredField = page => page.getByRole('dialog').locator('.row input.offered');
+  const fromSite = page => page.getByRole('dialog').locator('.row .from');
   const offer = page => page.getByRole('dialog').locator('.offer');
 
   test('fills an unnamed address with the site\'s name, selected and marked as theirs', async ({ page }) => {
     await open(page, labelled('row', other, 'Uniswap V3: Router'), [record]);
     await tagFor(page, 'row').click();
     await expect(input(page)).toHaveValue('Uniswap V3: Router');
-    // Shown as the website's words, with nothing narrating where they came
-    // from: the website is the page this panel is sitting on.
-    await expect(offeredField(page)).toHaveCount(1);
-    await expect(page.getByRole('dialog')).not.toContainText('label');
+    // Set in the ink of any other tag, because it is one keystroke from being
+    // one: muted would say the field was empty while it holds what Save would
+    // store. Whose words they are is said beside them, never on its own line.
+    await expect(fromSite(page)).toHaveText('(from Etherscan)');
+    const [ink, plain] = await page.getByRole('dialog').evaluate(panel => [
+      getComputedStyle(panel.querySelector('.row input')).color,
+      getComputedStyle(panel.querySelector('code')).color]);
+    expect(ink).toBe(plain);
     // Selected, so typing replaces it rather than appending to it.
     expect(await input(page).evaluate(field => [field.selectionStart, field.selectionEnd]))
       .toEqual([0, 'Uniswap V3: Router'.length]);
@@ -523,13 +527,14 @@ test.describe('a name the website already shows', () => {
     await open(page, labelled('row', other, 'Uniswap V3: Router'), [record]);
     await tagFor(page, 'row').click();
     await save(page).click();
+    // The aside is never part of what is stored.
     await expect.poll(() => page.evaluate(() => window.saves.at(-1)))
       .toMatchObject({ address: other, tags: ['Uniswap V3: Router'], source: 'etherscan:page' });
 
     await open(page, labelled('row', other, 'Uniswap V3: Router'), [record]);
     await tagFor(page, 'row').click();
     await input(page).fill('The router we use');
-    await expect(offeredField(page)).toHaveCount(0);
+    await expect(fromSite(page)).toHaveCount(0);
     await save(page).click();
     const written = await page.evaluate(() => window.saves.at(-1));
     expect(written.tags).toEqual(['The router we use']);
@@ -542,7 +547,7 @@ test.describe('a name the website already shows', () => {
     await open(page, labelled('row', address, 'Uniswap V3: Router'), [record]);
     await tagFor(page, 'row').click();
     await expect(input(page)).toHaveValue('Treasury');
-    await expect(offeredField(page)).toHaveCount(0);
+    await expect(fromSite(page)).toHaveCount(0);
     await expect(offer(page)).toContainText('Uniswap V3: Router');
     await offer(page).getByRole('button', { name: 'Add tag' }).click();
     await save(page).click();
@@ -555,7 +560,7 @@ test.describe('a name the website already shows', () => {
     await open(page, labelled('row', address, 'Treasury'), [record]);
     await tagFor(page, 'row').click();
     await expect(offer(page)).toBeHidden();
-    await expect(offeredField(page)).toHaveCount(0);
+    await expect(fromSite(page)).toHaveCount(0);
   });
 
   // A label belongs to the chain the page was showing it on. Saving an
@@ -594,7 +599,7 @@ test.describe('a name the website already shows', () => {
     await open(page, labelled('row', other, '0xcdcd…cdcd'), [record]);
     await tagFor(page, 'row').click();
     await expect(input(page)).toHaveValue('');
-    await expect(offeredField(page)).toHaveCount(0);
+    await expect(fromSite(page)).toHaveCount(0);
   });
 });
 
@@ -635,4 +640,16 @@ test('the saved tick is drawn in the colour the button writes in', async ({ page
     .evaluate(node => getComputedStyle(node).backgroundColor);
   expect(drawn).toBe('rgb(74, 222, 128)');
   expect(contrast(drawn, fill)).toBeGreaterThanOrEqual(3);
+});
+
+// A record already saved carries its words as its own, whatever they were
+// first read from, so nothing beside them claims otherwise.
+test('a saved name is never labelled with where the record came from', async ({ page }) => {
+  const labelled = `<p><a id="row" href="/address/${address}"><span class="hash-tag">Binance 16</span></a></p>`;
+  await start(page, { html: `<header>Explorer</header><main>${labelled}</main>`,
+    records: [{ ...record, tags: ['My own words'], source: 'safe:address-book' }] });
+  await tagFor(page, 'row').click();
+  await expect(input(page)).toHaveValue('My own words');
+  await expect(page.getByRole('dialog').locator('.row .from')).toHaveCount(0);
+  await expect(page.getByRole('dialog')).not.toContainText('from Safe');
 });
