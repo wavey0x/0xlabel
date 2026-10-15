@@ -510,7 +510,7 @@ test.describe('a name the website already shows', () => {
     await open(page, labelled('row', other, 'Uniswap V3: Router'), [record]);
     await tagFor(page, 'row').click();
     await expect(input(page)).toHaveValue('Uniswap V3: Router');
-    await expect(attribution(page)).toHaveText('Suggested by Etherscan');
+    await expect(attribution(page)).toHaveText('Etherscan label');
     // Selected, so typing replaces it rather than appending to it.
     expect(await input(page).evaluate(field => [field.selectionStart, field.selectionEnd]))
       .toEqual([0, 'Uniswap V3: Router'.length]);
@@ -540,7 +540,8 @@ test.describe('a name the website already shows', () => {
     await tagFor(page, 'row').click();
     await expect(input(page)).toHaveValue('Treasury');
     await expect(attribution(page)).toBeHidden();
-    await expect(offer(page)).toContainText('Suggested by Etherscan: Uniswap V3: Router');
+    await expect(offer(page)).toContainText('Uniswap V3: Router');
+    await expect(offer(page)).toContainText('Etherscan label');
     await offer(page).getByRole('button', { name: 'Add tag' }).click();
     await save(page).click();
     await expect.poll(() => page.evaluate(() => window.saves.at(-1))).toMatchObject({
@@ -602,4 +603,38 @@ test.describe('a name the website already shows', () => {
     await expect(input(page)).toHaveValue('');
     await expect(attribution(page)).toBeHidden();
   });
+});
+
+// The accent does two jobs: words on a dark website have to be light enough to
+// read, and words on a filled control have to be dark enough to sit under
+// white. One colour cannot do both, so the filled surfaces keep their own.
+test('a filled control writes in white, on a purple dark enough to carry it', async ({ page }) => {
+  for (const [scheme, surface] of [['light', '#ffffff'], ['dark', '#101113']]) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await start(page, { html: `<style>html{background:${surface}}</style>` + wallets });
+    await tagFor(page, 'first').click();
+    const button = page.getByRole('dialog').locator('.save');
+    const [ink, fill] = await button.evaluate(node =>
+      [getComputedStyle(node).color, getComputedStyle(node).backgroundColor]);
+    expect(ink, `${scheme}: a filled control writes in white`).toBe('rgb(255, 255, 255)');
+    expect(contrast(ink, fill), `${scheme}: Save against its own fill`).toBeGreaterThanOrEqual(4.5);
+    // The switch knob is the same white on the same fill.
+    const knob = page.getByRole('dialog').locator('.visibility span');
+    expect(await knob.evaluate(node => getComputedStyle(node).backgroundColor)).toBe('rgb(255, 255, 255)');
+  }
+  await page.emulateMedia({ colorScheme: null });
+});
+
+// A tick drawn in the accent on a button filled with the accent is a
+// confirmation nobody can see.
+test('the saved tick is drawn in the colour the button writes in', async ({ page }) => {
+  await start(page);
+  await tagFor(page, 'first').click();
+  await input(page).fill('Treasury rename');
+  await save(page).click();
+  const stroke = page.getByRole('dialog').locator('.save svg path');
+  await expect(stroke).toHaveAttribute('stroke-dasharray', '14.2');
+  const [drawn, ink] = await stroke.evaluate(node =>
+    [getComputedStyle(node).stroke, getComputedStyle(node.closest('button')).color]);
+  expect(drawn).toBe(ink);
 });

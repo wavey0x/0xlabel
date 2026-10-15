@@ -7,9 +7,14 @@ const accent = '#5b21b6';
 // Deep purple reads at 2.1:1 on a dark surface, far short of the 4.5:1 a
 // tag needs. Lightened for dark websites only; the tints stay as they are.
 const accentOnDark = '#a78bfa';
-// The accent is both a text colour and a fill, so whatever sits on top of it
-// has to be themed with it: white on the lightened purple is only 2.72:1.
-const inkOnAccentDark = '#101113';
+// The accent does two jobs. As a text colour on a dark website it has to be
+// light to be read at all, which is what accentOnDark is for. As a fill with
+// words on top it has to be dark enough for them: white on the lightened
+// purple is 2.72:1, so a filled control in the dark theme keeps a deeper
+// purple of its own, where white reads at 7.1:1. Both themes then put the
+// same white on the same kind of surface, which is what a filled button and a
+// switch look like they should do.
+const accentFillDark = '#6d28d9';
 // Chrome never tells an extension whether its toolbar is light or dark, so the
 // active icon cannot switch the way a surface does: one purple has to clear 3:1
 // both ways. The deep accent is 1.55:1 on a dark toolbar, the lightened one
@@ -19,6 +24,7 @@ const iconAccent = '#8b5cf6';
 
 export const COLORS = Object.freeze({
   accent,
+  accentFill: accent,
   onAccent: white,
   iconAccent,
   iconIdle: '#7e8794',
@@ -40,6 +46,7 @@ export const COLORS = Object.freeze({
 export const THEMES = Object.freeze({
   light: {
     accent,
+    accentFill: accent,
     onAccent: white,
     canvas: '#f6f7fa', panel: white, ink: '#111111', muted: '#666666',
     glass: tint(white, 72), soft: tint(black, 2.75), line: tint(black, 6.25),
@@ -47,7 +54,8 @@ export const THEMES = Object.freeze({
   },
   dark: {
     accent: accentOnDark,
-    onAccent: inkOnAccentDark,
+    accentFill: accentFillDark,
+    onAccent: white,
     error: '#f87171',
     canvas: '#101113', panel: '#18191c', ink: '#fafafa', muted: '#aaaaaa',
     glass: tint('#16171a', 60), soft: tint(white, 3.1), line: tint(white, 7.8),

@@ -9,7 +9,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,summary:focus-vi
 button svg { display: block; width: 16px; height: 16px; }
 .quiet { color: var(--0xtagger-ink); background: transparent; }
 .quiet:hover { background: var(--0xtagger-soft); }
-.primary { color: var(--0xtagger-on-accent); background: var(--0xtagger-accent); }
+.primary { color: var(--0xtagger-on-accent); background: var(--0xtagger-accent-fill); }
 .icon { display: flex; align-items: center; justify-content: center; flex: 0 0 28px; width: 28px; height: 28px; padding: 6px; }
 .icon[aria-label^="Close"] { font-size: 22px; }
 .brand { display: inline-flex; align-items: center; gap: .2em; margin: 0; color: var(--0xtagger-ink); font-size: 20px; line-height: 1; font-weight: 750; letter-spacing: -.04em; white-space: nowrap; }
@@ -41,7 +41,7 @@ dialog.panel { width: 360px; max-width: calc(100vw - 24px); max-height: calc(100
 dialog::backdrop { background: var(--0xtagger-backdrop); backdrop-filter: blur(2px); }
 .switch { flex: 0 0 34px; width: 34px; height: 20px; padding: 3px; background: var(--0xtagger-switch-off); border-radius: 10px; }
 .switch span { display: block; width: 14px; height: 14px; background: var(--0xtagger-on-accent); border-radius: 50%; }
-.switch[aria-checked="true"] { background: var(--0xtagger-accent); }
+.switch[aria-checked="true"] { background: var(--0xtagger-accent-fill); }
 .switch[aria-checked="true"] span { transform: translateX(14px); }
 #location { anchor-name: --location; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex: 1; min-width: 0; text-align: left; font-weight: 750; color: var(--0xtagger-ink); background: var(--0xtagger-soft); padding: 8px 10px; }
 #location span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -96,3 +96,10 @@ dialog.panel { padding: 16px; }
 .setup-note code { font-size: 10px; }
 #location-menu .kept { display: flex; flex-shrink: 0; width: 13px; height: 13px; color: var(--0xtagger-muted); }
 #location-menu button[aria-checked="true"] .kept { color: var(--0xtagger-accent); }
+
+/* The tick draws on rather than appearing: the whole of the confirmation is
+   over in a quarter of a second, and it is the part worth watching. */
+@keyframes tagger-draw { from { stroke-dashoffset: 14.2; } to { stroke-dashoffset: 0; } }
+.confirmed svg path { animation: tagger-draw 240ms cubic-bezier(.2,.9,.3,1) both; }
+.quiet.confirmed { color: var(--0xtagger-accent); }
+@media (prefers-reduced-motion: reduce) { .confirmed svg path { animation: none; } }

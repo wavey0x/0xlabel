@@ -131,7 +131,8 @@ export function createEditor(container, { address, scope = 'global', state, save
     if (spare) {
       const button = element('button', 'Add tag', { type: 'button', class: 'quiet' });
       button.onclick = () => { draft.tags.push(offered.name); renderRows(draft.tags.length - 1); };
-      get('.offer').append(element('span', `${suggestedBy(offered.source)}: ${offered.name}`), button);
+      get('.offer').append(element('span', offered.name),
+        element('small', suggestedBy(offered.source)), button);
     }
   }
   function preview() {
@@ -152,10 +153,12 @@ export function createEditor(container, { address, scope = 'global', state, save
     const busy = phase !== 'idle';
     get('.save').disabled = busy || activeState.activeBook !== book;
     if (phase === 'saved') {
-      get('.save').innerHTML = COPIED_ICON;
+      if (!get('.save').classList.contains('confirmed')) get('.save').innerHTML = COPIED_ICON;
+      get('.save').classList.add('confirmed');
       get('.save').setAttribute('aria-label', 'Saved');
       get('.save').title = 'Saved';
     } else {
+      get('.save').classList.remove('confirmed');
       get('.save').textContent = busy ? 'Saving…' : 'Save';
       get('.save').removeAttribute('aria-label');
       get('.save').title = bookName ? `Save to ${bookName}` : 'Save';
@@ -224,12 +227,16 @@ export function createEditor(container, { address, scope = 'global', state, save
       guard();
       // Confirm the write first; a small local animation never determines
       // whether a save succeeded. Keep the button locked until it closes.
+      // The button gives a little under the press and comes back past where it
+      // started, while a ring leaves it and the tick draws itself on. Brief
+      // enough to be over before anyone waits for it.
       const frames = matchMedia('(prefers-reduced-motion: reduce)').matches ? [{ opacity: 1 }, { opacity: 1 }] : [
-        { transform: 'scale(1)', boxShadow: '0 0 0 0 transparent' },
-        { transform: 'scale(1.06)', boxShadow: '0 0 0 4px var(--0xtagger-accent-pulse)', offset: .35 },
+        { transform: 'scale(1)', boxShadow: '0 0 0 0 var(--0xtagger-accent-glow)' },
+        { transform: 'scale(.95)', boxShadow: '0 0 0 2px var(--0xtagger-accent-pulse)', offset: .2 },
+        { transform: 'scale(1.05)', boxShadow: '0 0 0 8px transparent', offset: .62 },
         { transform: 'scale(1)', boxShadow: '0 0 0 0 transparent' },
       ];
-      await get('.save').animate(frames, { duration: 300, easing: 'ease-out' }).finished.catch(() => {});
+      await get('.save').animate(frames, { duration: 340, easing: 'cubic-bezier(.2,.9,.3,1)' }).finished.catch(() => {});
       finish();
     } catch (error) {
       if (closed) return;

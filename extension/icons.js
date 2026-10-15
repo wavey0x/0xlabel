@@ -57,7 +57,11 @@ export const TRASH_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentC
 
 const COPIED_CHECK_MS = 1500;
 
-export const COPIED_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="var(--0xtagger-accent)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 8 3 3 7-7"/></svg>';
+// Drawn in whatever colour the button already writes in: it confirms on a
+// quiet button and on a filled one, and on the filled one it used to be the
+// accent on the accent — a tick nobody could see. The dash length is the path
+// length, so a stylesheet can draw it on rather than flash it into place.
+export const COPIED_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 8 3 3 7-7" stroke-dasharray="14.2" stroke-dashoffset="0"/></svg>';
 
 // Confirm a copy on the button that did it, then put the button back. The
 // first call remembers the resting state, so repeated copies keep showing the
@@ -70,10 +74,12 @@ export function confirmCopied(button, tag = 'Copied') {
   const state = resting.get(button);
   clearTimeout(state.timer);
   button.innerHTML = COPIED_ICON;
+  button.classList.add('confirmed');
   button.setAttribute('aria-label', tag);
   button.title = tag;
   state.timer = setTimeout(() => {
     button.innerHTML = state.icon;
+    button.classList.remove('confirmed');
     if (state.tag === null) button.removeAttribute('aria-label');
     else button.setAttribute('aria-label', state.tag);
     button.title = state.title;
