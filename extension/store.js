@@ -1,4 +1,4 @@
-import { difference, findRecord, normalizeTags, normalizeScope, parseAddress, recordKey, sameTags, validateSnapshot } from './shared.js';
+import { difference, findRecord, normalizeTags, normalizeScope, parseAddress, recordKey, sameTags, validateImport } from './shared.js';
 import { createRecords } from './records.js';
 import { createServerBook } from './stores/server.js';
 
@@ -262,12 +262,12 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
   // any tags already held for the same address on the same network. One file
   // is one decision, so it is one write: all of it lands or none of it does.
   async function merge(incoming) {
-    const wanted = validateSnapshot({ records: incoming });
+    const wanted = validateImport(incoming);
     return serial(async () => {
       if (unreadable) throw new Error('This address book could not be read, so nothing was added to it.');
       const index = new Map(records.map(item => [recordKey(item.address, item.scope), item]));
-      // The receiving book issues its own versions, so a file cannot carry one in.
-      const drafts = wanted.map(({ address, scope, tags }) => ({ address, scope, tags }));
+      // Versions belong to the receiving book, and a file never carries one.
+      const drafts = wanted;
       let saved;
       if (remote) {
         saved = await remote.putMany(drafts.map(draft => ({ ...draft,

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { IDBFactory, IDBKeyRange as FakeKeyRange } from 'fake-indexeddb';
 import { createStore } from '../extension/store.js';
-import { applyChange, normalizeAPI, parseConnectLink } from '../extension/shared.js';
+import { applyChange, normalizeAPI, parseConnectLink, readBookFile } from '../extension/shared.js';
 
 const address = '0x' + 'ab'.repeat(20);
 const other = '0x' + 'cd'.repeat(20);
@@ -524,4 +524,66 @@ test('a refusal that names no record leaves the saved copy alone', async () => {
   intercept((url, options) => (options.method === 'PUT' ? response({ detail: 'Saved elsewhere.' }, 409) : null));
   await assert.rejects(write(store, ['Renamed'], { version: 'v1' }), error => error.status === 409);
   assert.deepEqual(store.state().records.map(entry => entry.tags[0]), ['Treasury']);
+});
+
+// Safe exports `address,name,chainId`, one row per chain, so the same name on
+// three chains is three rows. That is the same thing our own book says.
+test('a Safe address book reads as tags, one record per network', async () => {
+  const { store } = harness();
+  await store.init();
+  const csv = ['address,name,chainId', `${address},Treasury,1`, `${address},Treasury,137`,
+    `${other},"Operations, EU",8453`].join('\r\n');
+  const result = await store.merge(readBookFile(csv));
+  assert.equal(result.added, 3);
+  assert.deepEqual(store.state().records.map(item => [item.address, item.scope, item.tags[0]]).sort(),
+    [[address, 'eip155:1', 'Treasury'], [address, 'eip155:137', 'Treasury'],
+     [other, 'eip155:8453', 'Operations, EU']].sort());
+});
+
+// A chain nobody here has heard of is still a network the record belongs to.
+test('a Safe row keeps a chain this build does not know, and an empty chain is every network', async () => {
+  const { store } = harness();
+  await store.init();
+  await store.merge(readBookFile(['address,name,chainId', `${address},Treasury,43114`, `${other},Everywhere,`].join('\n')));
+  assert.deepEqual(store.state().records.map(item => item.scope).sort(), ['eip155:43114', 'global']);
+});
+
+// A spreadsheet leaves a byte-order mark behind; it is not content.
+test('a Safe export saved by a spreadsheet still reads', async () => {
+  const { store } = harness();
+  await store.init();
+  await store.merge(readBookFile(`\uFEFFaddress,name,chainId\n${address},Treasury,1\n`));
+  assert.equal(store.state().records[0].tags[0], 'Treasury');
+});
+
+// Versions are issued by the book that receives a record, so a file that has
+// never been in a book has none to give.
+test('a file imports without carrying a version, and the book issues one', async () => {
+  const { store } = harness();
+  await store.init();
+  await store.merge(readBookFile(JSON.stringify({ records: [{ address, tags: ['Treasury'] }] })));
+  const [held] = store.state().records;
+  assert.equal(held.scope, 'global');
+  assert.equal(typeof held.version, 'string');
+  assert.ok(held.version);
+});
+
+test('our own export reads back', async () => {
+  const { store } = harness();
+  await store.init();
+  await write(store, ['Treasury', 'Operations']);
+  const exported = JSON.stringify({ records: store.state().records }, null, 2);
+  const second = harness();
+  await second.store.init();
+  await second.store.merge(readBookFile(exported));
+  assert.deepEqual(second.store.state().records.map(item => item.tags), [['Treasury', 'Operations']]);
+});
+
+test('a file that is neither is refused, and a bad row says which row', async () => {
+  assert.throws(() => readBookFile('name,address\nTreasury,0x1'), /not a 0xtagger export or a Safe address book/);
+  const { store } = harness();
+  await store.init();
+  await assert.rejects(store.merge(readBookFile(['address,name,chainId', `${address},Treasury,1`, 'not-an-address,Oops,1'].join('\n'))),
+    /Row 2: that is not a full Ethereum address/);
+  assert.equal(store.state().records.length, 0, 'one file is one decision');
 });

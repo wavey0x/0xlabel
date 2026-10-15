@@ -1,5 +1,5 @@
 import { $, rpc, emptyState, currentSnapshot, syncText, bookPicker, newBookForm, watchBook, dismissDialog } from './ui.js';
-import { parseAddress, normalizeScope } from './shared.js';
+import { parseAddress, normalizeScope, readBookFile } from './shared.js';
 import { scopeName } from './networks.js';
 import { checksumAddress } from './checksum.js';
 import { createEditor, editorStyles } from './editor.js';
@@ -173,11 +173,10 @@ $('#import-file').onchange = async event => {
   event.target.value = '';
   if (!file) return;
   try {
-    const parsed = JSON.parse(await file.text());
-    const result = await rpc({ type: 'Import', records: parsed.records ?? parsed });
+    const result = await rpc({ type: 'Import', records: readBookFile(await file.text()) });
     tell(`Added ${result.added} address${result.added === 1 ? '' : 'es'} to ${state.bookName}.`);
   } catch (error) {
-    tell(error instanceof SyntaxError ? 'That file is not a 0xtagger export.' : error);
+    tell(error instanceof SyntaxError ? 'That file is not a 0xtagger export or a Safe address book.' : error);
   }
 };
 $('#export').onclick = () => {

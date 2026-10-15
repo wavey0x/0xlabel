@@ -129,3 +129,77 @@ export function difference(held, incoming) {
 export function indexBook(records) {
   return new Map(records.map(entry => [recordKey(entry.address, entry.scope), entry]));
 }
+
+// A book arrives either as our own JSON export or as Safe's address book,
+// which is a CSV of `address,name,chainId` with one row per chain. Both say
+// the same three things: an address, the tags for it, and the network those
+// tags belong to. Reading them here keeps file formats out of the views.
+const SAFE_COLUMNS = ['address', 'name', 'chainId'];
+
+// RFC 4180 fields: commas and newlines survive inside quotes, and a doubled
+// quote is a literal one. A name people typed is allowed to contain both.
+function csvRows(text) {
+  const rows = [];
+  let row = [];
+  let field = '';
+  let quoted = false;
+  for (let at = 0; at < text.length; at += 1) {
+    const character = text[at];
+    if (quoted) {
+      if (character !== '"') field += character;
+      else if (text[at + 1] === '"') { field += '"'; at += 1; }
+      else quoted = false;
+    } else if (character === '"') quoted = true;
+    else if (character === ',') { row.push(field); field = ''; }
+    else if (character === '\n' || character === '\r') {
+      if (character === '\r' && text[at + 1] === '\n') at += 1;
+      row.push(field); rows.push(row); row = []; field = '';
+    } else field += character;
+  }
+  if (field || row.length) { row.push(field); rows.push(row); }
+  return rows.filter(cells => cells.some(cell => cell.trim()));
+}
+
+export function readBookFile(text) {
+  // A byte-order mark is what a spreadsheet leaves behind; it is not content.
+  const body = text.replace(/^﻿/, '').trimStart();
+  if (body.startsWith('{') || body.startsWith('[')) {
+    const parsed = JSON.parse(body);
+    return parsed.records ?? parsed;
+  }
+  const [header, ...rows] = csvRows(body);
+  if (!header || header.length !== SAFE_COLUMNS.length ||
+      !SAFE_COLUMNS.every((column, at) => header[at].trim() === column)) {
+    throw new Error('That file is not a 0xtagger export or a Safe address book.');
+  }
+  // Safe names one chain per row, and names none for an address kept everywhere.
+  return rows.map(([address, name, chain]) => ({
+    address: address?.trim(),
+    tags: [name?.trim()],
+    scope: chain?.trim() ? `eip155:${chain.trim()}` : 'global',
+  }));
+}
+
+// What a file is allowed to carry. The receiving book issues its own versions,
+// so an imported record never brings one, and a record that names no network
+// is one that stands on every network. Rows are counted the way a spreadsheet
+// shows them, because that is where the reader will go to fix it.
+export function validateImport(records) {
+  if (!Array.isArray(records)) throw new Error('That file is not an address book.');
+  const seen = new Set();
+  return records.map((item, at) => {
+    try {
+      const address = parseAddress(item?.address);
+      if (!address) throw new Error('That is not a full Ethereum address.');
+      const scope = normalizeScope(item.scope ?? 'global');
+      const tags = normalizeTags(item.tags);
+      if (!tags.length) throw new Error('It names no tags.');
+      const key = recordKey(address, scope);
+      if (seen.has(key)) throw new Error('This address and network are already in the file.');
+      seen.add(key);
+      return { address, scope, tags };
+    } catch (failure) {
+      throw new Error(`Row ${at + 1}: ${failure.message[0].toLowerCase()}${failure.message.slice(1)}`);
+    }
+  });
+}
