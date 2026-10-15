@@ -21,12 +21,35 @@ const site = ({ rules, watch = [], ...adapter }) => ({
 
 const SEARCH_ROW = '.search-panel-container li[role="option"] > a[href]';
 
+// The explorer keeps a name's own tooltip ahead of the address it belongs to:
+// "Wrapped Ether (0xc02a…)". Where a row has the room, the two say the same
+// thing; where it has not, the shown one is cut short to fit.
+const TOOLTIP = /^(.*?)\s*\(0x[0-9a-f]{40}\)$/is;
+// A name cut short to fit is not a name. The tooltip is the only place the
+// whole of it is kept, and a row with neither is offering nothing.
+const whole = element => /[.…]$/.test(element.textContent.trim())
+  ? element.getAttribute('title')?.match(TOOLTIP)?.[1] || null
+  : element.textContent;
+// A token is named in its own row rather than by a public name tag. A token
+// with no name of its own leaves that half of the tooltip empty and leads with
+// its symbol, which is short enough to be shown whole.
+const tokenName = element => {
+  const at = element.matches('a[href*="/token/"]') ? parseAddress(element.getAttribute('data-highlight-target')) : null;
+  const tooltip = at && query(element, '[title]').find(node => node.title.toLowerCase().endsWith(`(${at})`));
+  if (!tooltip) return null;
+  return tooltip.title.slice(0, -at.length - 2).trim() || whole(tooltip);
+};
+
 const etherscanAdapter = site({
   id: 'Etherscan',
   source: 'etherscan:page',
   // What the explorer calls this address: its public name tag, which is the
-  // same element a tag is allowed to stand in for.
-  names: element => (element.matches('.hash-tag') ? element : element.querySelector('.hash-tag'))?.textContent,
+  // same element a tag is allowed to stand in for. A token row has no name tag
+  // and names the token itself, so that is what the explorer is calling it.
+  names: element => {
+    const tagged = element.matches('.hash-tag') ? element : element.querySelector('.hash-tag');
+    return tagged ? whole(tagged) : tokenName(element);
+  },
   matches: url => Boolean(explorerNetwork(url.hostname)),
   watch: ['data-highlight-value'],
   // The heading of an address page is what the page is about. A name alone
