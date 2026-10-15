@@ -1,5 +1,5 @@
 import { $, rpc, emptyState, currentSnapshot, syncText, bookPicker, newBookForm, watchBook, dismissDialog, tooltips } from './ui.js';
-import { parseAddress, normalizeScope, readBookFile } from './shared.js';
+import { parseAddress, normalizeScope, readBookFile, reviewImport, sourceName } from './shared.js';
 import { scopeName } from './networks.js';
 import { checksumAddress } from './checksum.js';
 import { createEditor, editorStyles } from './editor.js';
@@ -52,6 +52,9 @@ function render(next = state) {
     .sort((one, two) => one.record.tags[0].localeCompare(two.record.tags[0]) ||
       one.record.address.localeCompare(two.record.address));
   if (editor) editor.updateState(state);
+  // A book that moved under a review is still the book it is going into, so
+  // what it would add is worked out again rather than left as it was.
+  if (pending) renderReview();
   search();
 }
 function edit(address, scope = 'global') {
@@ -176,9 +179,7 @@ $('#import-file').onchange = async event => {
   if (!file) return;
   try {
     const { records, unnamed } = readBookFile(await file.text());
-    const result = await rpc({ type: 'Import', records });
-    const skipped = unnamed ? ` ${unnamed} unnamed row${unnamed === 1 ? '' : 's'} skipped.` : '';
-    tell(`Added ${result.added} address${result.added === 1 ? '' : 'es'} to ${state.bookName}.${skipped}`);
+    review(records, { unnamed, what: file.name });
   } catch (error) {
     tell(error instanceof SyntaxError ? 'That file is not a 0xtagger export or a Safe address book.' : error);
   }
@@ -189,11 +190,108 @@ $('#export').onclick = () => {
   const link = document.createElement('a'); link.href = url; link.download = '0xtagger-book.json'; link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
+// One screen you read. It says where the names are going and what will be
+// added; everything else it has to say, it says in a line. Nothing is chosen
+// here, because asking to import was the choice — a row can be left out, and
+// that is the whole of it.
+let pending = null;
+function showReview(on) {
+  $('.book-panel').hidden = on;
+  $('.book-heading').hidden = on;
+  $('#review').hidden = !on;
+  if (!on) pending = null;
+}
+function review(records, { unnamed = 0, what = '' } = {}) {
+  // A file that named a network for nothing lands everywhere, and the network
+  // is shown rather than asked about. Offering to change it is only honest
+  // where the file itself said nothing either way.
+  const scoped = records.some(item => item.scope && item.scope !== 'global');
+  pending = { records, unnamed, what, scoped, network: '', left: new Set() };
+  showReview(true);
+  $('#review-into').textContent = `Into ${state.bookName}${what ? ` · ${what}` : ''}`;
+  $('#review-scope').hidden = scoped || !records.length;
+  $('#review-network').value = '';
+  tell('');
+  renderReview();
+}
+function renderReview() {
+  if (!pending) return;
+  let outcome;
+  try { outcome = reviewImport(scoped(), state.records); }
+  catch (error) { tell(error); showReview(false); return; }
+  const rows = outcome.add.filter((_, index) => !pending.left.has(index));
+  $('#review-rows').replaceChildren(...outcome.add.map((entry, index) => {
+    const row = document.createElement('tr');
+    const out = pending.left.has(index);
+    if (out) row.setAttribute('data-left-out', '');
+    const name = document.createElement('td'); name.textContent = entry.tags.join(' · ');
+    const at = document.createElement('td'); at.className = 'address';
+    at.textContent = checksumAddress(entry.address);
+    const where = document.createElement('td'); where.textContent = scopeName(entry.scope);
+    const drop = document.createElement('td');
+    const button = document.createElement('button');
+    button.type = 'button'; button.className = 'quiet drop';
+    button.textContent = out ? 'Put back' : 'Leave out';
+    button.setAttribute('aria-label', `${out ? 'Put back' : 'Leave out'} ${entry.tags[0]}`);
+    button.onclick = () => {
+      if (out) pending.left.delete(index); else pending.left.add(index);
+      renderReview();
+    };
+    drop.append(button);
+    row.append(name, at, where, drop);
+    return row;
+  }));
+  const said = [];
+  if (outcome.kept) said.push(`${outcome.kept} name${outcome.kept === 1 ? '' : 's'} you already have ${outcome.kept === 1 ? 'was' : 'were'} kept`);
+  if (pending.unnamed) said.push(`${pending.unnamed} unnamed row${pending.unnamed === 1 ? '' : 's'} skipped`);
+  $('#review-summary').textContent = outcome.add.length ? `${said.join('. ')}${said.length ? '.' : ''}`
+    : said.length ? `All names are already in your book. ${said.join('. ')}.` : 'All names are already in your book.';
+  const bad = $('#review-invalid');
+  bad.hidden = !outcome.invalid.length;
+  bad.querySelector('summary').textContent = `${outcome.invalid.length} row${outcome.invalid.length === 1 ? '' : 's'} could not be read`;
+  bad.querySelector('ul').replaceChildren(...outcome.invalid.map(item => {
+    const line = document.createElement('li');
+    line.textContent = `Row ${item.row}: ${item.reason[0].toLocaleLowerCase()}${item.reason.slice(1)}`;
+    return line;
+  }));
+  $('#confirm-import').textContent = rows.length
+    ? `Import ${rows.length.toLocaleString()} name${rows.length === 1 ? '' : 's'}` : 'Nothing to import';
+  $('#confirm-import').disabled = busy || !rows.length;
+  pending.ready = rows;
+}
+// What the file said, with the one network choice the screen offers applied to
+// a file that named none. Recomputed before anything is written.
+function scoped() {
+  const id = $('#review-network').value.trim();
+  if (pending.scoped || !id) return pending.records;
+  const scope = normalizeScope(`eip155:${id}`);
+  return pending.records.map(item => ({ ...item, scope }));
+}
+$('#review-network').oninput = () => { tell(''); renderReview(); };
+$('#cancel-import').onclick = () => { showReview(false); tell(''); };
+$('#confirm-import').onclick = async () => {
+  if (!pending?.ready?.length) return;
+  const wanted = pending.ready;
+  busy = true; renderReview();
+  try {
+    const result = await rpc({ type: 'Import', records: wanted });
+    showReview(false);
+    tell(`${result.added.toLocaleString()} name${result.added === 1 ? '' : 's'} imported.`);
+  } catch (error) {
+    // The screen and what was left out stay exactly as they were; only the
+    // comparison against the book is worth doing again.
+    tell(error?.status === 409 ? 'Some names changed. Review and import again.' : error);
+  } finally { busy = false; renderReview(); }
+};
+
 tooltips();
 watchBook(() => state, render);
 try {
   const [, response] = await ready;
   render(response.state);
+  // A website was asked what names it keeps, and this is where they are read.
+  const held = await rpc({ type: 'PendingImport' }).catch(() => null);
+  if (held?.records?.length) review(held.records, { what: sourceName(held.records[0]?.source) });
 } catch (error) { render(); tell(error); }
 finally {
   $('.book').hidden = false;

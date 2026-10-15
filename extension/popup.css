@@ -16,3 +16,6 @@ body { width: 320px; padding: 10px; background: radial-gradient(ellipse at top l
 #adapter-warning { font-size: 11px; color: var(--0xtagger-warning); }
 #adapter-warning p { margin: 8px 0 2px; }
 #adapter-warning button { font-size: 10px; padding: 4px 8px 4px 0; }
+
+/* Offered only where a website keeps names of its own, and only once it is on. */
+.import-site { display: block; width: 100%; margin-top: 8px; text-align: left; font-size: 12px; }

@@ -362,3 +362,80 @@ test('installed extension: a book that works with no setup, moving it to a serve
     await context.close(); await api.dispose(); await rm(profile,{recursive:true,force:true});
   }
 });
+
+// Importing is one screen you read: what is going where, what is already
+// yours, and one button. The write that follows comes from the book page,
+// never from the website the names were read on.
+test('installed extension: a file is reviewed before it lands, and a page cannot import', async () => {
+  test.setTimeout(90000);
+  const other = '0x' + 'cd'.repeat(20);
+  const profile = await mkdtemp(path.join(tmpdir(), '0xtagger-chrome-import-'));
+  const extension = path.join(profile, 'extension');
+  await cp(path.resolve('extension'), extension, { recursive: true });
+  const manifest = JSON.parse(await readFile(path.join(extension, 'manifest.json'), 'utf8'));
+  manifest.host_permissions = ['http://127.0.0.1/*', 'https://127.0.0.1/*'];
+  await writeFile(path.join(extension, 'manifest.json'), JSON.stringify(manifest));
+  const context = await chromium.launchPersistentContext(profile, {
+    channel: 'chromium', headless: true, ignoreHTTPSErrors: true,
+    args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`, '--ignore-certificate-errors'],
+  });
+  const errors = [];
+  context.on('weberror', error => errors.push(error.error().message));
+  try {
+    const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker');
+    const id = worker.url().split('/')[2];
+    const book = await context.newPage();
+    await book.goto(`chrome-extension://${id}/book.html`);
+    await expect(book.locator('.book')).toBeVisible();
+
+    // Something already in the book, so the review has a name to keep.
+    await book.evaluate(async at => {
+      await chrome.runtime.sendMessage({ type: 'Save',
+        draft: { book: (await chrome.runtime.sendMessage({ type: 'State' })).result.state.activeBook,
+          address: at, scope: 'global', tags: ['Treasury'], version: null } });
+    }, address);
+    await expect(book.locator('#results tr')).toHaveCount(1);
+
+    // Safe's signer export: no header, no network, and a signer nobody named.
+    const file = [`${address},Safe calls it this`, `${other},dudesahn`, `${'0x' + 'ef'.repeat(20)},`].join('\n');
+    await book.locator('#import-file').setInputFiles({ name: '1-signers.csv', mimeType: 'text/csv', buffer: Buffer.from(file) });
+
+    await expect(book.locator('#review')).toBeVisible();
+    await expect(book.locator('.book-panel')).toBeHidden();
+    await expect(book.locator('#review-rows tr')).toHaveCount(1);
+    await expect(book.locator('#review-rows')).toContainText('dudesahn');
+    await expect(book.locator('#review-summary')).toContainText('1 name you already have was kept');
+    await expect(book.locator('#review-summary')).toContainText('1 unnamed row skipped');
+    // The file named no network, so the choice is shown rather than asked.
+    await expect(book.locator('#review-scope')).toBeVisible();
+    await expect(book.locator('#review-rows')).toContainText('All networks');
+    await expect(book.locator('#confirm-import')).toHaveText('Import 1 name');
+
+    // Changing the one network choice reworks the screen before anything lands.
+    await book.locator('#review-network').fill('8453');
+    await expect(book.locator('#review-rows')).toContainText('Base');
+    await book.locator('#review-network').fill('');
+
+    await book.locator('#confirm-import').click();
+    await expect(book.locator('#review')).toBeHidden();
+    await expect(book.locator('#message')).toContainText('1 name imported');
+    await expect(book.locator('#results tr')).toHaveCount(2);
+    // The name already held was never touched, and the new one kept its origin.
+    const held = await book.evaluate(async () =>
+      (await chrome.runtime.sendMessage({ type: 'State' })).result.state.records);
+    expect(held.find(item => item.address === address).tags).toEqual(['Treasury']);
+    expect(held.find(item => item.address === other)).toMatchObject({ tags: ['dudesahn'], scope: 'global' });
+
+    // A website can be asked what it keeps; it never decides what is done with
+    // the answer. The extension declares no externally_connectable, so a page
+    // has nothing to send with, and the worker refuses these verbs from
+    // anything that is not one of its own views regardless.
+    const site = await context.newPage();
+    await site.goto('http://127.0.0.1:8719/tests/fixtures/generic.html');
+    expect(await site.evaluate(() => typeof chrome === 'undefined' || !chrome.runtime?.sendMessage)).toBe(true);
+
+    expect(errors).toEqual([]);
+  } finally {
+    await context.close(); await rm(profile, { recursive: true, force: true });
+  }
+});

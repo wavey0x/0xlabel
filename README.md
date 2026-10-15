@@ -14,6 +14,9 @@ Tag wallet addresses directly on Etherscan, Safe, and other enabled sites. Carry
 
 Your stored book stays under your control. **Websites can read tags displayed on their pages.**
 
+0xtagger reads a website's own stored address book only when you ask it to, from **Import names from
+Safe**, and shows you what it found before anything is saved. Nothing is read while you browse.
+
 ### Get started
 
 ```sh

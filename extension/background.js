@@ -1,6 +1,6 @@
 import { COLORS } from './colors.js';
 import { createStore } from './store.js';
-import { hostPermission } from './shared.js';
+import { hostPermission, validateImport } from './shared.js';
 
 let sites = {};
 const health = new Map();
@@ -117,7 +117,8 @@ async function handle(message, sender) {
     // The toolbar describes the outer page. Embedded views cannot replace its
     // adapter status (including unrelated contract and advertising frames).
     if (sender.frameId !== 0) return {};
-    const value = { adapter: String(message.adapter).slice(0, 40), status: message.status, origin: siteOrigin(sender.url) };
+    const value = { adapter: String(message.adapter).slice(0, 40), status: message.status,
+      imports: Boolean(message.imports), origin: siteOrigin(sender.url) };
     const tab = await chrome.tabs.get(sender.tab.id);
     if (!tab.url || siteOrigin(tab.url) !== value.origin) return {};
     await updateAction(sender.tab.id, value);
@@ -135,6 +136,23 @@ async function handle(message, sender) {
     return store.add({ name: message.name, storage: where, copyFrom: message.copyFrom });
   }
   if (message.type === 'Import') return store.merge(message.records);
+  // A website is asked what names it keeps; it never says what to do with
+  // them. The answer is held for the book page to review, and the write that
+  // may follow is an ordinary Import from a trusted view.
+  if (message.type === 'Harvest') {
+    const tab = await chrome.tabs.get(message.tabId);
+    const origin = siteOrigin(tab.url);
+    if (!sites[origin]) throw new Error('Enable this website first.');
+    const answer = await send(message.tabId, { type: 'Harvest' });
+    const records = validateImport(answer?.records || []);
+    await chrome.storage.session.set({ pendingImport: { records, origin } });
+    return { count: records.length, origin };
+  }
+  if (message.type === 'PendingImport') {
+    const held = (await chrome.storage.session.get('pendingImport')).pendingImport || null;
+    await chrome.storage.session.remove('pendingImport');
+    return held;
+  }
   if (message.type === 'RenameBook') return store.rename(message.book, message.name);
   if (message.type === 'RemoveBook') return store.remove(message.book);
   if (message.type === 'Refresh') return store.refresh();

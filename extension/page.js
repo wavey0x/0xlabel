@@ -217,10 +217,19 @@ export async function createPageController({
       paint(target);
     }
   }
+  // The names this website keeps about addresses, for the trusted view to
+  // review. Nothing is written from here: this answers a question and the
+  // decision is made somewhere a website cannot reach.
+  function harvest() {
+    return health.status === 'ready' && adapter.harvest ? adapter.harvest(win) : [];
+  }
   function setHealth(next, reason) {
     const changed = health.status !== next.status || health.network !== next.network;
     health = next;
-    if (changed || reason || !reported) { reported = true; report({ adapter: adapter?.id || 'This site', ...next }); }
+    if (changed || reason || !reported) {
+      reported = true;
+      report({ adapter: adapter?.id || 'This site', imports: Boolean(adapter?.harvest), ...next });
+    }
     if (reason) console.warn(`0xtagger ${adapter?.id}: ${reason}`);
   }
   function fail(reason) {
@@ -467,7 +476,7 @@ export async function createPageController({
   dirty.add(doc);
   run();
   return {
-    updateState, patch, stop,
+    updateState, patch, stop, harvest,
     retry() { dirty.add(doc); run(true); },
     openEditor(info = {}) {
       if (contextTarget) {
@@ -503,6 +512,7 @@ export async function startPage() {
       else if (!controller.patch(value)) resync();
     }
     if (value.type === 'Status') reply?.({ health: controller?.health });
+    if (value.type === 'Harvest') reply?.({ records: controller?.harvest() || [] });
     if (value.type === 'Retry') { controller?.retry(); reply?.({ health: controller?.health }); }
     if (value.type === 'OpenEditor') controller?.openEditor(value);
     if (value.type === 'Recheck') rpc({ type: 'State' }).then(result => { if (!result.enabled) message({ type: 'Disable' }); }).catch(() => {});

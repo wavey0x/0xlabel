@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { IDBFactory, IDBKeyRange as FakeKeyRange } from 'fake-indexeddb';
 import { createStore } from '../extension/store.js';
-import { applyChange, normalizeAPI, parseConnectLink, readBookFile } from '../extension/shared.js';
+import { applyChange, normalizeAPI, parseConnectLink, readBookFile, reviewImport } from '../extension/shared.js';
 
 const address = '0x' + 'ab'.repeat(20);
 const other = '0x' + 'cd'.repeat(20);
@@ -666,4 +666,39 @@ test('an import carrying nothing writes nothing, asks nothing and moves no revis
   assert.deepEqual(await store.merge([]), { added: 0 });
   assert.equal(store.state().stateRevision, before, 'nothing changed, so nothing moved');
   assert.equal(calls.length, quiet, 'and nothing was sent');
+});
+
+// What an import would do, worked out before anything is written. The unit is
+// the address, the same as it is everywhere else: a name you already have is
+// kept, and which network either side names it on does not come into it.
+test('a review says what would be added, what is already yours, and what it could not read', async () => {
+  const held = [{ address, scope: 'eip155:1', tags: ['Treasury'], version: 'one' }];
+  const outcome = reviewImport([
+    { row: 2, address, tags: ['Safe calls it this'], scope: 'global' },
+    { row: 3, address: other, tags: ['Payroll'], scope: 'eip155:8453' },
+    { row: 4, address: 'not-an-address', tags: ['Oops'] },
+    { row: 5, address: third, tags: [''] },
+  ], held);
+  assert.deepEqual(outcome.add, [{ address: other, scope: 'eip155:8453', tags: ['Payroll'] }]);
+  assert.equal(outcome.kept, 1, 'an address already named is left exactly as it is');
+  assert.deepEqual(outcome.invalid.map(item => item.row), [4, 5]);
+  assert.match(outcome.invalid[0].reason, /full Ethereum address/);
+});
+
+test('a review keeps the rest when one row cannot be read, and counts a repeat once', async () => {
+  const outcome = reviewImport([
+    { row: 2, address, tags: ['Treasury'] },
+    { row: 3, address, tags: ['Treasury again'] },
+    { row: 4, address: other, tags: ['Payroll'] },
+  ], []);
+  assert.deepEqual(outcome.add.map(item => item.tags[0]), ['Treasury', 'Payroll']);
+  assert.deepEqual(outcome.invalid.map(item => item.row), [3]);
+  assert.match(outcome.invalid[0].reason, /already in the file/);
+});
+
+test('a review of a Safe signer export carries its source and names every network', async () => {
+  const { records } = readBookFile([`${address},dudesahn`, `${other},wavey`].join('\n'));
+  const outcome = reviewImport(records.map(item => ({ ...item, source: 'safe:address-book' })), []);
+  assert.deepEqual(outcome.add.map(item => [item.scope, item.source]),
+    [['global', 'safe:address-book'], ['global', 'safe:address-book']]);
 });

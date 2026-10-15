@@ -36,3 +36,17 @@ td code { display: block; font: 12px/1.6 ui-monospace, monospace; overflow-wrap:
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @media (max-width: 600px) { .book { width: calc(100% - 24px); padding: 16px 0; } .book-header { margin-bottom: 28px; } .book-header .connection-line { width: 180px; } th,td { padding: 10px; } th:first-child { width: 35%; } td code { font-size: 10px; } .book-tools { gap: 8px; } }
 #remove-name { margin-top: 10px; }
+
+/* One screen you read: what will be added, where it is going, and one button.
+   Nothing is chosen here, because choosing was done by asking to import. */
+#review { margin-top: 14px; }
+#review .table-scroll { max-height: 46vh; }
+#review td { vertical-align: top; }
+#review .drop { padding: 0; font-size: 12px; color: var(--0xtagger-muted); }
+#review .drop:hover { color: var(--0xtagger-warning); }
+#review tr[data-left-out] td:not(:last-child) { opacity: .45; text-decoration: line-through; }
+.review-scope { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; }
+.review-scope input { width: 10em; }
+#review-invalid { margin-top: 10px; font-size: 12px; color: var(--0xtagger-muted); }
+#review-invalid ul { margin: 6px 0 0; padding-left: 18px; }
+#review-invalid li { margin: 2px 0; }

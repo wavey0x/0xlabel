@@ -87,6 +87,7 @@ const SOURCE_NAMES = {
   'safe:page': 'Safe',
   'etherscan:page': 'Etherscan',
 };
+export const sourceName = source => SOURCE_NAMES[source] || '';
 export const suggestedBy = source => (SOURCE_NAMES[source] ? `Suggested by ${SOURCE_NAMES[source]}` : '');
 export const addedFrom = source => (SOURCE_NAMES[source] ? `Added from ${SOURCE_NAMES[source]}` : '');
 
@@ -242,22 +243,51 @@ export function readBookFile(text) {
 // so an imported record never brings one, and a record that names no network
 // is one that stands on every network. Rows are counted the way a spreadsheet
 // shows them, because that is where the reader will go to fix it.
+function entryOf(item, seen) {
+  const address = parseAddress(item?.address);
+  if (!address) throw new Error('That is not a full Ethereum address.');
+  const scope = normalizeScope(item.scope ?? 'global');
+  const tags = normalizeTags(item.tags);
+  if (!tags.length) throw new Error('It names no tags.');
+  const key = recordKey(address, scope);
+  if (seen.has(key)) throw new Error('This address and network are already in the file.');
+  seen.add(key);
+  return withSource({ address, scope, tags }, normalizeSource(item.source));
+}
+
 export function validateImport(records) {
   if (!Array.isArray(records)) throw new Error('That file is not an address book.');
   const seen = new Set();
   return records.map((item, at) => {
-    try {
-      const address = parseAddress(item?.address);
-      if (!address) throw new Error('That is not a full Ethereum address.');
-      const scope = normalizeScope(item.scope ?? 'global');
-      const tags = normalizeTags(item.tags);
-      if (!tags.length) throw new Error('It names no tags.');
-      const key = recordKey(address, scope);
-      if (seen.has(key)) throw new Error('This address and network are already in the file.');
-      seen.add(key);
-      return withSource({ address, scope, tags }, normalizeSource(item.source));
-    } catch (failure) {
+    try { return entryOf(item, seen); }
+    catch (failure) {
       throw new Error(`Row ${item?.row ?? at + 1}: ${failure.message[0].toLowerCase()}${failure.message.slice(1)}`);
     }
   });
+}
+
+// What an import would do to the book it is going into: the records it would
+// add, how many addresses it names that this book already names, and the rows
+// that are not records at all.
+//
+// An address already in the book is kept as it is, whatever network either
+// side names it on: the unit is the address, the same as it is everywhere
+// else, and comparing two names is a job for the editor rather than for the
+// busiest screen in the app. A row nobody can read does not stop the rest —
+// it is set aside with its reason, and the readable rows still come in.
+export function reviewImport(records, held = []) {
+  if (!Array.isArray(records)) throw new Error('That file is not an address book.');
+  const known = new Set(held.map(record => record.address));
+  const seen = new Set();
+  const add = [];
+  const invalid = [];
+  let kept = 0;
+  records.forEach((item, at) => {
+    let entry;
+    try { entry = entryOf(item, seen); }
+    catch (failure) { invalid.push({ row: item?.row ?? at + 1, reason: failure.message }); return; }
+    if (known.has(entry.address)) kept += 1;
+    else add.push(entry);
+  });
+  return { add, kept, invalid };
 }

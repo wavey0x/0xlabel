@@ -1,4 +1,4 @@
-import { parseAddress, query, UI } from './shared.js';
+import { parseAddress, query, usableName, UI } from './shared.js';
 import { explorerNetwork, safeNetwork, scopeOf } from './networks.js';
 import { addressLink, addressText, collect } from './detect.js';
 
@@ -104,6 +104,26 @@ const safeAdapter = site({
   names: element => {
     const name = safePair(element)?.querySelector(SAFE_NAME)?.getAttribute('title');
     return ['This Safe account', 'Unverified contract'].includes(name) ? null : name;
+  },
+  // Safe keeps its own address book in site storage, one name per chain. It is
+  // the one thing about this page our reading of it cannot show: Workspace
+  // names and ENS arrive rendered, the local book never does. Read only when
+  // someone asks for it to be imported, and never on a scan.
+  harvest(win) {
+    let held;
+    try { held = JSON.parse(win.localStorage.getItem('SAFE_v2__addressBook') || '{}'); }
+    catch { return []; }
+    if (!held || typeof held !== 'object') return [];
+    const found = [];
+    for (const [chain, names] of Object.entries(held)) {
+      if (!/^[1-9][0-9]{0,19}$/.test(chain) || !names || typeof names !== 'object') continue;
+      for (const [at, name] of Object.entries(names)) {
+        const address = parseAddress(at);
+        const tag = usableName(name);
+        if (address && tag) found.push({ address, scope: `eip155:${chain}`, tags: [tag], source: 'safe:address-book' });
+      }
+    }
+    return found;
   },
   probe({ document, url }) {
     if (document.readyState === 'loading' || document.querySelector('[role="progressbar"]')) return { status: 'waiting' };

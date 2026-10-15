@@ -262,3 +262,46 @@ test.describe('Safe address widget', () => {
     await expect(page.locator('#addr')).toHaveAttribute('data-0xtagger-tag', 'Treasury');
   });
 });
+
+// Safe keeps its own address book in site storage. It is read when someone
+// asks to import it and at no other time — never while reading the page, and
+// never on a website whose adapter keeps nothing.
+test.describe('importing the names a website keeps', () => {
+  const book = { 1: { [address]: 'Treasury', [other]: 'dudesahn' },
+    8453: { [address]: 'Base treasury' }, nonsense: { [address]: 'Ignored' } };
+  const watched = `<script>
+    window.storageReads = 0;
+    const read = Storage.prototype.getItem;
+    Storage.prototype.getItem = function (key) { window.storageReads += 1; return read.call(this, key); };
+    localStorage.setItem('SAFE_v2__addressBook', ${JSON.stringify(JSON.stringify(book))});
+  </script><header>Safe</header><main><a id="row" href="/address/${address}">${address}</a></main>`;
+
+  test('reads Safe\'s book only when asked, and only what is a name for a wallet', async ({ page }) => {
+    await start(page, { site: `https://app.safe.global/home?safe=eth:${other}`, html: watched });
+    await expect(page.locator('#row')).toHaveAttribute('data-0xtagger-tag', 'Treasury');
+    // Reading the page never touches the website's own storage.
+    expect(await page.evaluate(() => window.storageReads)).toBe(0);
+
+    const found = await page.evaluate(() => window.controller.harvest());
+    expect(await page.evaluate(() => window.storageReads)).toBeGreaterThan(0);
+    expect(found).toEqual([
+      { address, scope: 'eip155:1', tags: ['Treasury'], source: 'safe:address-book' },
+      { address: other, scope: 'eip155:1', tags: ['dudesahn'], source: 'safe:address-book' },
+      { address, scope: 'eip155:8453', tags: ['Base treasury'], source: 'safe:address-book' },
+    ]);
+  });
+
+  test('a website that keeps no book of its own offers nothing', async ({ page }) => {
+    await start(page, { site: 'https://etherscan.io/accounts', html: watched });
+    expect(await page.evaluate(() => window.controller.harvest())).toEqual([]);
+    expect(await page.evaluate(() => window.storageReads)).toBe(0);
+  });
+
+  test('a book that is not a book at all reads as nothing', async ({ page }) => {
+    const broken = `<script>localStorage.setItem('SAFE_v2__addressBook', 'not json');</script>
+      <header>Safe</header><main><a id="row" href="/address/${address}">${address}</a></main>`;
+    await start(page, { site: `https://app.safe.global/home?safe=eth:${other}`, html: broken });
+    await expect(page.locator('#row')).toHaveAttribute('data-0xtagger-tag', 'Treasury');
+    expect(await page.evaluate(() => window.controller.harvest())).toEqual([]);
+  });
+});

@@ -7,6 +7,7 @@ let tab;
 let siteURL;
 let busy = false;
 let siteBusy = false;
+let health = null;
 const tell = error => { $('#message').textContent = error?.message || String(error || ''); };
 const setup = newBookForm({ container: $('#server'), state: () => state, created: render,
   busy: value => { busy = value; render(); }, error: tell,
@@ -37,6 +38,20 @@ function render(next = state) {
   // ignores a click reads as broken rather than unavailable.
   $('#site-toggle').disabled = siteBusy;
   $('#site-toggle').dataset.tip = enabled ? 'Show the website originals again' : 'Show my tags on this website';
+  // Only a website that keeps names of its own has any to bring in, and only
+  // once it has been turned on. Everywhere else the row is not there at all.
+  const offers = enabled && health?.imports && health.status === 'ready';
+  $('#import-site').hidden = !offers;
+  $('#import-site').disabled = busy || siteBusy;
+  if (offers) $('#import-site').textContent = `Import names from ${health.adapter}`;
+}
+async function openBook() {
+  const url = chrome.runtime.getURL('book.html');
+  const [book] = await chrome.runtime.getContexts({ contextTypes: ['TAB'], documentUrls: [url] });
+  if (book) {
+    await chrome.tabs.update(book.tabId, { active: true });
+    await chrome.windows.update(book.windowId, { focused: true });
+  } else await chrome.tabs.create({ url });
 }
 async function enable(enabled) {
   siteBusy = true; render();
@@ -61,13 +76,20 @@ $('#open-book').onclick = async () => {
   const button = $('#open-book');
   if (button.disabled) return;
   button.disabled = true; tell('');
+  try { await openBook(); }
+  catch (error) { tell(error); }
+  finally { button.disabled = false; }
+};
+// The website is asked what it keeps; the book page is where it is read and
+// where the decision is made. Nothing is written from here.
+$('#import-site').onclick = async () => {
+  const button = $('#import-site');
+  if (button.disabled) return;
+  button.disabled = true; tell('');
   try {
-    const url = chrome.runtime.getURL('book.html');
-    const [book] = await chrome.runtime.getContexts({ contextTypes: ['TAB'], documentUrls: [url] });
-    if (book) {
-      await chrome.tabs.update(book.tabId, { active: true });
-      await chrome.windows.update(book.windowId, { focused: true });
-    } else await chrome.tabs.create({ url });
+    const result = await rpc({ type: 'Harvest', tabId: tab.id });
+    if (!result.count) tell('This website is keeping no names to bring in.');
+    else { await openBook(); window.close(); }
   } catch (error) { tell(error); }
   finally { button.disabled = false; }
 };
@@ -79,7 +101,7 @@ try {
   if (tab?.url && /^https?:/.test(tab.url)) siteURL = new URL(tab.url);
   $('#site-name').textContent = siteURL?.hostname || '';
   const result = await rpc({ type: 'State', tabId: tab?.id });
-  sites = result.sites; render(result.state);
+  sites = result.sites; health = result.health; render(result.state);
   // The popup is only ever open for a moment, so ask while it is, rather than
   // waiting for a button press to make the time above it true. The ask is
   // conditional and rate limited, so opening the popup repeatedly costs little.
