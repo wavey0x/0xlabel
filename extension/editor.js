@@ -1,6 +1,6 @@
 import { findRecord, MAX_LABELS, MAX_NAME_LENGTH, normalizeLabels, sameLabels } from './shared.js';
 import { checksumAddress } from './checksum.js';
-import { BRAND_MARK, COPY_ICON, COPIED_ICON, confirmCopied } from './icons.js';
+import { EDITOR_MARK, COPY_ICON, COPIED_ICON, confirmCopied } from './icons.js';
 
 const element = (tag, text, attrs = {}) => {
   const node = document.createElement(tag);
@@ -46,7 +46,7 @@ export function createEditor(container, { address, scope = 'global', state, save
   let pageNotice = '';
 
   const panel = element(modal ? 'dialog' : 'section', undefined, { class: 'editor', role: 'dialog', 'aria-label': 'Edit wallet labels' });
-  panel.innerHTML = `<header><strong class="brand" role="img" aria-label="0xlabel">${BRAND_MARK}label</strong><span class="source"></span>${visibility ? '<div class="visibility-group"><span>Show tags</span><button type="button" class="switch visibility" role="switch" aria-label="Show my tags for this address" aria-checked="true"><span></span></button></div>' : '<button type="button" class="quiet close" aria-label="Close editor" title="Close">×</button>'}</header>
+  panel.innerHTML = `<header><strong class="brand" role="img" aria-label="0xlabel">${EDITOR_MARK}label</strong><span class="source"></span>${visibility ? '<div class="visibility-group"><span>Show tags</span><button type="button" class="switch visibility" role="switch" aria-label="Show my tags for this address" aria-checked="true"><span></span></button></div>' : '<button type="button" class="quiet close" aria-label="Close editor" title="Close">×</button>'}</header>
     <div class="address-line"><code></code><button type="button" class="quiet copy" aria-label="Copy">${COPY_ICON}</button></div>
     <div class="rows"></div>
     <p class="preview"></p><p class="notice" role="status"></p><div class="conflict" hidden></div>

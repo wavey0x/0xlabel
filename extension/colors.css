@@ -2,6 +2,7 @@
 :root, :host {
   --0xlabel-accent: #5b21b6;
   --0xlabel-on-accent: #ffffff;
+  --0xlabel-icon-accent: #8b5cf6;
   --0xlabel-icon-idle: #7e8794;
   --0xlabel-error: #b91c1c;
   --0xlabel-warning: #b5760d;

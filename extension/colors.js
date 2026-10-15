@@ -10,10 +10,17 @@ const accentOnDark = '#a78bfa';
 // The accent is both a text colour and a fill, so whatever sits on top of it
 // has to be themed with it: white on the lightened purple is only 2.72:1.
 const inkOnAccentDark = '#101113';
+// Chrome never tells an extension whether its toolbar is light or dark, so the
+// active icon cannot switch the way a surface does: one purple has to clear 3:1
+// both ways. The deep accent is 1.55:1 on a dark toolbar, the lightened one
+// 2.41:1 on a light toolbar; this sits between them at 3.29:1 and 3.76:1, the
+// same compromise iconIdle already makes.
+const iconAccent = '#8b5cf6';
 
 export const COLORS = Object.freeze({
   accent,
   onAccent: white,
+  iconAccent,
   iconIdle: '#7e8794',
   error: '#b91c1c',
   warning: '#b5760d',

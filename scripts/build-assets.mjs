@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
 import { writeFile } from 'node:fs/promises';
-import { BRAND_MARK, brandMark } from '../extension/icons.js';
+import { THEMED_MARK, THEMED_MARK_PLAIN, MARK_EYELET_MIN, brandMark, brandMarkPlain } from '../extension/icons.js';
 import { COLORS, THEMES } from '../extension/colors.js';
 
 const variables = palette => Object.entries(palette).map(([name, value]) =>
@@ -24,16 +24,17 @@ ${variables(THEMES.dark)}
 `;
 await writeFile(new URL('../extension/colors.css', import.meta.url), css);
 
-// Use the inline editor's mark so website branding needs no image permission.
-// Chrome's unpacked toolbar icons require PNG; trusted views use the SVG export.
-const source = BRAND_MARK;
-await writeFile(new URL('../extension/icons/mark.svg', import.meta.url), source + '\n');
-const idle = brandMark(COLORS.iconIdle);
+// Trusted views load the mark as a file and follow the reader's theme; Chrome's
+// toolbar requires PNG, and gets the one purple that clears either toolbar.
+await writeFile(new URL('../extension/icons/mark.svg', import.meta.url), THEMED_MARK + '\n');
+await writeFile(new URL('../extension/icons/mark-plain.svg', import.meta.url), THEMED_MARK_PLAIN + '\n');
 const browser = await chromium.launch();
 try {
   const page = await browser.newPage();
-  for (const [name, svg, sizes] of [['mark', source, [16, 24, 32, 48, 128]], ['mark-idle', idle, [16, 24, 32, 48]]]) {
+  for (const [name, color, sizes] of [['mark', COLORS.iconAccent, [16, 24, 32, 48, 128]], ['mark-idle', COLORS.iconIdle, [16, 24, 32, 48]]]) {
     for (const size of sizes) {
+      // Each size rasterises from the drawing that survives it.
+      const svg = size < MARK_EYELET_MIN ? brandMarkPlain(color) : brandMark(color);
       const data = await page.evaluate(async ({ svg, size }) => {
         const image = new Image();
         image.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
