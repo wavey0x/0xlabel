@@ -1,4 +1,4 @@
-import { difference, findRecord, normalizeTags, normalizeScope, parseAddress, recordKey, sameTags, validateImport } from './shared.js';
+import { difference, findRecord, normalizeTags, normalizeScope, normalizeSource, parseAddress, recordKey, sameTags, validateImport } from './shared.js';
 import { createRecords } from './records.js';
 import { createServerBook } from './stores/server.js';
 
@@ -263,6 +263,9 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
   // is one decision, so it is one write: all of it lands or none of it does.
   async function merge(incoming) {
     const wanted = validateImport(incoming);
+    // Nothing to add is not a write. It costs no request, no transaction and
+    // no revision, and the view says so rather than claiming an import.
+    if (!wanted.length) return { added: 0 };
     return serial(async () => {
       if (unreadable) throw new Error('This address book could not be read, so nothing was added to it.');
       const index = new Map(records.map(item => [recordKey(item.address, item.scope), item]));
@@ -294,6 +297,9 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
     const tags = normalizeTags(draft.tags);
     const version = draft.version;
     if (!(version === null || typeof version === 'string')) throw new Error('Refresh this record before saving.');
+    // Only ever an origin for a record being created; the book keeps the one a
+    // record already has, so an editor cannot rewrite where something came from.
+    const source = normalizeSource(draft.source);
     const started = active;
     return serial(async () => {
       if (active !== started) throw new Error('You switched address books before this was saved. Try again.');
@@ -327,10 +333,10 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
       let saved;
       try {
         if (remote) {
-          saved = await remote.put({ address, scope, tags, version });
+          saved = await remote.put({ address, scope, tags, version, source });
           ({ revision } = await local.write(started, [saved || erase(address, scope)]));
         } else {
-          ({ record: saved, revision } = await local.save(started, { address, scope, tags, version }));
+          ({ record: saved, revision } = await local.save(started, { address, scope, tags, version, source }));
         }
       } catch (failure) {
         if (failure.status === 409) {

@@ -38,9 +38,11 @@ function harness({ remote = [] } = {}) {
   // conditional read, one record at a time and many in one go.
   let revision = 0;
   const held = (address, scope) => book.find(item => item.address === address && item.scope === scope) || null;
-  const apply = ({ address, scope, tags }) => {
+  const apply = ({ address, scope, tags, source }) => {
     revision += 1;
-    const next = tags.length ? { address, scope, tags, version: 'v' + revision } : null;
+    // As server.py does: an origin is settled when the record is created.
+    const origin = held(address, scope)?.source || source || null;
+    const next = tags.length ? { address, scope, tags, version: 'v' + revision, ...(origin ? { source: origin } : {}) } : null;
     book = [...book.filter(item => item.address !== address || item.scope !== scope), ...(next ? [next] : [])];
     return next;
   };
@@ -62,7 +64,7 @@ function harness({ remote = [] } = {}) {
     const [, scope, at] = path.split('/').map(decodeURIComponent).filter((_, index) => index !== 0);
     const current = held(at, scope);
     if (body.version !== (current?.version || null)) return response({ current }, 409, mark);
-    return response({ record: apply({ address: at, scope, tags: body.tags }) }, 200, `"${revision}"`);
+    return response({ record: apply({ address: at, scope, tags: body.tags, source: body.source }) }, 200, `"${revision}"`);
   };
   // One database per harness, so a restart reopens the same books and a
   // different test never sees them.
@@ -86,8 +88,8 @@ function harness({ remote = [] } = {}) {
   return { store: make(), make, saved, calls, storage, fetch, writes, corrupt,
     remote: () => book, intercept: value => { intercept = value; } };
 }
-const write = (store, tags, { book = store.state().activeBook, at = address, version = null } = {}) =>
-  store.save({ book, address: at, scope: 'global', tags, version });
+const write = (store, tags, { book = store.state().activeBook, at = address, version = null, source } = {}) =>
+  store.save({ book, address: at, scope: 'global', tags, version, source });
 
 test('a book exists before anything is set up, and tagging needs no connection', async () => {
   const { store, saved } = harness();
@@ -612,4 +614,56 @@ test('a file that is neither is refused, and a bad row says which row', async ()
   await assert.rejects(store.merge(readBookFile(['address,name,chainId', `${address},Treasury,1`, 'not-an-address,Oops,1'].join('\n')).records),
     /Row 3: that is not a full Ethereum address/);
   assert.equal(store.state().records.length, 0, 'one file is one decision');
+});
+
+// Where a record came from is history, not permission. It is settled when the
+// record is created, it survives every later edit, and it ranks no name above
+// another: the first tag still decides what a website shows.
+test('a source is set once and survives editing, on this device and on a server', async () => {
+  for (const storage of [undefined, onServer]) {
+    const { store } = harness();
+    await store.init();
+    if (storage) await store.add({ name: 'Shared', storage });
+    await write(store, ['Treasury'], { source: 'safe:address-book' });
+    assert.equal(store.state().records[0].source, 'safe:address-book');
+    const { version } = store.state().records[0];
+    await write(store, ['Our treasury', 'Treasury'], { version, source: 'etherscan:page' });
+    const [held] = store.state().records;
+    assert.equal(held.source, 'safe:address-book', 'a later write never rewrites the origin');
+    assert.deepEqual(held.tags, ['Our treasury', 'Treasury']);
+  }
+});
+
+test('a record composed by hand carries no source, and an unknown source is refused', async () => {
+  const { store } = harness();
+  await store.init();
+  await write(store, ['Treasury']);
+  assert.equal('source' in store.state().records[0], false);
+  await assert.rejects(write(store, ['Treasury'], { at: other, source: 'evil.example' }),
+    /not a source a record can carry/);
+});
+
+test('a source survives an export and the import that reads it back', async () => {
+  const { store } = harness();
+  await store.init();
+  await write(store, ['Treasury'], { source: 'safe:page' });
+  const exported = JSON.stringify({ records: store.state().records });
+  const second = harness();
+  await second.store.init();
+  await second.store.merge(readBookFile(exported).records);
+  assert.equal(second.store.state().records[0].source, 'safe:page');
+});
+
+// An import that adds nothing is not a change, so nothing downstream should be
+// told the book moved — and on a server it should not cost a request either.
+test('an import carrying nothing writes nothing, asks nothing and moves no revision', async () => {
+  const { store, calls } = harness();
+  await store.init();
+  await store.add({ name: 'Shared', storage: onServer });
+  await write(store, ['Treasury']);
+  const before = store.state().stateRevision;
+  const quiet = calls.length;
+  assert.deepEqual(await store.merge([]), { added: 0 });
+  assert.equal(store.state().stateRevision, before, 'nothing changed, so nothing moved');
+  assert.equal(calls.length, quiet, 'and nothing was sent');
 });

@@ -15,8 +15,11 @@ def book(tmp_path):
     return TestClient(create_app(tmp_path / 'book.sqlite3', TOKEN), headers=HEADERS)
 
 
-def put(book, tags, version=None, scope='global', address=ADDRESS):
-    return book.put(f'/tags/{scope}/{address}', json={'tags': tags, 'version': version})
+def put(book, tags, version=None, scope='global', address=ADDRESS, source=None):
+    body = {'tags': tags, 'version': version}
+    if source is not None:
+        body['source'] = source
+    return book.put(f'/tags/{scope}/{address}', json=body)
 
 
 
@@ -144,3 +147,41 @@ def test_connect_link_carries_the_key_in_the_fragment():
     base, _, fragment = link.partition("#")
     assert "sk-example" not in base, "a key in the path or query would reach the server"
     assert fragment == "key=sk-example"
+
+
+def test_a_source_is_settled_when_a_record_is_created(book):
+    """Where a record came from is history, so a later write never rewrites it."""
+    first = put(book, ['Treasury'], source='safe:address-book').json()['record']
+    assert first['source'] == 'safe:address-book'
+
+    second = put(book, ['Our treasury'], version=first['version'], source='etherscan:page')
+    assert second.json()['record']['source'] == 'safe:address-book'
+    assert book.get('/tags').json()['records'][0]['source'] == 'safe:address-book'
+
+
+def test_a_record_composed_by_hand_carries_no_source(book):
+    assert 'source' not in put(book, ['Treasury']).json()['record']
+
+
+def test_a_source_a_record_cannot_carry_is_refused(book):
+    assert put(book, ['Treasury'], source='evil.example').status_code == 422
+
+
+def test_a_batch_carrying_nothing_moves_no_revision(book):
+    put(book, ['Treasury'])
+    mark = book.get('/tags').headers['etag']
+    assert batch(book, []).status_code == 200
+    assert book.get('/tags').headers['etag'] == mark
+
+
+def test_a_book_from_an_older_build_refuses_to_open(tmp_path):
+    """Greenfield: an old book is not upgraded in place, it is named and refused."""
+    import sqlite3
+    path = tmp_path / 'old.sqlite3'
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            'CREATE TABLE tags (address TEXT NOT NULL, scope TEXT NOT NULL, '
+            'tags_json TEXT NOT NULL, version TEXT NOT NULL, PRIMARY KEY (address, scope))'
+        )
+    with pytest.raises(RuntimeError, match='older 0xtagger'):
+        create_app(path, TOKEN)

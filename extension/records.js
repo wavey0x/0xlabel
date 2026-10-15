@@ -57,16 +57,19 @@ export function createRecords({ indexedDB: factory = globalThis.indexedDB, keyRa
     const transaction = database.transaction([RECORDS, META], mode);
     return [transaction.objectStore(RECORDS), transaction.objectStore(META), transaction];
   }
-  async function bumped(meta) {
+  async function standing(meta) {
     const held = await wrap(meta.get(REVISION));
-    const revision = (Number.isSafeInteger(held?.value) ? held.value : 0) + 1;
+    return Number.isSafeInteger(held?.value) ? held.value : 0;
+  }
+  async function bumped(meta) {
+    const revision = await standing(meta) + 1;
     meta.put({ key: REVISION, value: revision });
     return revision;
   }
   // A record with no tags is a record removed, the same as everywhere else.
-  function store(records, id, { address, scope, tags, version }) {
+  function store(records, id, { address, scope, tags, version, source }) {
     if (!tags.length) { records.delete([id, scope, address]); return null; }
-    const saved = { address, scope, tags, version: version || stamp() };
+    const saved = { address, scope, tags, version: version || stamp(), ...(source ? { source } : {}) };
     records.put({ book: id, ...saved });
     return saved;
   }
@@ -82,7 +85,7 @@ export function createRecords({ indexedDB: factory = globalThis.indexedDB, keyRa
     },
     // One tag list, against the version it was read at. The check and the write are
     // the same transaction, so nothing can land between them.
-    async save(id, { address, scope, tags, version }) {
+    async save(id, { address, scope, tags, version, source }) {
       const [records, meta, transaction] = await begin();
       const held = await wrap(records.get([id, scope, address]));
       const existing = held ? validateRecord(held) : null;
@@ -93,7 +96,10 @@ export function createRecords({ indexedDB: factory = globalThis.indexedDB, keyRa
         conflict.current = existing;
         throw conflict;
       }
-      const saved = store(records, id, { address, scope, tags, version: stamp() });
+      // Where a record came from is settled when it is created. A later save
+      // changes its tags, never the history of how it got here.
+      const saved = store(records, id, { address, scope, tags, version: stamp(),
+        source: existing?.source ?? source });
       const revision = await bumped(meta);
       await settled(transaction);
       return { record: saved, revision };
@@ -101,11 +107,14 @@ export function createRecords({ indexedDB: factory = globalThis.indexedDB, keyRa
     // Many at once: a file carried in, a book copied, or the handful of records
     // a sync found changed. One transaction, so a book is never half written.
     // A record that arrives with a version keeps it — that is a server's answer
-    // being mirrored; one without gets ours.
+    // being mirrored; one without gets ours. Either way it brings its own
+    // source, because a batch is records arriving rather than records changing.
     async write(id, wanted) {
       const [records, meta, transaction] = await begin();
       const saved = wanted.map(record => store(records, id, record));
-      const revision = await bumped(meta);
+      // A write carrying nothing changes nothing, including the count that
+      // tells every reader the book moved. Nothing reloads for no reason.
+      const revision = wanted.length ? await bumped(meta) : await standing(meta);
       await settled(transaction);
       return { records: saved, revision };
     },

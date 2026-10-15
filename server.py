@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import secrets
 import sqlite3
+from typing import Literal
 from contextlib import closing
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
@@ -41,6 +42,10 @@ class TagWrite(BaseModel):
     model_config = ConfigDict(extra="forbid")
     tags: list[str] = Field(max_length=MAX_TAGS)
     version: str | None = Field(max_length=128)
+    # Where a record came from, as a kind rather than a host. Set when the
+    # record is created and never rewritten: it describes history, not
+    # permission, and it ranks no name above another.
+    source: Literal["safe:address-book", "safe:page", "etherscan:page"] | None = None
 
     @field_validator("tags")
     @classmethod
@@ -78,6 +83,7 @@ def record(row: sqlite3.Row | None) -> dict | None:
         "scope": row["scope"],
         "tags": json.loads(row["tags_json"]),
         "version": row["version"],
+        **({"source": row["source"]} if row["source"] else {}),
     }
 
 
@@ -99,9 +105,15 @@ def create_app(database: str | Path, token: str) -> FastAPI:
                 scope TEXT NOT NULL,
                 tags_json TEXT NOT NULL,
                 version TEXT NOT NULL,
+                source TEXT,
                 PRIMARY KEY (address, scope)
             )
         """)
+        # A book written by an earlier build is not upgraded in place; this is
+        # a greenfield project and says so out loud rather than guessing.
+        columns = {row["name"] for row in connection.execute("PRAGMA table_info(tags)")}
+        if "source" not in columns:
+            raise RuntimeError(f"{database} was written by an older 0xtagger. Delete it and start again.")
         # One number that changes whenever the book does. Asking "has anything
         # changed?" then costs a row, rather than the whole book over the wire.
         connection.execute("CREATE TABLE IF NOT EXISTS book (revision INTEGER NOT NULL)")
@@ -149,14 +161,19 @@ def create_app(database: str | Path, token: str) -> FastAPI:
         if not change.tags:
             connection.execute("DELETE FROM tags WHERE address = ? AND scope = ?", (address, scope))
             return None
+        # A record's origin is settled when it is created. A later write
+        # changes its tags, never the history of how it got here.
+        current = held(connection, address, scope)
+        source = (current["source"] if current else None) or change.source
         saved = {
             "address": address, "scope": scope,
             "tags": change.tags, "version": secrets.token_hex(16),
+            **({"source": source} if source else {}),
         }
         connection.execute(
-            "INSERT INTO tags VALUES (?, ?, ?, ?) "
+            "INSERT INTO tags (address, scope, tags_json, version, source) VALUES (?, ?, ?, ?, ?) "
             "ON CONFLICT(address, scope) DO UPDATE SET tags_json=excluded.tags_json, version=excluded.version",
-            (address, scope, json.dumps(change.tags, ensure_ascii=False), saved["version"]),
+            (address, scope, json.dumps(change.tags, ensure_ascii=False), saved["version"], source),
         )
         return saved
 
@@ -217,7 +234,9 @@ def create_app(database: str | Path, token: str) -> FastAPI:
                         "conflicts": conflicts,
                     })
                 saved = [apply(connection, address, scope, change) for address, scope, change in changes]
-                mark = bump(connection)
+                # A batch carrying nothing changes nothing, including the
+                # number that tells every reader the book moved.
+                mark = bump(connection) if changes else revision_of(connection)
             return JSONResponse({"records": saved}, headers={"ETag": f'"{mark}"'})
 
         return unlocked(work)

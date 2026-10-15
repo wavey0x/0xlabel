@@ -3,7 +3,11 @@ import { sameTags, validateRecord, validateSnapshot } from '../shared.js';
 // A book kept by a server the person runs. This is only the transport: the
 // store above it owns the cached copy, so an unreachable server costs freshness
 // and not the book itself.
-const BATCH = 1000;
+// The server applies a batch inside one transaction, and its own limit is
+// 5,000 changes. So a confirmed write is one request: splitting it would let
+// half a book land and call it done. Anything larger is refused before it is
+// sent, which the view enforces before anyone confirms.
+const BATCH = 5000;
 
 export function createServerBook({ url, token, fetch: fetcher = globalThis.fetch }) {
   async function request(path, { headers = {}, ...options } = {}) {
@@ -45,9 +49,9 @@ export function createServerBook({ url, token, fetch: fetcher = globalThis.fetch
     return saved;
   }
 
-  async function put({ address, scope, tags, version }) {
+  async function put({ address, scope, tags, version, source }) {
     const { body } = await request(`/tags/${encodeURIComponent(scope)}/${address}`, {
-      method: 'PUT', body: JSON.stringify({ tags, version }),
+      method: 'PUT', body: JSON.stringify({ tags, version, source: source ?? null }),
     });
     return confirm(body.record === null ? null : validateRecord(body.record), { address, scope, tags });
   }
@@ -65,21 +69,19 @@ export function createServerBook({ url, token, fetch: fetcher = globalThis.fetch
       if (answer.unchanged) return { records: null, mark: answer.mark || mark };
       return { records: validateSnapshot(answer.body), mark: answer.mark };
     },
-    // A file carried in travels in batches, each one a single request the
-    // server applies whole. One round trip per thousand addresses, not one per
-    // address.
+    // A file carried in is one decision, so it is one request the server
+    // applies whole: all of it lands or none of it does.
     async putMany(wanted) {
-      const saved = [];
-      for (let at = 0; at < wanted.length; at += BATCH) {
-        const changes = wanted.slice(at, at + BATCH);
-        const { body } = await request('/tags', { method: 'PUT', body: JSON.stringify({ changes }) });
-        if (!Array.isArray(body.records) || body.records.length !== changes.length) {
-          throw new Error('That server confirmed a different number of records. Refresh before trying again.');
-        }
-        body.records.forEach((record, index) =>
-          saved.push(confirm(record === null ? null : validateRecord(record), changes[index])));
+      if (wanted.length > BATCH) {
+        throw new Error(`A single write carries at most ${BATCH.toLocaleString()} addresses.`);
       }
-      return saved;
+      const changes = wanted.map(({ source, ...change }) => ({ ...change, source: source ?? null }));
+      const { body } = await request('/tags', { method: 'PUT', body: JSON.stringify({ changes }) });
+      if (!Array.isArray(body.records) || body.records.length !== changes.length) {
+        throw new Error('That server confirmed a different number of records. Refresh before trying again.');
+      }
+      return body.records.map((record, index) =>
+        confirm(record === null ? null : validateRecord(record), changes[index]));
     },
   };
 }

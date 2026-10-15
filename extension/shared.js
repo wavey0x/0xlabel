@@ -65,13 +65,30 @@ export function normalizeTags(values) {
   });
 }
 
+// Where a record came from, named as a kind rather than as a host: a host
+// alone cannot tell someone's private tag from a public explorer label. It is
+// set when the record is created and never rewritten, because it describes
+// history rather than permission — a name corrected later still came from
+// wherever it came from. It ranks nothing and permits nothing.
+export const SOURCES = ['safe:address-book', 'safe:page', 'etherscan:page'];
+
+export function normalizeSource(value) {
+  if (value === undefined || value === null || value === '') return null;
+  if (!SOURCES.includes(value)) throw new Error('That is not a source a record can carry.');
+  return value;
+}
+
+// Records carry a source only when they have one, so a record composed by hand
+// is the plain object it has always been.
+const withSource = (record, source) => (source ? { ...record, source } : record);
+
 export function validateRecord(value) {
   if (!value || typeof value !== 'object') throw new Error('The API returned an invalid record.');
   const address = parseAddress(value.address);
   if (!address || typeof value.version !== 'string' || !value.version || value.version.length > 128) throw new Error('The API returned an invalid record.');
   const tags = normalizeTags(value.tags);
   if (!tags.length) throw new Error('An API record cannot have an empty tag list.');
-  return { address, scope: normalizeScope(value.scope), tags, version: value.version };
+  return withSource({ address, scope: normalizeScope(value.scope), tags, version: value.version }, normalizeSource(value.source));
 }
 
 export function recordKey(address, scope = 'global') {
@@ -216,7 +233,7 @@ export function validateImport(records) {
       const key = recordKey(address, scope);
       if (seen.has(key)) throw new Error('This address and network are already in the file.');
       seen.add(key);
-      return { address, scope, tags };
+      return withSource({ address, scope, tags }, normalizeSource(item.source));
     } catch (failure) {
       throw new Error(`Row ${item?.row ?? at + 1}: ${failure.message[0].toLowerCase()}${failure.message.slice(1)}`);
     }
