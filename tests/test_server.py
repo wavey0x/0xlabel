@@ -159,6 +159,16 @@ def test_a_source_is_settled_when_a_record_is_created(book):
     assert book.get('/tags').json()['records'][0]['source'] == 'safe:address-book'
 
 
+def test_a_record_written_before_the_column_existed_can_still_be_attributed(book):
+    """Settled at creation is not the same as unanswerable forever."""
+    plain = put(book, ['Treasury']).json()['record']
+    assert 'source' not in plain
+
+    named = put(book, ['Treasury'], version=plain['version'], source='safe:page')
+    assert named.json()['record']['source'] == 'safe:page'
+    assert book.get('/tags').json()['records'][0]['source'] == 'safe:page'
+
+
 def test_a_record_composed_by_hand_carries_no_source(book):
     assert 'source' not in put(book, ['Treasury']).json()['record']
 

@@ -177,7 +177,12 @@ def create_app(database: str | Path, token: str) -> FastAPI:
         }
         connection.execute(
             "INSERT INTO tags (address, scope, tags_json, version, source) VALUES (?, ?, ?, ?, ?) "
-            "ON CONFLICT(address, scope) DO UPDATE SET tags_json=excluded.tags_json, version=excluded.version",
+            # `source` above already resolved to the one this record has, so
+            # writing it back changes nothing for a record that has one — and
+            # is the only way one written before the column existed can ever
+            # acquire it.
+            "ON CONFLICT(address, scope) DO UPDATE SET "
+            "tags_json=excluded.tags_json, version=excluded.version, source=excluded.source",
             (address, scope, json.dumps(change.tags, ensure_ascii=False), saved["version"], source),
         )
         return saved
