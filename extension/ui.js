@@ -1,7 +1,7 @@
 import { applyChange, hostPermission, parseConnectLink } from './shared.js';
 import { COPIED_ICON, DEVICE_ICON, PENCIL_ICON, SERVER_ICON } from './icons.js';
 
-export const emptyState = { books: [], activeBook: null, bookName: '', bookKind: 'device', records: [], stateRevision: -1, syncedAt: null, error: null };
+export const emptyState = { books: [], activeBook: null, bookName: '', bookKind: 'device', cameFrom: null, records: [], stateRevision: -1, syncedAt: null, error: null };
 export const $ = selector => document.querySelector(selector);
 export async function rpc(message) {
   const response = await chrome.runtime.sendMessage(message);

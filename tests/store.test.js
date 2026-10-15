@@ -850,3 +850,58 @@ test('two connections to one server at the same moment make one book', async () 
   assert.equal(first.book, second.book);
   assert.ok(first.opened || second.opened, 'one of them opened what the other made');
 });
+
+// A replacement key replaces nothing until it opens the book: writing one down
+// first would break a connection that was working.
+test('a replacement key that does not open the book is refused, and the old one stands', async () => {
+  const { store, intercept, calls } = harness();
+  await store.init();
+  await store.add({ storage: onServer });
+  intercept(async () => response({ detail: 'rejected' }, 401));
+  await assert.rejects(store.add({ storage: { kind: 'server', url: host, token: 'typo' } }), /rejected|refused|Access/i);
+  intercept(null);
+  await store.refresh();
+  assert.equal(calls.filter(call => call.headers?.Authorization).at(-1).headers.Authorization, `Bearer ${token}`);
+});
+
+// The book left behind, so that a book opening empty can offer to carry its
+// names over. Read at the moment of copying rather than from whatever a view
+// was holding, so nothing deleted in between comes back with them.
+test('a book opening empty is told which book it came from, and copies it as it is now', async () => {
+  const { store } = harness();
+  await store.init();
+  const first = store.state().activeBook;
+  await write(store, ['Treasury']);
+  await write(store, ['Payroll'], { at: other });
+  assert.equal(store.state().cameFrom, null, 'nothing was left behind yet');
+
+  await store.add({ storage: { kind: 'device' } });
+  const empty = store.state().activeBook;
+  assert.deepEqual(store.state().cameFrom, { id: first, name: 'default', count: 2 });
+
+  // One of them goes while the offer is on screen. What arrives is what the
+  // book holds now, not what it held when the offer was made.
+  await store.use(first);
+  const held = store.state().records.find(item => item.address === other);
+  await write(store, [], { at: other, version: held.version });
+  await store.use(empty);
+  await store.copyBook(first, empty);
+  assert.deepEqual(store.state().records.map(item => item.tags[0]), ['Treasury']);
+});
+
+test('a book never offers to copy from itself, nor from one that is gone', async () => {
+  const { store } = harness();
+  await store.init();
+  const first = store.state().activeBook;
+  await write(store, ['Treasury']);
+  await store.add({ storage: { kind: 'device' } });
+  const second = store.state().activeBook;
+  await store.use(first);
+  assert.equal(store.state().cameFrom?.id, second, 'the one just left, not this one');
+  assert.notEqual(store.state().cameFrom?.id, first);
+
+  await store.use(second);
+  await store.remove(first);
+  assert.equal(store.state().cameFrom, null, 'a book that is gone is not a source');
+  await assert.rejects(store.copyBook(first, store.state().activeBook), /nothing to copy/);
+});

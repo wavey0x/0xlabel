@@ -29,6 +29,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
   let error = null;
   let revision = 0;
   let needsRefresh = false;
+  let came = null;
   // A book that could not be read is never saved over: the save would write
   // over tags this worker never managed to see.
   let unreadable = false;
@@ -65,6 +66,9 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
       books: books.map(item => ({ id: item.id, name: item.name, kind: item.storage.kind,
         where: item.storage.kind === 'server' ? new URL(item.storage.url).hostname : 'On this device' })),
       activeBook: active, bookName: current?.name || '', bookKind: current?.storage.kind || 'device',
+      // Only while it is still a book, and never the one being looked at.
+      cameFrom: came && came.id !== active && entry(came.id)
+        ? { id: came.id, name: entry(came.id).name, count: came.count } : null,
       records, stateRevision: revision, syncedAt, error,
     };
   }
@@ -85,8 +89,15 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
     if (remote) await storage.set({ [syncKey(active)]: { mark, syncedAt, pending: needsRefresh } });
   }
 
+  // The book being left, counted while its records are still in hand. A view
+  // offers to carry these into a book that opens with nothing in it, and reads
+  // them again at the moment it does — a count is enough to decide by, and a
+  // held copy would be a copy of how things were.
+  const leaving = () => (entry(active) ? { id: active, count: records.length } : null);
+
   async function open(id) {
     const item = entry(id);
+    if (id !== active) came = leaving();
     active = id;
     remote = server(item);
     error = null;
@@ -199,6 +210,9 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
           // which is the only reason to paste one twice. Reopening the old key
           // would walk straight back into the refusal that prompted it.
           if (already.storage.token !== where.token) {
+            // A replacement key replaces nothing until it opens the book.
+            // Writing one down first would break a connection that worked.
+            await server({ storage: where }).load();
             books = books.map(item => (item.id === already.id ? { ...item, storage: where } : item));
             await saveBooks();
           }
@@ -217,6 +231,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
       let held = answer.records;
       if (held.length || !candidate) ({ records: held, revision } = await local.write(item.id, held));
       books = [...books, item];
+      came = leaving();
       active = item.id;
       remote = candidate;
       error = null;
@@ -427,5 +442,15 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
     });
   }
 
-  return { init, state, use, add, rename, remove, refresh, sync, heartbeat, merge, save };
+  // One book's names into another's: read now rather than from whatever a view
+  // was holding, so nothing deleted in between comes back with them.
+  async function copyBook(from, into) {
+    if (into !== active) throw new Error('You switched address books. Open that one again to copy into it.');
+    if (from === into || !entry(from)) throw new Error('There is nothing to copy.');
+    const held = (await local.load(from)).records;
+    return merge(held.map(({ address, scope, tags, source }) =>
+      ({ address, scope, tags, ...(source ? { source } : {}) })), into);
+  }
+
+  return { init, state, use, add, rename, remove, refresh, sync, heartbeat, merge, copyBook, save };
 }
