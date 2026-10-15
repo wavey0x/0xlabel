@@ -3,11 +3,14 @@ body { width: 320px; padding: 20px; background: radial-gradient(ellipse at top l
 #sync { margin: 5px 0 12px; font-size: 10px; }
 #sync[data-offline="true"] { color: var(--0xtagger-warning); }
 .site { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-block: 1px solid var(--0xtagger-line); }
-.site-info { display: grid; min-width: 0; gap: 2px; }
-.site-info .eyebrow { margin: 0; }
-#site-name { font-size: 12px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.open-book { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: calc(100% + 16px); margin: 6px -8px 0; padding: 10px 8px; font-size: 12px; text-align: left; }
-.open-book svg { flex-shrink: 0; color: var(--0xtagger-accent); }
+/* The hostname beside its switch says what the row is for; a heading over it
+   only repeats the sentence the two already make. */
+#site-name { min-width: 0; font-size: 12px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A way out of the popup, not a call to action: it sits quiet until pointed at. */
+.open-book { display: flex; align-items: center; gap: 8px; width: calc(100% + 16px); margin: 6px -8px 0; padding: 9px 8px; font-size: 11px; font-weight: 600; color: var(--0xtagger-muted); text-align: left; }
+.open-book svg { flex-shrink: 0; width: 14px; height: 14px; }
+.open-book .go { margin-left: auto; }
+.open-book:hover,.open-book:focus-visible { color: var(--0xtagger-accent); background: var(--0xtagger-accent-hover); }
 #adapter-warning { font-size: 11px; color: var(--0xtagger-warning); }
 #adapter-warning p { margin: 8px 0 2px; }
 #adapter-warning button { font-size: 10px; padding: 4px 8px 4px 0; }

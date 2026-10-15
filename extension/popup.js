@@ -29,13 +29,14 @@ function render(next = state) {
   $('#sync').title = state.error || '';
   $('#sync').dataset.offline = String(Boolean(state.error));
   const enabled = Boolean(siteURL && sites[siteURL.origin]);
+  // With no website in front of it the row has nothing to say, so it says
+  // nothing rather than standing there explaining its own absence.
+  $('.site').hidden = !siteURL;
   $('#site-toggle').setAttribute('aria-checked', String(enabled));
-  // Only inert when there is nothing to act on. Without a book the switch
-  // still answers, because a control that silently ignores a click reads as
-  // broken rather than unavailable.
-  $('#site-toggle').disabled = !siteURL || siteBusy;
-  $('#site-toggle').title = !siteURL ? 'Open a website to use your tags'
-    : enabled ? 'Show the website originals again' : 'Show my tags on this website';
+  // The switch still answers without a book, because a control that silently
+  // ignores a click reads as broken rather than unavailable.
+  $('#site-toggle').disabled = siteBusy;
+  $('#site-toggle').title = enabled ? 'Show the website originals again' : 'Show my tags on this website';
 }
 async function enable(enabled) {
   siteBusy = true; render();
@@ -75,7 +76,7 @@ render();
 try {
   [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (tab?.url && /^https?:/.test(tab.url)) siteURL = new URL(tab.url);
-  $('#site-name').textContent = siteURL?.hostname || 'No website open';
+  $('#site-name').textContent = siteURL?.hostname || '';
   const result = await rpc({ type: 'State', tabId: tab?.id });
   sites = result.sites; render(result.state);
   // The popup is only ever open for a moment, so ask while it is, rather than
