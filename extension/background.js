@@ -72,6 +72,49 @@ async function refreshAction(tabId) {
     await updateAction(tabId, { adapter: result.health.adapter || 'This site', ...result.health, origin });
   }
 }
+// Chrome announces a grant to the worker as well as to the popup that asked for
+// it, so one flip can arrive here twice. The claim is made before the first
+// await, which is what lets the second arrival leave quietly.
+async function enableSite(origin) {
+  if (sites[origin]) return;
+  sites[origin] = true;
+  await chrome.storage.session.remove('pendingSite');
+  await chrome.storage.local.set({ sites });
+  await register(origin);
+  for (const tab of await chrome.tabs.query({})) {
+    if (tab.url && /^https?:/.test(tab.url) && siteOrigin(tab.url) === origin) {
+      const target = { tabId: tab.id, allFrames: true };
+      await chrome.scripting.insertCSS({ target, files: ['colors.css', 'page.css'] });
+      await chrome.scripting.executeScript({ target, files: ['content.js'] });
+    }
+  }
+}
+async function disableSite(origin) {
+  delete sites[origin];
+  await chrome.storage.session.remove('pendingSite');
+  await chrome.storage.local.set({ sites });
+  await chrome.scripting.unregisterContentScripts({ ids: [scriptId(origin)] });
+  for (const tab of await chrome.tabs.query({})) {
+    if (tab.url && /^https?:/.test(tab.url) && siteOrigin(tab.url) === origin) {
+      await send(tab.id, { type: 'Disable' }, {}); await updateAction(tab.id, null);
+    }
+  }
+}
+// A grant can land when the popup that asked for it is gone: Brave closes it
+// over Chrome's own question, and a closed popup never got to send Site. The
+// note the switch left behind is what finishes the job, so nothing has to be
+// flipped a second time.
+async function finishPendingSite() {
+  const held = (await chrome.storage.session.get('pendingSite')).pendingSite || null;
+  if (!held) return;
+  // A note nobody came back for stops meaning anything.
+  if (Date.now() - held.at > 300000) { await chrome.storage.session.remove('pendingSite'); return; }
+  // Only the website the switch was flipped for, whatever else was granted: the
+  // same question is asked for a server book, and granting that is not an
+  // invitation to tag it.
+  if (!await chrome.permissions.contains({ origins: [hostPermission(held.origin)] })) return;
+  await enableSite(held.origin);
+}
 function broadcast(state, change) {
   // One record costs the same to send however large the book is; the whole
   // book costs the whole book, to every tab, every time.
@@ -106,6 +149,9 @@ async function handle(message, sender) {
   const page = await authorizedPage(sender);
   if (message.type === 'State' && sender.id === chrome.runtime.id) {
     if (!view && !page) return { enabled: false };
+    // A grant with no popup left to receive it is finished here, so the sites
+    // this answer carries are the ones that are really on.
+    if (view) await finishPendingSite().catch(() => {});
     const tabId = view ? message.tabId : sender.tab.id;
     if (view && tabId && !health.has(tabId)) await refreshAction(tabId);
     return { state: store.state(), enabled: Boolean(page), ...(view ? { sites } : {}), health: health.get(tabId) || null };
@@ -157,30 +203,19 @@ async function handle(message, sender) {
   if (message.type === 'RenameBook') return store.rename(message.book, message.name);
   if (message.type === 'RemoveBook') return store.remove(message.book);
   if (message.type === 'Refresh') return store.refresh();
+  // Which website the switch was flipped for, said before Chrome is asked, so
+  // the answer can be honoured whether or not this popup is still here for it.
+  if (message.type === 'Enabling') {
+    const origin = siteOrigin((await chrome.tabs.get(message.tabId)).url);
+    await chrome.storage.session.set({ pendingSite: { origin, at: Date.now() } });
+    return {};
+  }
   if (message.type === 'Site') {
-    const tab = await chrome.tabs.get(message.tabId);
-    const origin = siteOrigin(tab.url);
+    const origin = siteOrigin((await chrome.tabs.get(message.tabId)).url);
     if (message.enabled) {
       if (!await chrome.permissions.contains({ origins: [hostPermission(origin)] })) throw new Error('Allow access to this website first.');
-      sites[origin] = true;
-      await chrome.storage.local.set({ sites });
-      await register(origin);
-    } else {
-      delete sites[origin];
-      await chrome.storage.local.set({ sites });
-      await chrome.scripting.unregisterContentScripts({ ids: [scriptId(origin)] });
-    }
-    for (const other of await chrome.tabs.query({})) {
-      if (other.url && /^https?:/.test(other.url) && siteOrigin(other.url) === origin) {
-        if (message.enabled) {
-          const target = { tabId: other.id, allFrames: true };
-          await chrome.scripting.insertCSS({ target, files: ['colors.css', 'page.css'] });
-          await chrome.scripting.executeScript({ target, files: ['content.js'] });
-        } else {
-          await send(other.id, { type: 'Disable' }, {}); await updateAction(other.id, null);
-        }
-      }
-    }
+      await enableSite(origin);
+    } else await disableSite(origin);
     return { sites };
   }
   if (message.type === 'Retry') {
@@ -205,6 +240,7 @@ chrome.tabs.onUpdated.addListener((tabId, change) => {
   if (change.url || change.status === 'loading') updateAction(tabId, null).catch(() => {});
   if (change.status === 'complete') ready.then(() => refreshAction(tabId)).catch(() => {});
 });
+chrome.permissions.onAdded.addListener(() => { ready.then(finishPendingSite).catch(() => {}); });
 chrome.permissions.onRemoved.addListener(() => {
   ready.then(async () => {
     for (const origin of Object.keys(sites)) {

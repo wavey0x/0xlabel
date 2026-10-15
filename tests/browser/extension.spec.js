@@ -253,6 +253,16 @@ test('installed extension: a book that works with no setup, moving it to a serve
     await expect(another.locator('#wallet')).toHaveAttribute('data-0xtagger-tag', 'Local edited');
     await popup.locator('#site-toggle').click();
     await expect(website.locator('[data-0xtagger-address],[data-0xtagger-tag],[data-0xtagger-ui]')).toHaveCount(0);
+    // Chrome's question can outlive the popup that asked it, and Brave closes
+    // that popup outright. The note the switch leaves behind is enough: the
+    // worker turns the website on, with no Site message from anywhere.
+    await worker.evaluate(origin => chrome.storage.session.set({ pendingSite: { origin, at: Date.now() } }), 'http://127.0.0.1:8719');
+    await popup.reload();
+    await expect(siteSwitch).toBeChecked();
+    await expect.poll(toolbar).toEqual({ icon: 'icons/mark-16.png', title: '0xtagger · Active on this page' });
+    await expect(website.locator('#wallet')).toHaveAttribute('data-0xtagger-tag', 'Local edited');
+    await popup.locator('#site-toggle').click();
+    await expect(website.locator('[data-0xtagger-address],[data-0xtagger-tag],[data-0xtagger-ui]')).toHaveCount(0);
     await another.close();
     const bookPromise = context.waitForEvent('page');
     await popup.getByRole('button', { name: 'Open address book', exact: false }).click();

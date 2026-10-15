@@ -61,10 +61,16 @@ async function openBook() {
   } else await chrome.tabs.create({ url });
 }
 async function enable(enabled) {
+  // Both asked for before anything is awaited: Chrome grants access only while
+  // the click that asked for it is still the reason, and the first await ends
+  // that. The note goes with the question rather than after the answer, because
+  // this popup may not be here when the answer arrives.
+  if (enabled && siteURL) rpc({ type: 'Enabling', tabId: tab.id }).catch(() => {});
+  const asked = enabled && siteURL ? chrome.permissions.request({ origins: [hostPermission(siteURL.origin)] }) : null;
   siteBusy = true; render();
   try {
     if (!siteURL) throw new Error('Open a website to enable tagging.');
-    if (enabled && !await chrome.permissions.request({ origins: [hostPermission(siteURL.origin)] })) throw new Error('Website access was not granted.');
+    if (enabled && !await asked) throw new Error('Website access was not granted.');
     sites = (await rpc({ type: 'Site', tabId: tab.id, enabled })).sites;
     $('#adapter-warning').hidden = true; tell('');
   } catch (error) { tell(error); }
