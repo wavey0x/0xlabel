@@ -48,7 +48,10 @@ function render(next = state) {
   // Sorted by name, so the order is a property of the book rather than of the
   // order it happened to be written in.
   entries = state.records
-    .map(record => ({ record, text: [record.address, ...record.tags].join('\n').toLocaleLowerCase(), row: null }))
+    // Searchable by where it came from too, so "safe" finds everything a Safe
+    // book brought in without anyone having to remember which names those were.
+    .map(record => ({ record, row: null,
+      text: [record.address, ...record.tags, sourceName(record.source)].join('\n').toLocaleLowerCase() }))
     .sort((one, two) => one.record.tags[0].localeCompare(two.record.tags[0]) ||
       one.record.address.localeCompare(two.record.address));
   if (editor) editor.updateState(state);
@@ -76,7 +79,11 @@ function bookRow(record) {
   row.innerHTML = '<td><button class="record"><strong></strong><small></small></button></td><td><code></code></td><td></td>';
   const open = row.querySelector('.record');
   open.querySelector('strong').textContent = record.tags.join(' · ');
-  open.querySelector('small').textContent = scopeName(record.scope);
+  // Where a name came from sits with the network it stands on, under the name
+  // itself: a column of its own would be empty on every record anybody typed,
+  // and this is the one place the question gets asked.
+  open.querySelector('small').textContent = [scopeName(record.scope),
+    record.source && `from ${sourceName(record.source)}`].filter(Boolean).join(' · ');
   open.dataset.tip = displayAddress; open.setAttribute('aria-label', `Edit tags for ${displayAddress}`);
   open.onclick = () => edit(record.address, record.scope);
   row.querySelector('code').textContent = displayAddress;

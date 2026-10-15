@@ -438,6 +438,16 @@ test('installed extension: a file is reviewed before it lands, and a page cannot
     await expect(book.locator('#review')).toBeHidden();
     await expect(book.locator('#message')).toContainText('1 name imported');
     await expect(book.locator('#results tr')).toHaveCount(2);
+    // Where a name came from is answerable from the book, under the name, with
+    // the network it stands on — and searchable, so one question finds them all.
+    await expect(book.locator('#results tr', { hasText: 'dudesahn' }).locator('small'))
+      .toHaveText("All networks · from Safe's address book");
+    await expect(book.locator('#results tr', { hasText: 'Treasury' }).locator('small'))
+      .toHaveText('All networks');
+    await book.locator('#search').fill('safe');
+    await expect(book.locator('#results tr')).toHaveCount(1);
+    await expect(book.locator('#results tr')).toContainText('dudesahn');
+    await book.locator('#search').fill('');
     // The name already held was never touched, and the new one kept its origin.
     const held = await book.evaluate(async () =>
       (await chrome.runtime.sendMessage({ type: 'State' })).result.state.records);
