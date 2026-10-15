@@ -106,8 +106,10 @@ for (const site of sites) {
   });
 }
 
+// A table an explorer embeds is a frame of its own: rows, and none of the
+// landmarks the page around it has. The frame's URL is the explorer's business.
 test.describe('Etherscan embedded transfers', () => {
-  const site = `https://etherscan.io/address-tokenpage?m=dark&a=${address}`;
+  const site = `https://etherscan.io/token/generic-tokentxns2?contractAddress=${other}&a=${address}`;
   const table = `<div class="table-responsive"><table><tbody><tr>
     <td><a id="from" class="hash-tag" href="/address/${other}#tokentxns" target="_parent"
       data-highlight-target="${other}" data-full-address="${other}">0xcdcd…cdcd</a></td>
@@ -115,7 +117,7 @@ test.describe('Etherscan embedded transfers', () => {
   </tr></tbody></table></div>`;
 
   test('labels the headerless transfer table from canonical row identities and the explorer chain', async ({ page }) => {
-    await start(page, { site, html: table, records: [record,
+    await start(page, { site, html: table, framed: true, records: [record,
       { ...record, scope: 'eip155:1', labels: ['Ethereum treasury'] },
       { ...record, address: other, labels: ['Sender'] },
     ] });
@@ -129,13 +131,24 @@ test.describe('Etherscan embedded transfers', () => {
     await expect(page.locator('#to')).toHaveText('BuilderNet');
   });
 
-  test('a transfer URL still requires a table, and unrelated pages still require explorer landmarks', async ({ page }) => {
-    await start(page, { site, html: '<p>Unavailable</p>' });
+  test('an embedded view still requires a table, and a page of its own still requires landmarks', async ({ page }) => {
+    await start(page, { site, html: '<p>Unavailable</p>', framed: true });
     await expect.poll(() => health(page)).toMatchObject({ status: 'stale' });
     await expect(page.locator('[data-0xlabel-address]')).toHaveCount(0);
+    // The same table, in a document nothing embedded: an explorer page that has
+    // lost its landmarks is an explorer we no longer read, not a frame.
     await start(page, { site: 'https://etherscan.io/accounts', html: table });
     await expect.poll(() => health(page)).toMatchObject({ status: 'stale' });
     await expect(page.locator('[data-0xlabel-address]')).toHaveCount(0);
+  });
+
+  test('a token page labels the table it embeds, whatever that frame is called', async ({ page }) => {
+    for (const frame of ['/token/generic-tokentxns2?a=' + address, '/address-tokenpage?a=' + address, '/whatever-they-rename-it-to']) {
+      await start(page, { site: `https://etherscan.io${frame}`, html: table, framed: true,
+        records: [{ ...record, address: other, labels: ['Sender'] }] });
+      expect(await reported(page), frame).toMatchObject({ status: 'ready' });
+      await expect(page.locator('#from')).toHaveAttribute('data-0xlabel-label', 'Sender');
+    }
   });
 });
 

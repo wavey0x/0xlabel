@@ -9,19 +9,19 @@ export const wallets = `<header>Explorer <input id="native-input"></header><main
   <p><a id="second" href="/address/${other}">${other}</a></p></main>
   <script>document.querySelector('#native-copy').onclick=()=>{window.nativeCopied='${address}';};</script>`;
 
-export async function start(page, { html = wallets, site = 'https://etherscan.io/accounts', records = [record] } = {}) {
+export async function start(page, { html = wallets, site = 'https://etherscan.io/accounts', records = [record], framed = false } = {}) {
   await page.goto('/tests/fixtures/page.html');
   await page.setContent(html);
   await page.addStyleTag({ url: '/extension/colors.css' });
   await page.addStyleTag({ url: '/extension/page.css' });
-  await page.evaluate(async ({ site, records }) => {
+  await page.evaluate(async ({ site, records, framed }) => {
     const { createPageController } = await import('/extension/page.js');
     window.site = new URL(site);
     window.state = { books: [{ id: 'book-1', name: 'default', where: 'On this device' }],
       activeBook: 'book-1', bookName: 'default', bookKind: 'device', stateRevision: 1, records };
     window.saves = [];
     window.reports = [];
-    window.controller = await createPageController({ state: window.state, url: () => window.site,
+    window.controller = await createPageController({ state: window.state, url: () => window.site, framed,
       report: value => window.reports.push(value),
       save: async draft => {
         window.saves.push(draft);
@@ -46,7 +46,7 @@ export async function start(page, { html = wallets, site = 'https://etherscan.io
         return {};
       },
     });
-  }, { site, records });
+  }, { site, records, framed });
 }
 
 export const edit = (page, index = 0) => page.getByRole('button', { name: 'Edit wallet labels', exact: true }).nth(index);

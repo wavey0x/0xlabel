@@ -13,10 +13,13 @@ const abbreviate = address => `${address.slice(0, 6)}…${address.slice(-4)}`;
 
 export async function createPageController({
   url = () => new URL(location.href), state: initialState,
-  save, report = () => {}, resume = () => {},
+  save, report = () => {}, resume = () => {}, framed,
 }) {
   const doc = document;
   const win = doc.defaultView;
+  // Whether this document is one a page embedded. Comparing the two window
+  // references touches nothing a cross-origin parent would withhold.
+  const embedded = framed ?? (win.top !== win);
   let state = initialState;
   let book = indexBook(state.records);
   let adapter;
@@ -196,7 +199,7 @@ export async function createPageController({
     }
     if (paused && !force) return false;
     if (force) { paused = false; probing = false; clearTimeout(grace); }
-    const next = adapter.probe({ document: doc, url: nextURL });
+    const next = adapter.probe({ document: doc, url: nextURL, embedded });
     if (next.status === 'stale') {
       clear();
       if (probing || force) fail(next.reason);

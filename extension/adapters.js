@@ -36,17 +36,20 @@ const etherscanAdapter = site({
       box-shadow: none !important;
       padding: 0 !important;
     }`,
-  probe({ document, url }) {
+  probe({ document, url, embedded }) {
     if (document.querySelector('#challenge-running,#challenge-stage,[name="cf-turnstile-response"]') || /^(Just a moment|Attention Required)/i.test(document.title)) return { status: 'waiting' };
     if (document.readyState === 'loading') return { status: 'waiting' };
-    // Address-page transfer tabs load standalone tables without the outer
-    // explorer's header or main element. Their rows supply the same identities.
-    if (/^\/address-(?:tokenpage|nft-transfers)$/.test(url.pathname)) {
+    const landmarks = document.querySelector('main') && document.querySelector('header,nav');
+    // An explorer embeds its tables as documents of their own: a frame holding
+    // rows and none of the outer page's landmarks. Which URL those frames load
+    // from is the explorer's business and changes with its pages; that they are
+    // framed tables does not. Their rows carry the same identities.
+    if (embedded && !landmarks) {
       return document.querySelector('.table-responsive table tbody')
         ? { status: 'ready', network: scopeOf(explorerNetwork(url.hostname)) }
         : { status: 'stale', reason: 'transfer-table-missing' };
     }
-    if (!document.querySelector('main') || !document.querySelector('header,nav')) return { status: 'stale', reason: 'explorer-landmarks-missing' };
+    if (!landmarks) return { status: 'stale', reason: 'explorer-landmarks-missing' };
     if (/^\/address\//.test(url.pathname) && !document.querySelector('#mainaddress')) return { status: 'stale', reason: 'main-address-missing' };
     return { status: 'ready', network: scopeOf(explorerNetwork(url.hostname)) };
   },
