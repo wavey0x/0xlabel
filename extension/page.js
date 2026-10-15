@@ -1,4 +1,5 @@
 import { adapters } from './adapters.js';
+import { addressAt } from './detect.js';
 import { applyChange, indexBook, parseAddress, query, recordKey, normalizeScope, UI, UI_ATTRIBUTE, UNSAFE_HOST } from './shared.js';
 import { createEditor } from './editor.js';
 import { createOverlay } from './overlay.js';
@@ -410,7 +411,7 @@ export async function createPageController({
         const target = targets.get(contextTarget.element);
         return open(target?.address === contextTarget.address ? contextTarget : { ...contextTarget, element: null });
       }
-      const address = parseAddress(info.selection?.trim()) || (info.link && parseAddress(new URL(info.link).pathname.match(/^\/address\/([^/]+)\/?$/)?.[1]));
+      const address = parseAddress(info.selection?.trim()) || (info.link && addressAt(info.link)?.address);
       if (address) open({ address, network: health.network, element: null });
     },
     get health() { return health; },

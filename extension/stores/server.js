@@ -1,4 +1,4 @@
-import { validateRecord, validateSnapshot } from '../shared.js';
+import { sameLabels, validateRecord, validateSnapshot } from '../shared.js';
 
 // A book kept by a server the person runs. This is only the transport: the
 // store above it owns the cached copy, so an unreachable server costs freshness
@@ -38,7 +38,7 @@ export function createServerBook({ url, token, fetch: fetcher = globalThis.fetch
 
   function confirm(saved, { address, scope, labels }) {
     if ((saved && (saved.address !== address || saved.scope !== scope ||
-         JSON.stringify(saved.labels) !== JSON.stringify(labels))) ||
+         !sameLabels(saved.labels, labels))) ||
         (!saved && labels.length) || (saved && !labels.length)) {
       throw new Error('That server confirmed a different record. Refresh before trying again.');
     }

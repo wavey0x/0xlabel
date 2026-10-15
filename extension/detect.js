@@ -34,15 +34,21 @@ export function addressText(root) {
   return [...found];
 }
 
-// A link naming a full address. A known explorer host also names its chain.
+// A URL naming a full address in its path. A known explorer host also names
+// the chain. Malformed input names nothing, which is the only answer it can
+// honestly give.
+export function addressAt(href, base) {
+  let url;
+  try { url = new URL(href, base); }
+  catch { return null; }
+  const address = parseAddress(url.pathname.match(ADDRESS_PATH)?.[1]);
+  return address ? { address, network: scopeOf(explorerNetwork(url.hostname)) } : null;
+}
+
+// A link naming a full address.
 export function addressLink(element, url) {
   const link = element.closest('a[href]');
-  if (!link) return null;
-  let href;
-  try { href = new URL(link.getAttribute('href'), url); }
-  catch { return null; } // Malformed website links provide no address evidence.
-  const address = parseAddress(href.pathname.match(ADDRESS_PATH)?.[1]);
-  return address ? { address, network: scopeOf(explorerNetwork(href.hostname)) } : null;
+  return link ? addressAt(link.getAttribute('href'), url) : null;
 }
 
 // The site-neutral identity kernel. An adapter describes where a site keeps its

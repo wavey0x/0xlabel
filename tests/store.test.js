@@ -228,6 +228,35 @@ test('there is always an address book to label into', async () => {
   await assert.rejects(store.remove(store.state().activeBook), /at least one/);
 });
 
+test('the last place for a book is settled in the queue, not before it', async () => {
+  const { store } = harness();
+  await store.init();
+  while (store.state().books.length < 19) await store.add({ storage: { kind: 'device' } });
+  // Two views asking at once both read nineteen books before either writes.
+  const answers = await Promise.allSettled([
+    store.add({ name: 'Nineteen', storage: { kind: 'device' } }),
+    store.add({ name: 'Twenty', storage: { kind: 'device' } }),
+  ]);
+  assert.deepEqual(answers.map(answer => answer.status), ['fulfilled', 'rejected']);
+  assert.match(answers[1].reason.message, /as many address books/);
+  assert.equal(store.state().books.length, 20);
+});
+
+test('removing the open book leaves the one that replaced it as the open book', async () => {
+  const { store, make, saved } = harness();
+  await store.init();
+  const first = store.state().activeBook;
+  await store.add({ name: 'Second', storage: { kind: 'device' } });
+  const second = store.state().activeBook;
+  await store.remove(second);
+  assert.equal(store.state().activeBook, first);
+  assert.equal(saved.activeBook, first, 'and storage says so, rather than naming a book that is gone');
+
+  const resumed = make();
+  await resumed.init();
+  assert.equal(resumed.state().activeBook, first);
+});
+
 test('a book can be renamed, and an empty name leaves the old one standing', async () => {
   const { store } = harness();
   await store.init();
@@ -481,4 +510,18 @@ test('a book says which kind of storage holds it', async () => {
   await store.init();
   await store.add({ name: 'Team', storage: onServer });
   assert.deepEqual(store.state().books.map(item => item.kind), ['device', 'server']);
+});
+
+// A refusal reports that a draft is out of date. Only one that says what the
+// book holds reports anything about the book itself.
+test('a refusal that names no record leaves the saved copy alone', async () => {
+  const { store, intercept } = harness({ remote: [{ address, scope: 'global', labels: ['Treasury'], version: 'v1' }] });
+  await store.init();
+  await store.add({ name: 'Team', storage: onServer });
+  assert.deepEqual(store.state().records.map(entry => entry.labels[0]), ['Treasury']);
+  // The server, or something standing between it and us, refuses without
+  // saying what it holds.
+  intercept((url, options) => (options.method === 'PUT' ? response({ detail: 'Saved elsewhere.' }, 409) : null));
+  await assert.rejects(write(store, ['Renamed'], { version: 'v1' }), error => error.status === 409);
+  assert.deepEqual(store.state().records.map(entry => entry.labels[0]), ['Treasury']);
 });

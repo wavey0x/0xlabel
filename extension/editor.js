@@ -33,7 +33,8 @@ export function createEditor(container, { address, scope = 'global', state, save
   };
   let loaded = reading(state);
   const draft = { labels: [...(loaded.labels.length ? loaded.labels : [''])], version: loaded.version };
-  const edited = () => !sameLabels(draft.labels.filter(name => name.trim()), loaded.labels);
+  // Compared as a save would store them, so a stray space is not an edit.
+  const edited = () => !sameLabels(draft.labels.map(name => name.trim()).filter(Boolean), loaded.labels);
   const adopt = next => {
     loaded = next;
     draft.labels = [...(next.labels.length ? next.labels : [''])];

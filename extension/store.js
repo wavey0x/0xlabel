@@ -129,7 +129,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
       if (active !== started) return { syncedAt };
       try {
         const answer = remote ? await remote.load(mark) : await local.load(started);
-        if (active !== started) return state();
+        if (active !== started) return { syncedAt };
         pulledAt = now();
         if (remote) mark = answer.mark ?? mark;
         // Only what differs is written, and a book that came back saying what
@@ -189,8 +189,8 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
   async function add({ name, storage: where, copyFrom }) {
     if (!where || (where.kind !== 'device' && where.kind !== 'server')) throw new Error('Choose where to keep this book.');
     if (where.kind === 'server' && (!where.url || !where.token)) throw new Error('Paste the link your server printed.');
-    if (books.length >= 20) throw new Error('That is as many address books as 0xlabel keeps.');
     return serial(async () => {
+      if (books.length >= 20) throw new Error('That is as many address books as 0xlabel keeps.');
       if (where.kind === 'server' && books.some(other => other.storage.url === where.url)) {
         throw new Error('That server is already one of your address books.');
       }
@@ -251,8 +251,8 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
       books = books.filter(other => other.id !== id);
       ({ revision } = await local.drop(id));
       await storage.remove([syncKey(id)]);
-      await saveBooks();
       if (active === id) await open(books[0].id);
+      await saveBooks();
       changed();
       return {};
     });
@@ -337,10 +337,14 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
           if (failure.current && (failure.current.address !== address || failure.current.scope !== scope)) {
             throw new Error('A conflict came back for a different record. Refresh before trying again.');
           }
-          const current = failure.current || null;
+          // A refusal that names no record at all says only that this draft is
+          // out of date. It is not a report that the book is empty, so there is
+          // nothing to copy over the saved one and nothing to settle below.
+          const told = failure.current !== undefined;
+          const current = failure.current ?? null;
           // A book kept here refused because the draft was old, not because the
           // copy is: only a server can have been written behind our back.
-          const stale = (findRecord(records, address, scope)?.version ?? null) !== (current?.version ?? null);
+          const stale = told && (findRecord(records, address, scope)?.version ?? null) !== (current?.version ?? null);
           needsRefresh = false;
           if (stale) {
             records = replace(records, address, scope, current);
@@ -351,7 +355,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
           // Whoever got there first wrote the very names this draft carries, so
           // the book says what it was asked to say. A refused write that leaves
           // nothing to decide is a save, not a conflict.
-          if (sameLabels(current?.labels || [], labels)) return {};
+          if (told && sameLabels(current?.labels || [], labels)) return {};
         } else if (failure.status && failure.status < 500) {
           needsRefresh = false;
           if (remote) await saveSync();

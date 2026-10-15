@@ -231,6 +231,27 @@ test('failed and conflicting saves retain the draft; a refusal offers both answe
   expect(await page.evaluate(() => window.saves.at(-1))).toMatchObject({ address, labels: ['Newer name'], version: 'newer' });
 });
 
+test('a stray space is not an edit, and a link that names nothing opens nothing', async ({ page }) => {
+  await start(page);
+  await edit(page).click();
+  await expect(input(page)).toHaveValue('Treasury');
+  // The same name with a space on the end is the same name: a save would store
+  // it that way, so nothing here is a draft worth defending.
+  await input(page).fill('  Treasury  ');
+  await edit(page, 1).click();
+  await expect(shownAddress(page)).toHaveText(checksumAddress(other));
+  await expect(page.locator('.notice')).toHaveText('');
+
+  // A context menu hands over whatever the page put in the link.
+  await input(page).press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.evaluate(() => window.controller.openEditor({ link: 'not a url' }));
+  await page.evaluate(() => window.controller.openEditor({ link: 'https://example.com/not/an/address' }));
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.evaluate(address => window.controller.openEditor({ link: `https://etherscan.io/address/${address}` }), other);
+  await expect(shownAddress(page)).toHaveText(checksumAddress(other));
+});
+
 test('a draft nobody has touched follows the book; one with typing in it is never overwritten', async ({ page }) => {
   await start(page);
   const elsewhere = labels => page.evaluate(({ address, labels }) => window.controller.updateState({

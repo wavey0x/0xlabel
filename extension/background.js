@@ -78,24 +78,22 @@ function broadcast(state, change) {
   const message = change
     ? { type: 'Updated', change, activeBook: state.activeBook, stateRevision: state.stateRevision, syncedAt: state.syncedAt }
     : { type: 'Updated', state };
-  // The popup and the book page hear this on the runtime channel. Sending it
-  // to every tab as well delivered it to them twice, and to tabs that have
-  // nothing of ours in them at all: a website only has a content script where
-  // we were granted the host, which is the same place its URL is visible.
+  // The popup and the book page hear this on the runtime channel. A website
+  // hears it only where it was enabled, because that is the only place a
+  // content script of ours is listening.
   chrome.runtime.sendMessage(message).catch(() => {});
   chrome.tabs.query({}).then(tabs => Promise.allSettled(tabs
-    .filter(tab => tab.url && /^https?:/.test(tab.url))
+    .filter(tab => tab.url && sites[new URL(tab.url).origin])
     .map(tab => send(tab.id, message, {}))));
 }
 async function authorizedPage(sender) {
-  try {
-    const origin = siteOrigin(sender.url);
-    if (sender.id !== chrome.runtime.id || !sender.tab || !sites[origin] || sender.origin !== origin) return false;
-    // A website's embedded views share its permission. An enabled website
-    // embedded by another origin cannot receive the book or submit edits.
-    const tab = await chrome.tabs.get(sender.tab.id);
-    return siteOrigin(tab.url) === origin;
-  }
+  if (sender.id !== chrome.runtime.id || !sender.tab || !/^https?:/.test(sender.url || '')) return false;
+  const origin = new URL(sender.url).origin;
+  if (!sites[origin] || sender.origin !== origin) return false;
+  // A website's embedded views share its permission. An enabled website
+  // embedded by another origin cannot receive the book or submit edits. The
+  // tab can be gone by the time we ask, which is an answer of no.
+  try { return siteOrigin((await chrome.tabs.get(sender.tab.id)).url) === origin; }
   catch { return false; }
 }
 function trustedView(sender) {
