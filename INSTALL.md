@@ -76,7 +76,7 @@ In the browser, records live in the extension's IndexedDB database, keyed by boo
 
 ## Updates and privacy
 
-This is an unpacked development extension. After editing or pulling its code, reload 0xtagger on the extensions page and refresh enabled websites. Restart the helper when its Python code changes. Address-book sync is independent of code reloads.
+This is an unpacked development extension. After editing or pulling its code, reload 0xtagger on the extensions page and refresh enabled websites. The manifest pins a public `key`, so the extension keeps one id — `odmejkpnlpbgpbohiejgiappnlohlgbj` — and therefore its stored books, wherever the checkout sits. Moving the folder still needs a **Load unpacked** from the new location, but nothing is lost when you do. Restart the helper when its Python code changes. Address-book sync is independent of code reloads.
 
 Displayed tags are part of the website's DOM and readable by that website. Credentials remain in trusted extension storage. Etherscan-family explorers and Safe have dedicated adapters; other enabled sites use full-address detection. Embedded views on the enabled website's own origin are included, such as Etherscan's token-transfer tabs; frames from other origins remain untouched. Inputs, signing controls, unresolved abbreviations, and ambiguous addresses are skipped. An inconsistent site integration pauses tagging and offers Retry in the popup.
 

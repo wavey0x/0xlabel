@@ -63,7 +63,7 @@ export function createRecords({ indexedDB: factory = globalThis.indexedDB, keyRa
     meta.put({ key: REVISION, value: revision });
     return revision;
   }
-  // A record with no names is a record removed, the same as everywhere else.
+  // A record with no tags is a record removed, the same as everywhere else.
   function store(records, id, { address, scope, tags, version }) {
     if (!tags.length) { records.delete([id, scope, address]); return null; }
     const saved = { address, scope, tags, version: version || stamp() };
@@ -80,7 +80,7 @@ export function createRecords({ indexedDB: factory = globalThis.indexedDB, keyRa
         revision: Number.isSafeInteger(revision?.value) ? revision.value : 0,
       };
     },
-    // One name, against the version it was read at. The check and the write are
+    // One tag list, against the version it was read at. The check and the write are
     // the same transaction, so nothing can land between them.
     async save(id, { address, scope, tags, version }) {
       const [records, meta, transaction] = await begin();

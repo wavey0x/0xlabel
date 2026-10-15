@@ -30,7 +30,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
   let revision = 0;
   let needsRefresh = false;
   // A book that could not be read is never saved over: the save would write
-  // over names this worker never managed to see.
+  // over tags this worker never managed to see.
   let unreadable = false;
   // A write left for a server, whose answer this worker may never have heard.
   // It belongs to the book it was for, and outlives the worker that sent it.
@@ -259,7 +259,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
   }
 
   // Addresses carried in from a file land in the book that is open, replacing
-  // any names already held for the same address on the same network. One file
+  // any tags already held for the same address on the same network. One file
   // is one decision, so it is one write: all of it lands or none of it does.
   async function merge(incoming) {
     const wanted = validateSnapshot({ records: incoming });
@@ -352,7 +352,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
             changed({ address, scope, record: current });
           }
           if (remote) await saveSync();
-          // Whoever got there first wrote the very names this draft carries, so
+          // Whoever got there first wrote the very tags this draft carries, so
           // the book says what it was asked to say. A refused write that leaves
           // nothing to decide is a save, not a conflict.
           if (told && sameTags(current?.tags || [], tags)) return {};

@@ -4,6 +4,7 @@
   "version": "1",
   "description": "Your tags for wallet addresses. One small, self-hosted address book.",
   "minimum_chrome_version": "125",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4uKnbg9lfDMiiiQQoeBszBU5XfnqfV80mqNeg1d84cikJw6MQ4LFGGWC5EXbXCXDGDVVZMsbq5M/9fUkOTGJiJqvoqb3G/K+qtJzg4ZXdbbm+M/r8RbUQGryCgvrp4kcLuUbmBM2l+RB7+s1K3WAsW9JgtVoM4j4n/i7QfwOszkjMLQdNN1khujtCX4c9fXKqkl/+UVyS5VGDF4Zwto43QOO/F8+a9uX5GIlHePAK2UBP5e2KLqzN5BGELAGzYoNNJl+E+8s420P4gV6P2pIfwHc7XINEHKH9b6/RC3sm5tbSMMMiMgpzwlCTjIiY4+dmDFb/L3Me4dJyaouSoUU4wIDAQAB",
   "permissions": ["storage", "unlimitedStorage", "alarms", "scripting", "contextMenus", "activeTab"],
   "optional_host_permissions": ["http://*/*", "https://*/*"],
   "background": {"service_worker": "background.js", "type": "module"},

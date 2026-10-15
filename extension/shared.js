@@ -56,12 +56,12 @@ export function normalizeTags(values) {
   const seen = new Set();
   return values.map(value => {
     if (typeof value !== 'string') throw new Error('Tags must be plain text.');
-    const name = value.trim();
-    if (!name || name.length > MAX_TAG_LENGTH || /[\x00-\x1f\x7f]/.test(name)) throw new Error(`Tags must contain 1–${MAX_TAG_LENGTH} characters.`);
-    const key = name.toLocaleLowerCase();
+    const tag = value.trim();
+    if (!tag || tag.length > MAX_TAG_LENGTH || /[\x00-\x1f\x7f]/.test(tag)) throw new Error(`Tags must contain 1–${MAX_TAG_LENGTH} characters.`);
+    const key = tag.toLocaleLowerCase();
     if (seen.has(key)) throw new Error('Each tag in a list must be distinct.');
     seen.add(key);
-    return name;
+    return tag;
   });
 }
 
@@ -90,10 +90,10 @@ export function validateSnapshot(value) {
   });
 }
 
-// Two tag lists mean the same thing only in the same order: the first name
+// Two tag lists mean the same thing only in the same order: the first tag
 // is the one a website shows.
 export function sameTags(left, right) {
-  return left.length === right.length && left.every((name, index) => name === right[index]);
+  return left.length === right.length && left.every((tag, index) => tag === right[index]);
 }
 
 export function findRecord(records, address, scope) {

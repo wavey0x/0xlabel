@@ -25,7 +25,7 @@ export function createEditor(container, { address, scope = 'global', state, save
   const displayAddress = checksumAddress(address);
   const own = findRecord(state.records, address, scope);
   // What the book says about this address, and the version a save must match.
-  // A scope with no record of its own starts from the names shown everywhere.
+  // A scope with no record of its own starts from the tags shown everywhere.
   const reading = from => {
     const mine = findRecord(from.records, address, scope);
     const shown = mine || (scope !== 'global' && findRecord(from.records, address, 'global'));
@@ -34,7 +34,7 @@ export function createEditor(container, { address, scope = 'global', state, save
   let loaded = reading(state);
   const draft = { tags: [...(loaded.tags.length ? loaded.tags : [''])], version: loaded.version };
   // Compared as a save would store them, so a stray space is not an edit.
-  const edited = () => !sameTags(draft.tags.map(name => name.trim()).filter(Boolean), loaded.tags);
+  const edited = () => !sameTags(draft.tags.map(tag => tag.trim()).filter(Boolean), loaded.tags);
   const adopt = next => {
     loaded = next;
     draft.tags = [...(next.tags.length ? next.tags : [''])];
@@ -101,9 +101,9 @@ export function createEditor(container, { address, scope = 'global', state, save
     catch { get('.notice').textContent = 'Select the full address above to copy it.'; queueMicrotask(onLayout); }
   };
   function preview() {
-    const names = draft.tags;
+    const tags = draft.tags;
     const fallback = scope !== 'global' ? findRecord(activeState.records, address, 'global')?.tags[0] : null;
-    get('.preview').hidden = names.length > 0;
+    get('.preview').hidden = tags.length > 0;
     get('.preview').textContent = fallback ? `Removing this override will show ${fallback}.` : 'Removing all tags restores the original address display.';
     queueMicrotask(onLayout);
   }
@@ -139,22 +139,22 @@ export function createEditor(container, { address, scope = 'global', state, save
   function renderRows(focus = 0) {
     const rows = get('.rows');
     rows.replaceChildren();
-    draft.tags.forEach((name, index) => {
+    draft.tags.forEach((tag, index) => {
       const row = element('div', undefined, { class: 'row' });
       // Search inputs are excluded by Bitwarden even when ignore hints are disabled.
       // Keep the accessible role a textbox: this edits a tag, not a search query.
       const input = element('input', undefined, { type: 'search', role: 'textbox', name: `0xtagger-tag-${index + 1}`, maxlength: MAX_TAG_LENGTH, 'aria-label': `Tag ${index + 1}`, placeholder: 'Add a tag', autocomplete: 'off', 'data-bwignore': 'true', spellcheck: 'false' });
-      input.value = name;
+      input.value = tag;
       // Typing changes no panel geometry; avoid positioning/layout work per letter.
       input.oninput = () => { draft.tags[index] = input.value; };
       const controls = element('div', undefined, { class: 'rank' });
       if (index === 0 && draft.tags.length > 1) controls.append(element('small', 'Default', { class: 'default' }));
-      for (const [text, tag, offset] of [['↑', 'Move up', -1], ['↓', 'Move down', 1], ['×', 'Remove tag', 0]]) {
-        const button = element('button', text, { type: 'button', class: 'quiet', 'aria-label': `${tag} ${index + 1}` });
+      for (const [text, action, offset] of [['↑', 'Move up', -1], ['↓', 'Move down', 1], ['×', 'Remove tag', 0]]) {
+        const button = element('button', text, { type: 'button', class: 'quiet', 'aria-label': `${action} ${index + 1}` });
         button.onclick = () => {
-          const names = draft.tags;
-          if (!offset) names.splice(index, 1);
-          else [names[index], names[index + offset]] = [names[index + offset], names[index]];
+          const tags = draft.tags;
+          if (!offset) tags.splice(index, 1);
+          else [tags[index], tags[index + offset]] = [tags[index + offset], tags[index]];
           renderRows(Math.max(0, index + offset));
         };
         controls.append(button);
