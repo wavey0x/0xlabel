@@ -175,8 +175,10 @@ $('#import-file').onchange = async event => {
   event.target.value = '';
   if (!file) return;
   try {
-    const result = await rpc({ type: 'Import', records: readBookFile(await file.text()) });
-    tell(`Added ${result.added} address${result.added === 1 ? '' : 'es'} to ${state.bookName}.`);
+    const { records, unnamed } = readBookFile(await file.text());
+    const result = await rpc({ type: 'Import', records });
+    const skipped = unnamed ? ` ${unnamed} unnamed row${unnamed === 1 ? '' : 's'} skipped.` : '';
+    tell(`Added ${result.added} address${result.added === 1 ? '' : 'es'} to ${state.bookName}.${skipped}`);
   } catch (error) {
     tell(error instanceof SyntaxError ? 'That file is not a 0xtagger export or a Safe address book.' : error);
   }

@@ -6,6 +6,7 @@ import { applyChange, normalizeAPI, parseConnectLink, readBookFile } from '../ex
 
 const address = '0x' + 'ab'.repeat(20);
 const other = '0x' + 'cd'.repeat(20);
+const third = '0x' + 'ef'.repeat(20);
 const host = 'http://127.0.0.1:8712';
 const token = 'test-only-secret';
 const onServer = { kind: 'server', url: host, token };
@@ -533,7 +534,7 @@ test('a Safe address book reads as tags, one record per network', async () => {
   await store.init();
   const csv = ['address,name,chainId', `${address},Treasury,1`, `${address},Treasury,137`,
     `${other},"Operations, EU",8453`].join('\r\n');
-  const result = await store.merge(readBookFile(csv));
+  const result = await store.merge(readBookFile(csv).records);
   assert.equal(result.added, 3);
   assert.deepEqual(store.state().records.map(item => [item.address, item.scope, item.tags[0]]).sort(),
     [[address, 'eip155:1', 'Treasury'], [address, 'eip155:137', 'Treasury'],
@@ -544,7 +545,7 @@ test('a Safe address book reads as tags, one record per network', async () => {
 test('a Safe row keeps a chain this build does not know, and an empty chain is every network', async () => {
   const { store } = harness();
   await store.init();
-  await store.merge(readBookFile(['address,name,chainId', `${address},Treasury,43114`, `${other},Everywhere,`].join('\n')));
+  await store.merge(readBookFile(['address,name,chainId', `${address},Treasury,43114`, `${other},Everywhere,`].join('\n')).records);
   assert.deepEqual(store.state().records.map(item => item.scope).sort(), ['eip155:43114', 'global']);
 });
 
@@ -552,7 +553,7 @@ test('a Safe row keeps a chain this build does not know, and an empty chain is e
 test('a Safe export saved by a spreadsheet still reads', async () => {
   const { store } = harness();
   await store.init();
-  await store.merge(readBookFile(`\uFEFFaddress,name,chainId\n${address},Treasury,1\n`));
+  await store.merge(readBookFile(`\uFEFFaddress,name,chainId\n${address},Treasury,1\n`).records);
   assert.equal(store.state().records[0].tags[0], 'Treasury');
 });
 
@@ -561,7 +562,7 @@ test('a Safe export saved by a spreadsheet still reads', async () => {
 test('a file imports without carrying a version, and the book issues one', async () => {
   const { store } = harness();
   await store.init();
-  await store.merge(readBookFile(JSON.stringify({ records: [{ address, tags: ['Treasury'] }] })));
+  await store.merge(readBookFile(JSON.stringify({ records: [{ address, tags: ['Treasury'] }] })).records);
   const [held] = store.state().records;
   assert.equal(held.scope, 'global');
   assert.equal(typeof held.version, 'string');
@@ -575,15 +576,40 @@ test('our own export reads back', async () => {
   const exported = JSON.stringify({ records: store.state().records }, null, 2);
   const second = harness();
   await second.store.init();
-  await second.store.merge(readBookFile(exported));
+  await second.store.merge(readBookFile(exported).records);
   assert.deepEqual(second.store.state().records.map(item => item.tags), [['Treasury', 'Operations']]);
+});
+
+// Safe's Members page exports signers from bare arrays, so the file opens on
+// data rather than on column names and says nothing about a network. A signer
+// is a person, not a deployment, so an unnamed one carries nothing in.
+test('a Safe signer export reads without a header, on every network', async () => {
+  const { store } = harness();
+  await store.init();
+  const { records, unnamed } = readBookFile([`${address},dudesahn`, `${other},`, `${third},"Smith, A"`].join('\n'));
+  assert.equal(unnamed, 1, 'a signer nobody named names nothing');
+  await store.merge(records);
+  assert.deepEqual(store.state().records.map(item => [item.address, item.scope, item.tags[0]]).sort(),
+    [[address, 'global', 'dudesahn'], [third, 'global', 'Smith, A']].sort());
+});
+
+// Skipping a blank name must not make a malformed named row acceptable, and
+// the row it complains about is the one a spreadsheet shows, not the one left
+// after the blanks were dropped.
+test('a blank name is skipped while a malformed named row still names its own line', async () => {
+  const { store } = harness();
+  await store.init();
+  await assert.rejects(store.merge(readBookFile([
+    'address,name,chainId', `${address},,1`, 'not-an-address,Oops,1'].join('\n')).records),
+    /Row 3: that is not a full Ethereum address/);
+  assert.equal(store.state().records.length, 0, 'one file is one decision');
 });
 
 test('a file that is neither is refused, and a bad row says which row', async () => {
   assert.throws(() => readBookFile('name,address\nTreasury,0x1'), /not a 0xtagger export or a Safe address book/);
   const { store } = harness();
   await store.init();
-  await assert.rejects(store.merge(readBookFile(['address,name,chainId', `${address},Treasury,1`, 'not-an-address,Oops,1'].join('\n'))),
-    /Row 2: that is not a full Ethereum address/);
+  await assert.rejects(store.merge(readBookFile(['address,name,chainId', `${address},Treasury,1`, 'not-an-address,Oops,1'].join('\n')).records),
+    /Row 3: that is not a full Ethereum address/);
   assert.equal(store.state().records.length, 0, 'one file is one decision');
 });

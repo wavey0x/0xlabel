@@ -130,10 +130,12 @@ export function indexBook(records) {
   return new Map(records.map(entry => [recordKey(entry.address, entry.scope), entry]));
 }
 
-// A book arrives either as our own JSON export or as Safe's address book,
-// which is a CSV of `address,name,chainId` with one row per chain. Both say
-// the same three things: an address, the tags for it, and the network those
-// tags belong to. Reading them here keeps file formats out of the views.
+// A book arrives in one of three shapes: our own JSON export, Safe's address
+// book — `address,name,chainId` with a header and one row per chain — or Safe's
+// signer export, which is written from bare arrays and so carries no header at
+// all, two columns, and a blank name for a signer nobody has named. All three
+// say the same things: an address, the tags for it, and the network those tags
+// belong to. Reading them here keeps file formats out of the views.
 const SAFE_COLUMNS = ['address', 'name', 'chainId'];
 
 // RFC 4180 fields: commas and newlines survive inside quotes, and a doubled
@@ -160,24 +162,41 @@ function csvRows(text) {
   return rows.filter(cells => cells.some(cell => cell.trim()));
 }
 
+// Returns the records a file names, and how many rows named an address but no
+// name. A row that names nobody says nothing, so it carries nothing in — but it
+// is not a broken file either, and the reader is told how many it passed over.
 export function readBookFile(text) {
   // A byte-order mark is what a spreadsheet leaves behind; it is not content.
   const body = text.replace(/^﻿/, '').trimStart();
   if (body.startsWith('{') || body.startsWith('[')) {
     const parsed = JSON.parse(body);
-    return parsed.records ?? parsed;
+    return { records: parsed.records ?? parsed, unnamed: 0 };
   }
-  const [header, ...rows] = csvRows(body);
-  if (!header || header.length !== SAFE_COLUMNS.length ||
-      !SAFE_COLUMNS.every((column, at) => header[at].trim() === column)) {
-    throw new Error('That file is not a 0xtagger export or a Safe address book.');
+  const rows = csvRows(body);
+  // A signer export opens on data rather than on column names, and nothing else
+  // begins with a whole address, so the first cell settles which file this is.
+  const headerless = Boolean(parseAddress(rows[0]?.[0]?.trim()));
+  if (!headerless) {
+    const header = rows.shift();
+    if (!header || header.length !== SAFE_COLUMNS.length ||
+        !SAFE_COLUMNS.every((column, at) => header[at].trim() === column)) {
+      throw new Error('That file is not a 0xtagger export or a Safe address book.');
+    }
   }
-  // Safe names one chain per row, and names none for an address kept everywhere.
-  return rows.map(([address, name, chain]) => ({
+  const records = rows.map(([address, name, chain], at) => ({
+    // The line a spreadsheet shows this on, carried so that dropping an unnamed
+    // row above a broken one cannot renumber the complaint about the broken one.
+    row: at + (headerless ? 1 : 2),
     address: address?.trim(),
     tags: [name?.trim()],
-    scope: chain?.trim() ? `eip155:${chain.trim()}` : 'global',
+    // Safe names one chain per address-book row, and names none for an address
+    // kept everywhere. A signer export names none at all, because a signer is a
+    // person rather than a deployment: which networks they stand on is the
+    // reader's choice to make, not ours to infer from the file it came in.
+    scope: !headerless && chain?.trim() ? `eip155:${chain.trim()}` : 'global',
   }));
+  const named = records.filter(record => record.tags[0]);
+  return { records: named, unnamed: records.length - named.length };
 }
 
 // What a file is allowed to carry. The receiving book issues its own versions,
@@ -199,7 +218,7 @@ export function validateImport(records) {
       seen.add(key);
       return { address, scope, tags };
     } catch (failure) {
-      throw new Error(`Row ${at + 1}: ${failure.message[0].toLowerCase()}${failure.message.slice(1)}`);
+      throw new Error(`Row ${item?.row ?? at + 1}: ${failure.message[0].toLowerCase()}${failure.message.slice(1)}`);
     }
   });
 }

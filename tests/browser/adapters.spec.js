@@ -189,3 +189,76 @@ test.describe('Generic address text', () => {
     expect(await health(page)).toMatchObject({ status: 'ready' });
   });
 });
+
+// Safe sets the name in a box of its own above the address, and sometimes puts
+// a badge beside it saying which of its books the name came from. Replacing the
+// name rather than the address is what keeps one name to a widget; leaving the
+// badge there would have the page vouching for our wording.
+test.describe('Safe address widget', () => {
+  const site = `https://app.safe.global/settings/setup?safe=eth:${other}`;
+  const widget = ({ name = 'dudesahn', link = true, shown = `0xabab…abab`, href = '/home?safe=eth:' + other } = {}) =>
+    `<div class="SrcEthHashInfo_container__h">
+      <div class="SrcEthHashInfo_avatarContainer__h"></div>
+      <div>
+        ${name ? `<div title="${name}" class="ethHashInfo-name flex items-center">
+          ${href ? `<a id="name" href="${href}">${name}</a>` : `<div id="name">${name}</div>`}
+          <span id="badge"><svg aria-hidden="true" width="20" height="20"></svg></span>
+        </div>` : ''}
+        <div class="SrcEthHashInfo_addressContainer__h">
+          <b>eth:</b><span id="addr">${shown}</span>
+          ${link ? `<a id="explorer" href="https://etherscan.io/address/${address}">open</a>` : ''}
+        </div>
+      </div>
+    </div>`;
+  const open = (page, html) => start(page, { site, html: `<header>Safe</header><main>${html}</main>` });
+
+  // The name is wrapped in a link, and a display holding a link is disqualified:
+  // matching the name's own box rather than the box Safe groups it in is the
+  // whole difference between this working and silently doing nothing.
+  test('tags the name beside the address, through the link Safe wraps it in', async ({ page }) => {
+    await open(page, widget());
+    await expect(page.locator('#name')).toHaveAttribute('data-0xtagger-address', address);
+    await expect(page.locator('#name')).toHaveAttribute('data-0xtagger-tag', 'Treasury');
+    await expect(page.locator('#name')).toHaveText('dudesahn');
+    await expect(page.locator('#name')).toHaveAttribute('href', `/home?safe=eth:${other}`);
+  });
+
+  test('tags a plain name box the same way', async ({ page }) => {
+    await open(page, widget({ href: '' }));
+    await expect(page.locator('#name')).toHaveAttribute('data-0xtagger-tag', 'Treasury');
+  });
+
+  // One name to a widget: the address below the replaced name stays an address.
+  test('leaves the address alone where the name carries the tag', async ({ page }) => {
+    await open(page, widget());
+    await expect(page.locator('#addr')).not.toHaveAttribute('data-0xtagger-tag', /./);
+    await expect(page.locator('#addr')).toHaveText('0xabab…abab');
+    await expect(page.locator('[data-0xtagger-tag]')).toHaveCount(1);
+  });
+
+  // The badge claims the name came from one of Safe's own books. While a tag
+  // stands in its place that claim is false, so it goes — and comes back.
+  test('hides Safe\'s name-origin badge only while a tag stands in for the name', async ({ page }) => {
+    await open(page, widget());
+    await expect(page.locator('#badge')).toBeHidden();
+    await page.evaluate(() => window.controller.stop());
+    await expect(page.locator('#badge')).toBeVisible();
+    await expect(page.locator('#name')).toHaveText('dudesahn');
+  });
+
+  // Nothing proves which wallet an abbreviation belongs to, so a widget with no
+  // explorer link names nobody — and must not take the address down with it.
+  test('an unprovable widget tags nothing, and a full address still tags', async ({ page }) => {
+    await open(page, widget({ link: false }));
+    await expect(page.locator('[data-0xtagger-address]')).toHaveCount(0);
+    await open(page, widget({ link: false, shown: address }));
+    await expect(page.locator('#addr')).toHaveAttribute('data-0xtagger-tag', 'Treasury');
+  });
+
+  // A widget Safe renders without a name is still an address to tag.
+  test('a widget with no name tags its address', async ({ page }) => {
+    await open(page, widget({ name: '' }));
+    await expect(page.locator('#addr')).toHaveAttribute('data-0xtagger-address', address);
+    await expect(page.locator('#addr')).toHaveAttribute('data-0xtagger-tag', 'Treasury');
+  });
+});

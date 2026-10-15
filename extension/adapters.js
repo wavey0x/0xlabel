@@ -77,6 +77,17 @@ const etherscanAdapter = site({
 
 const SAFE_SELECTOR = '[data-testid="safe-selector-trigger-name"],[data-testid="safe-selector-trigger-address"]';
 const SAFE_WIDGET = '[class*="addressContainer"],[class*="EthHashInfo_container"],[class*="SrcEthHashInfo_container"]';
+// Safe's address widget sets the name in a box of its own, under a plain class
+// rather than a hashed one, and sometimes puts a badge beside it saying which
+// of Safe's books the name came from. The name's own box is the first child:
+// wrapping it in a link is Safe's business, and a link inside a display would
+// disqualify the display, so the box is what we match rather than its parent.
+const SAFE_NAME = '.ethHashInfo-name';
+const SAFE_NAME_BOX = `${SAFE_NAME} > :first-child`;
+// The address lives beside the name in the same widget, and an explorer link
+// beside it is what proves which wallet the pair is about.
+const SAFE_ADDRESS_LINK = 'a[href*="/address/"]';
+const safePair = element => element.closest(`${SAFE_NAME},[class*="addressContainer"]`)?.parentElement || null;
 
 const safeAdapter = site({
   id: 'Safe',
@@ -87,16 +98,31 @@ const safeAdapter = site({
     const network = safeNetwork(url.searchParams.get('safe')?.split(':')[0]);
     return { status: 'ready', ...(network ? { network: scopeOf(network) } : {}) };
   },
+  // While a tag stands in for Safe's name, the badge beside it would still be
+  // claiming the name came from one of Safe's own books. It goes for exactly as
+  // long as the substitution lasts, and comes back with it, because the rule
+  // rests on an attribute the controller already adds and removes.
+  styles: `${SAFE_NAME} > [data-0xtagger-tag] ~ * { display: none !important; }`,
   rules: {
-    targets: `a[href*="/address/"],[data-address],[title],[class*="addressContainer"] span,main span,${SAFE_SELECTOR}`,
+    targets: `a[href*="/address/"],[data-address],[title],[class*="addressContainer"] span,main span,${SAFE_NAME_BOX},${SAFE_SELECTOR}`,
     attributes: ['data-address', 'title', 'aria-label'],
     identifies: ['data-address'],
-    skip: element => element.children.length && !element.matches(`a[href*="/address/"],${SAFE_SELECTOR}`),
+    // A name may stand in for the address only in the box Safe set it in.
+    named: SAFE_NAME_BOX,
+    skip: element => {
+      if (element.matches(SAFE_NAME_BOX)) return false;
+      if (element.children.length && !element.matches(`${SAFE_ADDRESS_LINK},${SAFE_SELECTOR}`)) return true;
+      // One name to a widget. Where Safe shows a name above the address and the
+      // widget proves which wallet it is, the name is the display a tag
+      // replaces, and the address below is left to go on being an address.
+      const pair = element.closest('[class*="addressContainer"]') && safePair(element);
+      return Boolean(pair?.querySelector(SAFE_NAME) && pair.querySelector(SAFE_ADDRESS_LINK));
+    },
     // Explorer links in a compact EthHashInfo widget can identify its display,
     // and the selected Safe is named by the URL and the header's explorer link.
     sources: (element, url) => {
-      const widget = element.closest(SAFE_WIDGET);
-      const found = widget ? query(widget, 'a[href*="/address/"]').map(link => addressLink(link, url)?.address) : [];
+      const widget = element.matches(SAFE_NAME_BOX) ? safePair(element) : element.closest(SAFE_WIDGET);
+      const found = widget ? query(widget, SAFE_ADDRESS_LINK).map(link => addressLink(link, url)?.address) : [];
       if (!element.matches(SAFE_SELECTOR)) return found;
       found.push(parseAddress(url.searchParams.get('safe')?.split(':')[1]));
       const header = element.closest('header');
