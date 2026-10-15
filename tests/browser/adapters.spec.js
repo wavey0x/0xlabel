@@ -249,6 +249,18 @@ test.describe('Safe address widget', () => {
     await expect(page.locator('#name')).toHaveText('dudesahn');
   });
 
+  // Safe gives that slot to its name-origin icon or to a notice of its own,
+  // never to both. A notice there says nothing about where our wording came
+  // from, so hiding it would be pure loss — and the kind of loss that matters.
+  test('leaves a notice beside the name alone', async ({ page }) => {
+    const warned = widget().replace('<span id="badge"><svg aria-hidden="true" width="20" height="20"></svg></span>',
+      '<span id="warning"><svg aria-hidden="true" width="20" height="20"></svg><b>Looks like another address</b></span>');
+    await open(page, warned);
+    await expect(page.locator('#name')).toHaveAttribute('data-0xtagger-tag', 'Treasury');
+    await expect(page.locator('#warning')).toBeVisible();
+    await expect(page.locator('#warning')).toContainText('Looks like another address');
+  });
+
   // Nothing proves which wallet an abbreviation belongs to, so a widget with no
   // explorer link names nobody — and must not take the address down with it.
   test('an unprovable widget tags nothing, and a full address still tags', async ({ page }) => {
