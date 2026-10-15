@@ -18,6 +18,9 @@ a[data-0xtagger-tag], span[data-0xtagger-tag], code[data-0xtagger-tag] {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* Its overflow makes this inline-block's baseline its bottom margin edge, so
+     baseline alignment would hang it off the line. Align the boxes instead and
+     give the trailer below the same line box, which keeps the two in step. */
   vertical-align: bottom;
   color: var(--0xtagger-accent);
   pointer-events: none;
@@ -34,4 +37,17 @@ a[data-0xtagger-tag], span[data-0xtagger-tag], code[data-0xtagger-tag] {
   vertical-align: bottom;
   color: var(--0xtagger-muted);
   pointer-events: none;
+}
+/* A name stands in for the address, so it is set in the type the address was
+   set in. Everywhere else that is already 14px; on a page's own heading it is
+   not, and a caption-sized name beside a heading reads as an afterthought.
+   The address trailer belongs to the name, so the two never break apart. */
+[data-0xtagger-short] {
+  white-space: nowrap;
+}
+[data-0xtagger-short]::before {
+  font-size: var(--0xtagger-size, 14px);
+}
+[data-0xtagger-short]::after {
+  line-height: calc(1.5 * var(--0xtagger-size, 14px));
 }

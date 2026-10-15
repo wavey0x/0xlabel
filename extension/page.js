@@ -92,7 +92,7 @@ export async function createPageController({
     slot.setAttribute(UI_ATTRIBUTE, '');
     slot.setAttribute('data-0xtagger-edit', '');
     markSurface(slot);
-    slot.style.cssText = 'display:inline-flex;vertical-align:middle;flex-shrink:0;width:20px;height:20px;margin-inline-start:3px;';
+    slot.style.cssText = 'display:inline-flex;vertical-align:middle;flex-shrink:0;width:20px;height:20px;margin-inline-start:3px;font-size:14px;';
     const root = slot.attachShadow({ mode: 'open' });
     root.adoptedStyleSheets = overlay.shadow.adoptedStyleSheets;
     const button = doc.createElement('button');
@@ -147,11 +147,17 @@ export async function createPageController({
     const shown = shownOn(target);
     if (shown !== target.element) { target.element.removeAttribute(TAG); target.element.removeAttribute(SHORT); }
     if (tag) {
+      const trailer = adapter.subject && target.element.matches(adapter.subject)
+        ? abbreviate(checksumAddress(target.address)) : null;
+      // A name stands in for the address, so it is set in the type the address
+      // was set in. Read before the attribute below hides the evidence behind
+      // our own font-size: 0, and only once: one element a page wears it.
+      if (trailer && !shown.style.getPropertyValue('--0xtagger-size')) {
+        shown.style.setProperty('--0xtagger-size', win.getComputedStyle(shown).fontSize);
+      }
       // Preserve native nodes and copy sources; CSS substitutes only their
       // visible glyphs with the shared custom-tag typography.
       if (shown.getAttribute(TAG) !== tag) shown.setAttribute(TAG, tag);
-      const trailer = adapter.subject && target.element.matches(adapter.subject)
-        ? abbreviate(checksumAddress(target.address)) : null;
       if (trailer) { if (shown.getAttribute(SHORT) !== trailer) shown.setAttribute(SHORT, trailer); }
       else shown.removeAttribute(SHORT);
       const description = `0xtagger: ${tag}`;
