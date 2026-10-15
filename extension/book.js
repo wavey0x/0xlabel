@@ -99,6 +99,8 @@ function search() {
   }
   $('#empty').hidden = Boolean(matches.length);
   $('#empty p').textContent = state.records.length ? 'No matching tags or addresses.' : 'No addresses tagged yet.';
+  // A search that found nothing is not the moment to explain importing.
+  $('#empty-hint').hidden = Boolean(state.records.length);
   $('#shown').hidden = matches.length <= SHOWN;
   $('#shown').textContent = `Showing ${SHOWN} of ${matches.length.toLocaleString()}. Search to narrow.`;
 }
