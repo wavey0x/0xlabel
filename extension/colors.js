@@ -32,6 +32,10 @@ export const COLORS = Object.freeze({
   warning: '#b5760d',
   warningBadge: '#c88315',
   switchOff: '#777777',
+  // The tick confirming a write, drawn on the filled accent rather than on a
+  // panel: 5.2:1 on the deep purple and 4.1:1 on the lighter fill the dark
+  // theme uses, both clear of the 3:1 an icon needs.
+  success: '#4ade80',
   accentSoft: tint(accent, 8),
   accentHover: tint(accent, 6),
   accentWash: tint(accent, 7),

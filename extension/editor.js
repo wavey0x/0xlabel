@@ -1,4 +1,4 @@
-import { addedFrom, findRecord, MAX_TAGS, MAX_TAG_LENGTH, normalizeTags, sameTags, suggestedBy, usableName } from './shared.js';
+import { findRecord, MAX_TAGS, MAX_TAG_LENGTH, normalizeTags, sameTags, usableName } from './shared.js';
 import { checksumAddress } from './checksum.js';
 import { EDITOR_MARK, COPY_ICON, COPIED_ICON, confirmCopied } from './icons.js';
 
@@ -59,7 +59,7 @@ export function createEditor(container, { address, scope = 'global', state, save
   panel.innerHTML = `<header><strong class="brand" role="img" aria-label="0xtagger">${EDITOR_MARK}tagger</strong><span class="source"></span>${visibility ? '<div class="visibility-group"><span>Show tags</span><button type="button" class="switch visibility" role="switch" aria-label="Show my tags for this address" aria-checked="true"><span></span></button></div>' : '<button type="button" class="quiet close" aria-label="Close editor" title="Close">×</button>'}</header>
     <div class="address-line"><code></code><button type="button" class="quiet copy" aria-label="Copy">${COPY_ICON}</button></div>
     <div class="rows"></div>
-    <p class="preview"></p><p class="attribution" hidden></p><p class="offer" hidden></p><p class="notice" role="status"></p><div class="conflict" hidden></div>
+    <p class="preview"></p><p class="offer" hidden></p><p class="notice" role="status"></p><div class="conflict" hidden></div>
     <footer><button type="button" class="quiet add" aria-label="Add tag" title="Add tag">+</button>${modal && own ? '<button type="button" class="quiet clear">Remove tags</button>' : ''}<button type="button" class="primary save">Save</button></footer>`;
   container.replaceChildren(panel);
   if (modal) panel.showModal();
@@ -113,26 +113,25 @@ export function createEditor(container, { address, scope = 'global', state, save
   // A record for one network giving way to a global one is worth saying, because
   // the tag that takes over is not on screen. That emptying the field puts the
   // address back is the field in front of you, said twice.
-  // Attribution describes the name now in the first field, so it goes the
-  // moment that name stops being the site's. The offer below it is for an
-  // address already named: the site's name is shown, never substituted, and
-  // adding it appends — the preferred name stays where it is.
+  // A name the editor filled in is shown as what it is — the website's words,
+  // not yet anyone's — and nothing says so in a sentence. Which website they
+  // came from is the page behind this panel, so naming it would be narrating
+  // something already on screen. Typing makes the words yours and the mark
+  // goes with them.
+  //
+  // The offer below is for an address already named: the site's other name is
+  // shown, never substituted, and taking it appends, so the preferred name
+  // stays the preferred name.
   function attribution() {
     const live = Boolean(prefill) && draft.tags[0] === prefill.name;
-    // A live suggestion describes the name in the field, so it is said in the
-    // present tense and goes when that name does. A record's own origin is
-    // history: it stays true however often the name has been rewritten since.
-    const history = !live && addedFrom(own?.source);
-    get('.attribution').hidden = !live && !history;
-    get('.attribution').textContent = live ? suggestedBy(prefill.source) : history || '';
+    panel.querySelector('.row input')?.classList.toggle('offered', live);
     const spare = offered && !prefill && !draft.tags.some(tag => tag.trim() === offered.name);
     get('.offer').hidden = !spare;
     get('.offer').replaceChildren();
     if (spare) {
       const button = element('button', 'Add tag', { type: 'button', class: 'quiet' });
       button.onclick = () => { draft.tags.push(offered.name); renderRows(draft.tags.length - 1); };
-      get('.offer').append(element('span', offered.name),
-        element('small', suggestedBy(offered.source)), button);
+      get('.offer').append(element('span', offered.name), button);
     }
   }
   function preview() {

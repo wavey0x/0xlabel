@@ -503,14 +503,17 @@ test.describe('a name the website already shows', () => {
     `<p><a id="${id}" href="/address/${at}"><span class="hash-tag">${name}</span></a></p>`;
   const open = (page, html, records) =>
     start(page, { html: `<header>Explorer</header><main>${html}</main>`, records });
-  const attribution = page => page.getByRole('dialog').locator('.attribution');
+  const offeredField = page => page.getByRole('dialog').locator('.row input.offered');
   const offer = page => page.getByRole('dialog').locator('.offer');
 
-  test('fills an unnamed address with the site\'s name, selected and attributed', async ({ page }) => {
+  test('fills an unnamed address with the site\'s name, selected and marked as theirs', async ({ page }) => {
     await open(page, labelled('row', other, 'Uniswap V3: Router'), [record]);
     await tagFor(page, 'row').click();
     await expect(input(page)).toHaveValue('Uniswap V3: Router');
-    await expect(attribution(page)).toHaveText('Etherscan label');
+    // Shown as the website's words, with nothing narrating where they came
+    // from: the website is the page this panel is sitting on.
+    await expect(offeredField(page)).toHaveCount(1);
+    await expect(page.getByRole('dialog')).not.toContainText('label');
     // Selected, so typing replaces it rather than appending to it.
     expect(await input(page).evaluate(field => [field.selectionStart, field.selectionEnd]))
       .toEqual([0, 'Uniswap V3: Router'.length]);
@@ -526,7 +529,7 @@ test.describe('a name the website already shows', () => {
     await open(page, labelled('row', other, 'Uniswap V3: Router'), [record]);
     await tagFor(page, 'row').click();
     await input(page).fill('The router we use');
-    await expect(attribution(page)).toBeHidden();
+    await expect(offeredField(page)).toHaveCount(0);
     await save(page).click();
     const written = await page.evaluate(() => window.saves.at(-1));
     expect(written.tags).toEqual(['The router we use']);
@@ -539,9 +542,8 @@ test.describe('a name the website already shows', () => {
     await open(page, labelled('row', address, 'Uniswap V3: Router'), [record]);
     await tagFor(page, 'row').click();
     await expect(input(page)).toHaveValue('Treasury');
-    await expect(attribution(page)).toBeHidden();
+    await expect(offeredField(page)).toHaveCount(0);
     await expect(offer(page)).toContainText('Uniswap V3: Router');
-    await expect(offer(page)).toContainText('Etherscan label');
     await offer(page).getByRole('button', { name: 'Add tag' }).click();
     await save(page).click();
     await expect.poll(() => page.evaluate(() => window.saves.at(-1))).toMatchObject({
@@ -553,7 +555,7 @@ test.describe('a name the website already shows', () => {
     await open(page, labelled('row', address, 'Treasury'), [record]);
     await tagFor(page, 'row').click();
     await expect(offer(page)).toBeHidden();
-    await expect(attribution(page)).toBeHidden();
+    await expect(offeredField(page)).toHaveCount(0);
   });
 
   // A label belongs to the chain the page was showing it on. Saving an
@@ -587,21 +589,12 @@ test.describe('a name the website already shows', () => {
     await expect(page.getByRole('dialog')).toContainText('Save or close');
   });
 
-  // A record's own origin is history: it stays true however often the name has
-  // been rewritten, and is said in the past tense because of that.
-  test('says where a saved name came from, as history', async ({ page }) => {
-    await open(page, labelled('row', address, 'Treasury'),
-      [{ ...record, tags: ['Our treasury'], source: 'safe:address-book' }]);
-    await tagFor(page, 'row').click();
-    await expect(attribution(page)).toHaveText("Added from Safe's address book");
-  });
-
   // An address, or a piece of one, is not a name worth offering back.
   test('never offers an address as a name', async ({ page }) => {
     await open(page, labelled('row', other, '0xcdcd…cdcd'), [record]);
     await tagFor(page, 'row').click();
     await expect(input(page)).toHaveValue('');
-    await expect(attribution(page)).toBeHidden();
+    await expect(offeredField(page)).toHaveCount(0);
   });
 });
 
@@ -637,4 +630,9 @@ test('the saved tick is drawn in the colour the button writes in', async ({ page
   const [drawn, ink] = await stroke.evaluate(node =>
     [getComputedStyle(node).stroke, getComputedStyle(node.closest('button')).color]);
   expect(drawn).toBe(ink);
+  // Green, and bright enough to carry on the purple the button is filled with.
+  const fill = await page.getByRole('dialog').locator('.save')
+    .evaluate(node => getComputedStyle(node).backgroundColor);
+  expect(drawn).toBe('rgb(74, 222, 128)');
+  expect(contrast(drawn, fill)).toBeGreaterThanOrEqual(3);
 });

@@ -78,20 +78,16 @@ export function normalizeSource(value) {
   return value;
 }
 
-// What to call a source in front of a person, in as few words as it takes.
-// A live suggestion names what is sitting in the field — the site's own label
-// for this address — so it is said in the present tense and goes the moment
-// the words stop being theirs. A stored record names where it came from, in
-// the past tense, because its words may have been rewritten since and it
-// still came from wherever it came from.
+// What to call a source where one has to be named: the heading of a review
+// screen, which is the one place a person asked where these came from. The
+// editor says nothing, because the website a name was read from is the page
+// the editor is sitting on.
 const SOURCE_NAMES = {
   'safe:address-book': "Safe's address book",
   'safe:page': 'Safe',
   'etherscan:page': 'Etherscan',
 };
 export const sourceName = source => SOURCE_NAMES[source] || '';
-export const suggestedBy = source => (SOURCE_NAMES[source] ? `${SOURCE_NAMES[source]} label` : '');
-export const addedFrom = source => (SOURCE_NAMES[source] ? `Added from ${SOURCE_NAMES[source]}` : '');
 
 // Records carry a source only when they have one, so a record composed by hand
 // is the plain object it has always been.

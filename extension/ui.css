@@ -102,4 +102,5 @@ dialog.panel { padding: 16px; }
 @keyframes tagger-draw { from { stroke-dashoffset: 14.2; } to { stroke-dashoffset: 0; } }
 .confirmed svg path { animation: tagger-draw 240ms cubic-bezier(.2,.9,.3,1) both; }
 .quiet.confirmed { color: var(--0xtagger-accent); }
+.primary.confirmed { color: var(--0xtagger-success); }
 @media (prefers-reduced-motion: reduce) { .confirmed svg path { animation: none; } }

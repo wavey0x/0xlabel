@@ -42,16 +42,17 @@ dialog.editor::backdrop { background: var(--0xtagger-backdrop); backdrop-filter:
 .row:only-child:has(input:placeholder-shown) .rank { display: none; }
 .default { color: var(--0xtagger-accent); font-size: 9px; font-weight: 750; margin-right: 3px; }
 .add { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; margin-right: auto; padding: 0; font-size: 20px; }
-.save { display: flex; align-items: center; justify-content: center; flex: 0 0 64px; min-height: 28px; padding: 6px 8px; font-size: 12px; white-space: nowrap; }
+.save { display: flex; align-items: center; justify-content: center; flex: 0 0 64px; min-height: 28px; padding: 6px 8px; font-size: 12px; font-weight: 600; white-space: nowrap; }
 .save svg { width: 16px; height: 16px; }
 .save[aria-label="Saved"] { background: var(--0xtagger-accent-soft); opacity: 1; }
-.preview,.notice,.attribution,.offer { font-size: 11px; margin: 8px 0 0; overflow-wrap: anywhere; }
-.preview,.attribution { color: var(--0xtagger-muted); }
-.attribution { margin-top: 5px; }
+.preview,.notice,.offer { font-size: 11px; margin: 8px 0 0; overflow-wrap: anywhere; }
+.preview { color: var(--0xtagger-muted); }
+/* A name the editor filled in rather than one anybody typed: the website's
+   words, shown as theirs until they are taken. */
+.row input.offered { color: var(--0xtagger-muted); }
 /* What a site calls an address you have already named: available, never loud. */
 .offer { display: flex; align-items: baseline; gap: 8px; color: var(--0xtagger-muted); }
 .offer span { overflow-wrap: anywhere; }
-.offer small { flex-shrink: 0; opacity: .75; }
 .offer button { flex-shrink: 0; padding: 0; font-size: 11px; color: var(--0xtagger-accent); }
 .notice { color: var(--0xtagger-warning); }
 .notice:empty { display: none; }
@@ -79,4 +80,5 @@ footer { margin-top: 8px; }
 @keyframes tagger-draw { from { stroke-dashoffset: 14.2; } to { stroke-dashoffset: 0; } }
 .confirmed svg path { animation: tagger-draw 240ms cubic-bezier(.2,.9,.3,1) both; }
 .quiet.confirmed { color: var(--0xtagger-accent); }
+.primary.confirmed { color: var(--0xtagger-success); }
 @media (prefers-reduced-motion: reduce) { .confirmed svg path { animation: none; } }
