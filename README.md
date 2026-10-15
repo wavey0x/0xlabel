@@ -2,11 +2,7 @@
 <p align="center"><strong>One private address book. A clearer view of the web.</strong><br>A single source of truth for your tags, overlaid on the websites you use.<br>Self-hosted on your laptop or server. No central service or account.</p>
 <p align="center"><a href="#get-started">Get started</a> · <a href="INSTALL.md">Setup guide</a> · <a href="LICENSE">MIT</a></p>
 
-<picture>
-  <source media="(prefers-reduced-motion: reduce) and (prefers-color-scheme: light)" srcset="docs/images/transfers-light.png">
-  <source media="(prefers-reduced-motion: reduce)" srcset="docs/images/transfers-dark.png">
-  <img alt="Adding address tags on Etherscan, revealing the original addresses, and choosing a preferred tag" src="docs/images/demo.gif">
-</picture>
+![Adding address tags on Etherscan, revealing the original addresses, and choosing a preferred tag](docs/images/demo.gif)
 
 Collect address tags in one book and bring the same context to different websites. See recurring addresses, follow connections, and make sense of onchain activity. Add tags directly on the page; links and copy controls keep working.
 
