@@ -1,15 +1,15 @@
 /* Keep native-page annotations quiet; the extension UI carries the heavier style. */
-[data-0xlabel-label],
-[data-0xlabel-label] :not([data-0xlabel-ui]) {
+[data-0xtagger-tag],
+[data-0xtagger-tag] :not([data-0xtagger-ui]) {
   font-size: 0 !important;
 }
-a[data-0xlabel-label], span[data-0xlabel-label], code[data-0xlabel-label] {
+a[data-0xtagger-tag], span[data-0xtagger-tag], code[data-0xtagger-tag] {
   display: inline-block;
 }
-[data-0xlabel-label]::before {
-  content: attr(data-0xlabel-label);
+[data-0xtagger-tag]::before {
+  content: attr(data-0xtagger-tag);
   /* Fixed units on purpose: rem would resolve against the website's own root
-     size, and a 62.5% reset is common enough to shrink labels to 8.75px. */
+     size, and a 62.5% reset is common enough to shrink tags to 8.75px. */
   font: 700 14px/1.5 system-ui, sans-serif;
   letter-spacing: normal;
   text-transform: none;
@@ -19,19 +19,19 @@ a[data-0xlabel-label], span[data-0xlabel-label], code[data-0xlabel-label] {
   text-overflow: ellipsis;
   white-space: nowrap;
   vertical-align: bottom;
-  color: var(--0xlabel-accent);
+  color: var(--0xtagger-accent);
   pointer-events: none;
 }
 /* On the one display a page is about, the address stays in view behind the
    name: it is what everything else on the page refers to. */
-[data-0xlabel-short]::after {
-  content: '(' attr(data-0xlabel-short) ')';
+[data-0xtagger-short]::after {
+  content: '(' attr(data-0xtagger-short) ')';
   font: 400 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
   letter-spacing: normal;
   text-transform: none;
   display: inline-block;
   margin-inline-start: .4em;
   vertical-align: bottom;
-  color: var(--0xlabel-muted);
+  color: var(--0xtagger-muted);
   pointer-events: none;
 }

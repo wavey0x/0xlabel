@@ -37,9 +37,9 @@ function harness({ remote = [] } = {}) {
   // conditional read, one record at a time and many in one go.
   let revision = 0;
   const held = (address, scope) => book.find(item => item.address === address && item.scope === scope) || null;
-  const apply = ({ address, scope, labels }) => {
+  const apply = ({ address, scope, tags }) => {
     revision += 1;
-    const next = labels.length ? { address, scope, labels, version: 'v' + revision } : null;
+    const next = tags.length ? { address, scope, tags, version: 'v' + revision } : null;
     book = [...book.filter(item => item.address !== address || item.scope !== scope), ...(next ? [next] : [])];
     return next;
   };
@@ -47,13 +47,13 @@ function harness({ remote = [] } = {}) {
     calls.push({ url, ...options });
     if (intercept) { const result = await intercept(url, options); if (result) return result; }
     const mark = `"${revision}"`;
-    const path = url.slice(url.indexOf('/labels'));
+    const path = url.slice(url.indexOf('/tags'));
     if (!options.method) {
       if (options.headers?.['If-None-Match'] === mark) return response(null, 304, mark);
       return response({ records: book }, 200, mark);
     }
     const body = JSON.parse(options.body);
-    if (path === '/labels') {
+    if (path === '/tags') {
       const conflicts = body.changes.filter(change => change.version !== (held(change.address, change.scope)?.version || null));
       if (conflicts.length) return response({ detail: 'Saved elsewhere while this file was being added.', conflicts }, 409, mark);
       return response({ records: body.changes.map(apply) }, 200, `"${revision}"`);
@@ -61,7 +61,7 @@ function harness({ remote = [] } = {}) {
     const [, scope, at] = path.split('/').map(decodeURIComponent).filter((_, index) => index !== 0);
     const current = held(at, scope);
     if (body.version !== (current?.version || null)) return response({ current }, 409, mark);
-    return response({ record: apply({ address: at, scope, labels: body.labels }) }, 200, `"${revision}"`);
+    return response({ record: apply({ address: at, scope, tags: body.tags }) }, 200, `"${revision}"`);
   };
   // One database per harness, so a restart reopens the same books and a
   // different test never sees them.
@@ -70,7 +70,7 @@ function harness({ remote = [] } = {}) {
     now: () => ++clock, uuid: () => `id-${++counter}` });
   const corrupt = async (id, row) => {
     const database = await new Promise((resolve, reject) => {
-      const request = indexedDB.open('0xlabel', 1);
+      const request = indexedDB.open('0xtagger', 1);
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
@@ -85,16 +85,16 @@ function harness({ remote = [] } = {}) {
   return { store: make(), make, saved, calls, storage, fetch, writes, corrupt,
     remote: () => book, intercept: value => { intercept = value; } };
 }
-const write = (store, labels, { book = store.state().activeBook, at = address, version = null } = {}) =>
-  store.save({ book, address: at, scope: 'global', labels, version });
+const write = (store, tags, { book = store.state().activeBook, at = address, version = null } = {}) =>
+  store.save({ book, address: at, scope: 'global', tags, version });
 
-test('a book exists before anything is set up, and labeling needs no connection', async () => {
+test('a book exists before anything is set up, and tagging needs no connection', async () => {
   const { store, saved } = harness();
   await store.init();
   assert.equal(store.state().books.length, 1);
   assert.equal(store.state().books[0].where, 'On this device');
   await write(store, ['Treasury']);
-  assert.deepEqual(store.state().records.map(entry => entry.labels[0]), ['Treasury']);
+  assert.deepEqual(store.state().records.map(entry => entry.tags[0]), ['Treasury']);
   // Settings and credentials live in extension storage; books do not.
   assert.deepEqual(Object.keys(saved).sort(), ['activeBook', 'books']);
 });
@@ -107,7 +107,7 @@ test('a device book survives a restart and removing every name deletes the recor
 
   const resumed = first.make();
   await resumed.init();
-  assert.deepEqual(resumed.state().records.map(entry => entry.labels[0]), ['Treasury']);
+  assert.deepEqual(resumed.state().records.map(entry => entry.tags[0]), ['Treasury']);
   await write(resumed, [], { version });
   assert.deepEqual(resumed.state().records, []);
 });
@@ -117,14 +117,14 @@ test('a stale version is refused rather than quietly overwriting the newer names
   await store.init();
   await write(store, ['First']);
   await assert.rejects(write(store, ['Second']),
-    error => error.status === 409 && error.current.labels[0] === 'First');
+    error => error.status === 409 && error.current.tags[0] === 'First');
 });
 
 test('an unreadable device book is never presented, or saved over, as an empty one', async () => {
   const { store, make, corrupt } = harness();
   await store.init();
   await write(store, ['Treasury']);
-  await corrupt(store.state().activeBook, { address: other, scope: 'global', labels: [] });
+  await corrupt(store.state().activeBook, { address: other, scope: 'global', tags: [] });
   const resumed = make();
   await resumed.init();
   assert.equal(resumed.state().records.length, 0);
@@ -151,10 +151,10 @@ test('books are separate, and switching between them changes neither', async () 
   await write(store, ['Shared']);
 
   await store.use(device);
-  assert.deepEqual(store.state().records.map(entry => entry.labels[0]), ['Mine']);
+  assert.deepEqual(store.state().records.map(entry => entry.tags[0]), ['Mine']);
   await store.use(store.state().books.find(item => item.name === 'Team').id);
-  assert.deepEqual(store.state().records.map(entry => entry.labels[0]), ['Shared']);
-  assert.deepEqual(remote().map(entry => entry.labels[0]), ['Shared'], 'the server holds only its own book');
+  assert.deepEqual(store.state().records.map(entry => entry.tags[0]), ['Shared']);
+  assert.deepEqual(remote().map(entry => entry.tags[0]), ['Shared'], 'the server holds only its own book');
 });
 
 test('a server book is named after its host unless it is given a name', async () => {
@@ -170,9 +170,9 @@ test('a new book can start as a copy, and will not be poured into one already in
   const device = copied.store.state().activeBook;
   await write(copied.store, ['Treasury']);
   await copied.store.add({ name: 'Team', storage: onServer, copyFrom: device });
-  assert.deepEqual(copied.remote().map(entry => entry.labels[0]), ['Treasury']);
+  assert.deepEqual(copied.remote().map(entry => entry.tags[0]), ['Treasury']);
 
-  const occupied = harness({ remote: [{ address: other, scope: 'global', labels: ['Theirs'], version: 'one' }] });
+  const occupied = harness({ remote: [{ address: other, scope: 'global', tags: ['Theirs'], version: 'one' }] });
   await occupied.store.init();
   await write(occupied.store, ['Mine']);
   await assert.rejects(
@@ -190,12 +190,12 @@ test('a draft written for one book is never saved into another', async () => {
 });
 
 test('an unreachable server costs freshness, not the book', async () => {
-  const { store, intercept } = harness({ remote: [{ address, scope: 'global', labels: ['Shared'], version: 'one' }] });
+  const { store, intercept } = harness({ remote: [{ address, scope: 'global', tags: ['Shared'], version: 'one' }] });
   await store.init();
   await store.add({ name: 'Team', storage: onServer });
   intercept(() => { throw new Error('offline'); });
   await store.refresh();
-  assert.deepEqual(store.state().records.map(entry => entry.labels[0]), ['Shared']);
+  assert.deepEqual(store.state().records.map(entry => entry.tags[0]), ['Shared']);
   assert.match(store.state().error, /could not be reached/);
 });
 
@@ -209,7 +209,7 @@ test('removing a device book takes its addresses; removing a server book only fo
   const team = store.state().activeBook;
 
   await store.remove(team);
-  assert.deepEqual(remote().map(entry => entry.labels[0]), ['Shared'], 'the server still holds it');
+  assert.deepEqual(remote().map(entry => entry.tags[0]), ['Shared'], 'the server still holds it');
   assert.equal(store.state().activeBook, device);
 
   await store.add({ name: 'Second', storage: { kind: 'device' } });
@@ -219,10 +219,10 @@ test('removing a device book takes its addresses; removing a server book only fo
   const resumed = make();
   await resumed.init();
   await assert.rejects(resumed.use(second), /gone/);
-  assert.deepEqual(resumed.state().records.map(entry => entry.labels[0]), ['Mine'], 'its addresses went with it');
+  assert.deepEqual(resumed.state().records.map(entry => entry.tags[0]), ['Mine'], 'its addresses went with it');
 });
 
-test('there is always an address book to label into', async () => {
+test('there is always an address book to tag into', async () => {
   const { store } = harness();
   await store.init();
   await assert.rejects(store.remove(store.state().activeBook), /at least one/);
@@ -279,12 +279,12 @@ test('an interrupted write is checked before it is retried', async () => {
   await storage.set({ [`sync:${book}`]: { ...saved[`sync:${book}`], pending: true } });
   const resumed = make();
   await resumed.init();
-  assert.deepEqual(resumed.state().records.map(entry => entry.labels[0]), ['Treasury']);
+  assert.deepEqual(resumed.state().records.map(entry => entry.tags[0]), ['Treasury']);
 
   // A retry of the same draft, carrying the version it was written against.
   calls.length = 0;
   await write(resumed, ['Treasury']);
-  assert.deepEqual(remote().map(entry => entry.labels[0]), ['Treasury']);
+  assert.deepEqual(remote().map(entry => entry.tags[0]), ['Treasury']);
   assert.equal(remote().length, 1, 'the write is not repeated');
   assert.equal(remote()[0].version, landed.version, 'and nothing was written over it');
   assert.deepEqual(calls.filter(call => call.method).map(call => call.method), [],
@@ -311,7 +311,7 @@ test('saving the names a book already holds is a save, not a conflict', async ()
   await write(store, ['Treasury']);
   // The same edit arrives twice: from a view that had not heard about the first.
   await write(store, ['Treasury']);
-  assert.deepEqual(store.state().records.map(entry => entry.labels), [['Treasury']]);
+  assert.deepEqual(store.state().records.map(entry => entry.tags), [['Treasury']]);
   await assert.rejects(write(store, ['Something else']), error => error.status === 409);
 });
 
@@ -324,7 +324,7 @@ test('an interrupted write that landed is answered by what the server now says',
   const resumed = make();
   await resumed.init();
   await write(resumed, ['Treasury']);
-  assert.deepEqual(remote().map(entry => entry.labels), [['Treasury']], 'the write is neither repeated nor disputed');
+  assert.deepEqual(remote().map(entry => entry.tags), [['Treasury']], 'the write is neither repeated nor disputed');
 });
 
 test('a save is one write, and a file carried in is one write however many it holds', async () => {
@@ -336,7 +336,7 @@ test('a save is one write, and a file carried in is one write however many it ho
 
   const { added } = await store.merge(Array.from({ length: 500 }, (_, index) => ({
     address: '0x' + index.toString(16).padStart(40, '0'), scope: 'global',
-    labels: ['Carried ' + index], version: 'from-file',
+    tags: ['Carried ' + index], version: 'from-file',
   })));
   assert.equal(added, 500);
   assert.equal(store.state().stateRevision, settled + 2, 'five hundred addresses, still one write');
@@ -350,7 +350,7 @@ test('a refused save writes nothing at all', async () => {
   const settled = store.state().stateRevision;
   await assert.rejects(write(store, ['Second']), error => error.status === 409);
   assert.equal(store.state().stateRevision, settled, 'the record and the count moved together, or not at all');
-  assert.deepEqual(store.state().records.map(entry => entry.labels[0]), ['First']);
+  assert.deepEqual(store.state().records.map(entry => entry.tags[0]), ['First']);
 });
 
 test('a book is read back whole, and removing another one leaves it alone', async () => {
@@ -364,15 +364,15 @@ test('a book is read back whole, and removing another one leaves it alone', asyn
 
   const resumed = make();
   await resumed.init();
-  assert.deepEqual(resumed.state().records.map(entry => entry.labels[0]), ['Elsewhere']);
+  assert.deepEqual(resumed.state().records.map(entry => entry.tags[0]), ['Elsewhere']);
   await resumed.use(first);
-  assert.deepEqual(resumed.state().records.map(entry => entry.labels[0]).sort(), ['First', 'Second']);
+  assert.deepEqual(resumed.state().records.map(entry => entry.tags[0]).sort(), ['First', 'Second']);
   await resumed.remove(resumed.state().books.find(item => item.name === 'Other').id);
-  assert.deepEqual(resumed.state().records.map(entry => entry.labels[0]).sort(), ['First', 'Second']);
+  assert.deepEqual(resumed.state().records.map(entry => entry.tags[0]).sort(), ['First', 'Second']);
 
   const again = make();
   await again.init();
-  assert.deepEqual(again.state().records.map(entry => entry.labels[0]).sort(), ['First', 'Second']);
+  assert.deepEqual(again.state().records.map(entry => entry.tags[0]).sort(), ['First', 'Second']);
 });
 
 test('a book carried in from a file joins the one that is open, replacing matching names', async () => {
@@ -380,11 +380,11 @@ test('a book carried in from a file joins the one that is open, replacing matchi
   await store.init();
   await write(store, ['Treasury']);
   const { added } = await store.merge([
-    { address, scope: 'global', labels: ['Renamed'], version: 'from-file' },
-    { address: other, scope: 'eip155:8453', labels: ['Payroll'], version: 'from-file' },
+    { address, scope: 'global', tags: ['Renamed'], version: 'from-file' },
+    { address: other, scope: 'eip155:8453', tags: ['Payroll'], version: 'from-file' },
   ]);
   assert.equal(added, 2);
-  const names = Object.fromEntries(store.state().records.map(entry => [entry.address, entry.labels[0]]));
+  const names = Object.fromEntries(store.state().records.map(entry => [entry.address, entry.tags[0]]));
   assert.deepEqual(names, { [address]: 'Renamed', [other]: 'Payroll' });
   assert.ok(store.state().records.every(entry => entry.version !== 'from-file'),
     'the receiving book issues its own versions');
@@ -394,25 +394,25 @@ test('a file that is not a book is refused before anything is written', async ()
   const { store } = harness();
   await store.init();
   await write(store, ['Treasury']);
-  await assert.rejects(store.merge([{ address, scope: 'global', labels: [] }]));
-  assert.deepEqual(store.state().records.map(entry => entry.labels[0]), ['Treasury']);
+  await assert.rejects(store.merge([{ address, scope: 'global', tags: [] }]));
+  assert.deepEqual(store.state().records.map(entry => entry.tags[0]), ['Treasury']);
 });
 
 test('a view applies one record, and asks for the book when it has missed one', () => {
   const held = { activeBook: 'book-1', stateRevision: 7, syncedAt: null,
-    records: [{ address, scope: 'global', labels: ['Treasury'], version: 'one' }] };
+    records: [{ address, scope: 'global', tags: ['Treasury'], version: 'one' }] };
   const announce = (change, revision = 8, book = 'book-1') =>
     ({ type: 'Updated', change, activeBook: book, stateRevision: revision, syncedAt: 100 });
 
-  const renamed = { address, scope: 'global', labels: ['Renamed'], version: 'two' };
+  const renamed = { address, scope: 'global', tags: ['Renamed'], version: 'two' };
   const after = applyChange(held, announce({ address, scope: 'global', record: renamed }));
   assert.deepEqual(after.records, [renamed]);
   assert.equal(after.stateRevision, 8);
   assert.equal(after.syncedAt, 100);
-  assert.deepEqual(held.records.map(entry => entry.labels[0]), ['Treasury'], 'the copy it was given is left alone');
+  assert.deepEqual(held.records.map(entry => entry.tags[0]), ['Treasury'], 'the copy it was given is left alone');
 
   const added = applyChange(held, announce({ address: other, scope: 'eip155:8453',
-    record: { address: other, scope: 'eip155:8453', labels: ['Payroll'], version: 'two' } }));
+    record: { address: other, scope: 'eip155:8453', tags: ['Payroll'], version: 'two' } }));
   assert.equal(added.records.length, 2);
   assert.deepEqual(applyChange(held, announce({ address, scope: 'global', record: null })).records, []);
 
@@ -424,7 +424,7 @@ test('a view applies one record, and asks for the book when it has missed one', 
 });
 
 test('a sync that learns nothing costs nothing, and a book kept here is never asked', async () => {
-  const { store, calls, remote } = harness({ remote: [{ address, scope: 'global', labels: ['Shared'], version: 'one' }] });
+  const { store, calls, remote } = harness({ remote: [{ address, scope: 'global', tags: ['Shared'], version: 'one' }] });
   await store.init();
   const device = store.state().activeBook;
   await store.add({ name: 'Team', storage: onServer });
@@ -448,18 +448,18 @@ test('a sync that learns nothing costs nothing, and a book kept here is never as
   assert.equal(calls.length, 1);
   await store.sync();
   assert.equal(calls.length, 1, 'a book asked about a moment ago is not asked again');
-  assert.deepEqual(remote().map(entry => entry.labels[0]), ['Shared']);
+  assert.deepEqual(remote().map(entry => entry.tags[0]), ['Shared']);
 });
 
 test('a book that did change is sent once, and every view hears about it', async () => {
-  const { store, intercept } = harness({ remote: [{ address, scope: 'global', labels: ['Shared'], version: 'one' }] });
+  const { store, intercept } = harness({ remote: [{ address, scope: 'global', tags: ['Shared'], version: 'one' }] });
   await store.init();
   await store.add({ name: 'Team', storage: onServer });
   const settled = store.state().stateRevision;
   intercept(() => ({ ok: true, status: 200, headers: { get: () => '"9"' },
-    json: async () => ({ records: [{ address, scope: 'global', labels: ['Renamed elsewhere'], version: 'two' }] }) }));
+    json: async () => ({ records: [{ address, scope: 'global', tags: ['Renamed elsewhere'], version: 'two' }] }) }));
   await store.refresh();
-  assert.deepEqual(store.state().records.map(entry => entry.labels[0]), ['Renamed elsewhere']);
+  assert.deepEqual(store.state().records.map(entry => entry.tags[0]), ['Renamed elsewhere']);
   assert.ok(store.state().stateRevision > settled);
 });
 
@@ -470,7 +470,7 @@ test('a file carried into a book on a server travels in one request', async () =
   calls.length = 0;
   const { added } = await store.merge(Array.from({ length: 50 }, (_, index) => ({
     address: '0x' + index.toString(16).padStart(40, '0'), scope: 'global',
-    labels: ['Carried ' + index], version: 'from-file',
+    tags: ['Carried ' + index], version: 'from-file',
   })));
   assert.equal(added, 50);
   const writes = calls.filter(call => call.method === 'PUT');
@@ -515,13 +515,13 @@ test('a book says which kind of storage holds it', async () => {
 // A refusal reports that a draft is out of date. Only one that says what the
 // book holds reports anything about the book itself.
 test('a refusal that names no record leaves the saved copy alone', async () => {
-  const { store, intercept } = harness({ remote: [{ address, scope: 'global', labels: ['Treasury'], version: 'v1' }] });
+  const { store, intercept } = harness({ remote: [{ address, scope: 'global', tags: ['Treasury'], version: 'v1' }] });
   await store.init();
   await store.add({ name: 'Team', storage: onServer });
-  assert.deepEqual(store.state().records.map(entry => entry.labels[0]), ['Treasury']);
+  assert.deepEqual(store.state().records.map(entry => entry.tags[0]), ['Treasury']);
   // The server, or something standing between it and us, refuses without
   // saying what it holds.
   intercept((url, options) => (options.method === 'PUT' ? response({ detail: 'Saved elsewhere.' }, 409) : null));
   await assert.rejects(write(store, ['Renamed'], { version: 'v1' }), error => error.status === 409);
-  assert.deepEqual(store.state().records.map(entry => entry.labels[0]), ['Treasury']);
+  assert.deepEqual(store.state().records.map(entry => entry.tags[0]), ['Treasury']);
 });

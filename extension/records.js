@@ -10,7 +10,7 @@ import { validateRecord, validateSnapshot } from './shared.js';
 //
 // Every write carries the book's revision with it, in the same transaction, so
 // the count that orders snapshots cannot disagree with the records it counts.
-const NAME = '0xlabel';
+const NAME = '0xtagger';
 const RECORDS = 'records';
 const META = 'meta';
 const REVISION = 'revision';
@@ -64,9 +64,9 @@ export function createRecords({ indexedDB: factory = globalThis.indexedDB, keyRa
     return revision;
   }
   // A record with no names is a record removed, the same as everywhere else.
-  function store(records, id, { address, scope, labels, version }) {
-    if (!labels.length) { records.delete([id, scope, address]); return null; }
-    const saved = { address, scope, labels, version: version || stamp() };
+  function store(records, id, { address, scope, tags, version }) {
+    if (!tags.length) { records.delete([id, scope, address]); return null; }
+    const saved = { address, scope, tags, version: version || stamp() };
     records.put({ book: id, ...saved });
     return saved;
   }
@@ -82,7 +82,7 @@ export function createRecords({ indexedDB: factory = globalThis.indexedDB, keyRa
     },
     // One name, against the version it was read at. The check and the write are
     // the same transaction, so nothing can land between them.
-    async save(id, { address, scope, labels, version }) {
+    async save(id, { address, scope, tags, version }) {
       const [records, meta, transaction] = await begin();
       const held = await wrap(records.get([id, scope, address]));
       const existing = held ? validateRecord(held) : null;
@@ -93,7 +93,7 @@ export function createRecords({ indexedDB: factory = globalThis.indexedDB, keyRa
         conflict.current = existing;
         throw conflict;
       }
-      const saved = store(records, id, { address, scope, labels, version: stamp() });
+      const saved = store(records, id, { address, scope, tags, version: stamp() });
       const revision = await bumped(meta);
       await settled(transaction);
       return { record: saved, revision };

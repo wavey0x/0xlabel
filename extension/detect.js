@@ -82,7 +82,7 @@ export function identify(element, url, { attributes = [], identifies = [], ancho
   const anchored = Boolean(anchors && element.matches(anchors)) ||
     identifies.some(key => parseAddress(element.getAttribute(key)));
   // A name may stand in for the address only where identity came from a
-  // canonical source. Navigation cards are never labeled.
+  // canonical source. Navigation cards are never tagged.
   const namedWidget = Boolean(named) && element.matches(named) && (link || sources.length || anchored) &&
     !(denied && element.closest(denied));
   const showsAddress = Boolean(fullShown || fragment);
@@ -102,7 +102,7 @@ export function collect(root, url, { targets, candidates, skip, sources = () => 
     try {
       identity = identify(element, url, { ...rules, sources: sources(element, url).filter(Boolean) });
     } catch (error) {
-      // Not labeling is as safe as labeling, so disagreement about one element
+      // Not tagging is as safe as tagging, so disagreement about one element
       // skips it. A changed fragment means the adapter no longer reads this
       // site correctly, which the controller handles by pausing the page.
       if (error.message !== AMBIGUOUS) throw error;

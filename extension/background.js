@@ -41,7 +41,7 @@ async function initialize() {
   // is about to look at, and those are asked for by name below.
   if (!await chrome.alarms.get('sync')) await chrome.alarms.create('sync', { periodInMinutes: 5 });
   await chrome.contextMenus.removeAll();
-  chrome.contextMenus.create({ id: 'edit-label', title: 'Label address with 0xlabel', contexts: ['page', 'link', 'selection'] });
+  chrome.contextMenus.create({ id: 'edit-tag', title: 'Tag address with 0xtagger', contexts: ['page', 'link', 'selection'] });
   store.sync().catch(() => {});
 }
 
@@ -55,7 +55,7 @@ async function updateAction(tabId, value) {
   const icon = active ? 'mark' : 'mark-idle';
   await Promise.all([
     chrome.action.setIcon({ tabId, path: Object.fromEntries([16, 24, 32, 48].map(size => [size, `icons/${icon}-${size}.png`])) }),
-    chrome.action.setTitle({ tabId, title: active ? '0xlabel · Active on this page' : paused ? '0xlabel · Labeling paused' : '0xlabel' }),
+    chrome.action.setTitle({ tabId, title: active ? '0xtagger · Active on this page' : paused ? '0xtagger · Tagging paused' : '0xtagger' }),
     chrome.action.setBadgeBackgroundColor({ tabId, color: COLORS.warningBadge }),
     chrome.action.setBadgeText({ tabId, text: paused ? '!' : '' }),
   ]);
@@ -123,7 +123,7 @@ async function handle(message, sender) {
     await updateAction(sender.tab.id, value);
     return {};
   }
-  if (!view) throw new Error('Open 0xlabel to change settings.');
+  if (!view) throw new Error('Open 0xtagger to change settings.');
   if (message.type === 'Use') return store.use(message.book);
   if (message.type === 'AddBook') {
     const where = message.storage;

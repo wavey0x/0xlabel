@@ -28,8 +28,8 @@ const etherscanAdapter = site({
   // The heading of an address page is what the page is about. A name alone
   // would take away the one thing identifying everything below it.
   subject: '#mainaddress',
-  // Address badges lose their decoration only while a custom label is visible.
-  styles: `.badge:is([data-0xlabel-label], :has([data-0xlabel-label])) {
+  // Address badges lose their decoration only while a custom tag is visible.
+  styles: `.badge:is([data-0xtagger-tag], :has([data-0xtagger-tag])) {
       background: transparent !important;
       border: 0 !important;
       border-radius: 0 !important;

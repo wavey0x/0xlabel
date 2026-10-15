@@ -1,7 +1,7 @@
 [project]
-name = "0xlabel"
+name = "0xtagger"
 version = "1"
-description = "A small self-hosted address book for the 0xlabel Chrome extension"
+description = "A small self-hosted address book for the 0xtagger Chrome extension"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -10,11 +10,11 @@ requires-python = ">=3.10"
 dependencies = ["fastapi>=0.115,<1", "uvicorn>=0.30,<1"]
 
 [project.scripts]
-0xlabel = "server:main"
+0xtagger = "server:main"
 
 [project.urls]
-Source = "https://github.com/wavey0x/0xlabel"
-Issues = "https://github.com/wavey0x/0xlabel/issues"
+Source = "https://github.com/wavey0x/0xtagger"
+Issues = "https://github.com/wavey0x/0xtagger/issues"
 
 [dependency-groups]
 dev = ["httpx>=0.27,<1", "pytest>=8,<10"]

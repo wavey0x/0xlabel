@@ -201,7 +201,7 @@ export function newBookForm({ container, state, created, busy, error, visible = 
       <div id="server-fields">
         <label for="connect-link">Link from your server</label>
         <input id="connect-link" type="text" autocomplete="off" spellcheck="false" placeholder="http://127.0.0.1:8712#key=…">
-        <p class="muted setup-note">Run <code>uv run 0xlabel</code> and copy the line it prints.</p>
+        <p class="muted setup-note">Run <code>uv run 0xtagger</code> and copy the line it prints.</p>
       </div>
       <label id="copy-row" class="check"><input type="checkbox" id="copy-current"> <span></span></label>
       <p id="server-error" class="message" role="alert"></p>

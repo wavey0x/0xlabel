@@ -3,13 +3,13 @@ import { addressAt } from './detect.js';
 import { applyChange, indexBook, parseAddress, query, recordKey, normalizeScope, UI, UI_ATTRIBUTE, UNSAFE_HOST } from './shared.js';
 import { createEditor } from './editor.js';
 import { createOverlay } from './overlay.js';
-import { LABEL_ICON } from './icons.js';
+import { TAG_ICON } from './icons.js';
 import { checksumAddress } from './checksum.js';
 
-const ADDRESS = 'data-0xlabel-address';
-const LABEL = 'data-0xlabel-label';
+const ADDRESS = 'data-0xtagger-address';
+const TAG = 'data-0xtagger-tag';
 // The address kept beside a name on the one display a page is about.
-const SHORT = 'data-0xlabel-short';
+const SHORT = 'data-0xtagger-short';
 const abbreviate = address => `${address.slice(0, 6)}…${address.slice(-4)}`;
 
 export async function createPageController({
@@ -40,7 +40,7 @@ export async function createPageController({
   const targets = new Map();
   const dirty = new Set();
   // Temporary comparisons belong to this page and chain, never the saved book.
-  const hiddenLabels = new Set();
+  const hiddenTags = new Set();
 
   const overlay = await createOverlay(doc, win);
   // Keep the editor beside the row it belongs to, while there still is one.
@@ -90,15 +90,15 @@ export async function createPageController({
   function addEditButton(target) {
     const slot = doc.createElement('span');
     slot.setAttribute(UI_ATTRIBUTE, '');
-    slot.setAttribute('data-0xlabel-edit', '');
+    slot.setAttribute('data-0xtagger-edit', '');
     markSurface(slot);
     slot.style.cssText = 'display:inline-flex;vertical-align:middle;flex-shrink:0;width:20px;height:20px;margin-inline-start:3px;';
     const root = slot.attachShadow({ mode: 'open' });
     root.adoptedStyleSheets = overlay.shadow.adoptedStyleSheets;
     const button = doc.createElement('button');
-    button.type = 'button'; button.className = 'inline-label';
-    button.setAttribute('aria-label', 'Edit wallet labels'); button.title = 'Edit labels';
-    button.innerHTML = LABEL_ICON;
+    button.type = 'button'; button.className = 'inline-tag';
+    button.setAttribute('aria-label', 'Edit wallet tags'); button.title = 'Edit tags';
+    button.innerHTML = TAG_ICON;
     // Keep a suggestion's search field focused until activation. Otherwise its
     // blur handler can hide this button before the browser delivers the click.
     button.onpointerdown = event => { event.preventDefault(); event.stopPropagation(); };
@@ -124,7 +124,7 @@ export async function createPageController({
     // The name may have been painted on a box further in, and a rescan may have
     // moved it since, so clear both candidates rather than guessing.
     for (const box of new Set([element, target.display])) {
-      box?.removeAttribute(LABEL);
+      box?.removeAttribute(TAG);
       box?.removeAttribute(SHORT);
     }
     element.removeAttribute(ADDRESS);
@@ -142,25 +142,25 @@ export async function createPageController({
   function paint(target) {
     if (target.element.getAttribute(ADDRESS) !== target.address) target.element.setAttribute(ADDRESS, target.address);
     if (!target.editButton?.isConnected) addEditButton(target);
-    const name = target.naming !== false && !hiddenLabels.has(recordKey(target.address, target.network)) &&
-      recordFor(target)?.labels[0];
+    const name = target.naming !== false && !hiddenTags.has(recordKey(target.address, target.network)) &&
+      recordFor(target)?.tags[0];
     const shown = shownOn(target);
-    if (shown !== target.element) { target.element.removeAttribute(LABEL); target.element.removeAttribute(SHORT); }
+    if (shown !== target.element) { target.element.removeAttribute(TAG); target.element.removeAttribute(SHORT); }
     if (name) {
       // Preserve native nodes and copy sources; CSS substitutes only their
-      // visible glyphs with the shared custom-label typography.
-      if (shown.getAttribute(LABEL) !== name) shown.setAttribute(LABEL, name);
+      // visible glyphs with the shared custom-tag typography.
+      if (shown.getAttribute(TAG) !== name) shown.setAttribute(TAG, name);
       const trailer = adapter.subject && target.element.matches(adapter.subject)
         ? abbreviate(checksumAddress(target.address)) : null;
       if (trailer) { if (shown.getAttribute(SHORT) !== trailer) shown.setAttribute(SHORT, trailer); }
       else shown.removeAttribute(SHORT);
-      const description = `0xlabel: ${name}`;
+      const description = `0xtagger: ${name}`;
       if (!target.element.hasAttribute('aria-description') || target.description === target.element.getAttribute('aria-description')) {
         if (target.element.getAttribute('aria-description') !== description) target.element.setAttribute('aria-description', description);
         target.description = description;
       }
     } else {
-      shown.removeAttribute(LABEL);
+      shown.removeAttribute(TAG);
       shown.removeAttribute(SHORT);
       if (target.description && target.element.getAttribute('aria-description') === target.description) target.element.removeAttribute('aria-description');
       target.description = null;
@@ -175,7 +175,7 @@ export async function createPageController({
     if (style.display === 'none' || style.visibility === 'hidden' || !element.getClientRects().length) return null;
     // A native prefix remains authoritative. Never fight the site's pseudo-element.
     const nativePrefix = win.getComputedStyle(element, '::before').content;
-    if (!element.hasAttribute(LABEL) && nativePrefix && !['none', 'normal', '""'].includes(nativePrefix)) return null;
+    if (!element.hasAttribute(TAG) && nativePrefix && !['none', 'normal', '""'].includes(nativePrefix)) return null;
     const network = item.network || health.network;
     if (network) { normalizeScope(network); if (network === 'global') throw new Error('adapter-network-invalid'); }
     return { element, address, network, naming: item.naming !== false, display: displayBox(element, address) };
@@ -215,7 +215,7 @@ export async function createPageController({
     const changed = health.status !== next.status || health.network !== next.network;
     health = next;
     if (changed || reason || !reported) { reported = true; report({ adapter: adapter?.id || 'This site', ...next }); }
-    if (reason) console.warn(`0xlabel ${adapter?.id}: ${reason}`);
+    if (reason) console.warn(`0xtagger ${adapter?.id}: ${reason}`);
   }
   function fail(reason) {
     paused = true;
@@ -227,7 +227,7 @@ export async function createPageController({
     const nextURL = url();
     const routed = nextURL.href !== href;
     if (routed) {
-      hiddenLabels.clear();
+      hiddenTags.clear();
       clear();
       if (editor) { editorTarget = null; editor.detach(); }
       href = nextURL.href;
@@ -308,7 +308,7 @@ export async function createPageController({
         const nodes = [...change.addedNodes, ...change.removedNodes];
         if (nodes.length && nodes.every(node => node.nodeType === 1 && node.matches(UI))) continue;
       }
-      if (change.type === 'attributes' && (change.attributeName.startsWith('data-0xlabel') || change.attributeName === 'aria-description')) continue;
+      if (change.type === 'attributes' && (change.attributeName.startsWith('data-0xtagger') || change.attributeName === 'aria-description')) continue;
       if (change.type === 'attributes' && change.oldValue === element.getAttribute(change.attributeName)) continue;
       const existing = element.closest(`[${ADDRESS}]`);
       // Hover styling and tooltip text do not change a verified wallet identity.
@@ -370,7 +370,7 @@ export async function createPageController({
     const visibility = () => {
       const live = targets.get(editorTarget?.element);
       return {
-        available: target.naming !== false && Boolean(recordFor(target)), hidden: hiddenLabels.has(key),
+        available: target.naming !== false && Boolean(recordFor(target)), hidden: hiddenTags.has(key),
         enabled: state.activeBook === book && health.status === 'ready' && href === url().href &&
           live?.element.isConnected && live.address === target.address && live.network === target.network,
       };
@@ -380,7 +380,7 @@ export async function createPageController({
       toggleVisibility: () => {
         const view = visibility();
         if (!view.available || !view.enabled) return;
-        if (view.hidden) hiddenLabels.delete(key); else hiddenLabels.add(key);
+        if (view.hidden) hiddenTags.delete(key); else hiddenTags.add(key);
         for (const item of targets.values()) if (recordKey(item.address, item.network) === key) paint(item);
         position();
       },
@@ -405,7 +405,7 @@ export async function createPageController({
   listen(doc, 'scroll', event => { if (event.target !== doc) position(); }, { capture: true, passive: true });
   listen(win, 'resize', () => position(true), { passive: true });
   // A system scheme change can repaint a website without touching its DOM, so
-  // nothing else would tell us the surface our labels sit on has moved.
+  // nothing else would tell us the surface our tags sit on has moved.
   listen(win.matchMedia('(prefers-color-scheme: dark)'), 'change', () => schedule());
   listen(win, 'popstate', () => schedule());
   listen(win, 'hashchange', () => schedule());
@@ -417,7 +417,7 @@ export async function createPageController({
     if (!next || !Number.isSafeInteger(next.stateRevision)) return;
     if (next.stateRevision < state.stateRevision) return;
     const switched = next.activeBook !== state.activeBook;
-    if (switched) hiddenLabels.clear();
+    if (switched) hiddenTags.clear();
     state = next;
     book = indexBook(next.records);
     if (editor) editor.updateState(next);
@@ -472,7 +472,7 @@ export async function startPage() {
     return response.result;
   };
   const initial = await rpc({ type: 'State' });
-  if (!initial.enabled) { globalThis.__oxlabelStarting = false; return; }
+  if (!initial.enabled) { globalThis.__oxtaggerStarting = false; return; }
   let controller;
   let latest;
   let missed = false;
@@ -491,7 +491,7 @@ export async function startPage() {
     if (value.type === 'OpenEditor') controller?.openEditor(value);
     if (value.type === 'Recheck') rpc({ type: 'State' }).then(result => { if (!result.enabled) message({ type: 'Disable' }); }).catch(() => {});
     if (value.type === 'Disable') {
-      disabled = true; controller?.stop(); chrome.runtime.onMessage.removeListener(message); globalThis.__oxlabelStarting = false;
+      disabled = true; controller?.stop(); chrome.runtime.onMessage.removeListener(message); globalThis.__oxtaggerStarting = false;
     }
   }
   chrome.runtime.onMessage.addListener(message);

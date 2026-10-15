@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>0xlabel · sample transfers</title>
+  <title>0xtagger · sample transfers</title>
   <style>
     :root{color-scheme:dark;--bg:#101113;--panel:#151619;--ink:#f4f4f5;--muted:#8d919b;--line:#ffffff0c;--link:#8bc6df;--soft:#ffffff04}
     :root[data-theme="light"]{color-scheme:light;--bg:#f6f7fa;--panel:#fff;--ink:#20232b;--muted:#858b96;--line:#e9ecf2;--link:#367a9e;--soft:#f8f9fb}
@@ -27,7 +27,7 @@
 <div class="page">
   <header><div><h1>Token transfers</h1><p class="sub">One source of truth. Connections at a glance.</p></div><div class="network"><svg viewBox="0 0 12 18" fill="currentColor" aria-hidden="true"><path d="m6 0 6 9-6 3-6-3Zm0 13 6-3-6 8-6-8Z"/></svg>Ethereum</div></header>
   <main class="card"><table><colgroup><col style="width:16%"><col style="width:9%"><col style="width:24%"><col style="width:24%"><col style="width:11%"><col style="width:16%"></colgroup><thead><tr><th>Transaction</th><th>Age</th><th>From</th><th>To</th><th>Token</th><th class="amount">Amount</th></tr></thead><tbody id="transfers"></tbody></table></main>
-  <footer><span>Illustrative transfers · sample labels</span><span class="brand" role="img" aria-label="0xlabel"><img class="brand-mark" src="/extension/icons/mark-plain.svg" alt="0x">label</span></footer>
+  <footer><span>Illustrative transfers · sample tags</span><span class="brand" role="img" aria-label="0xtagger"><img class="brand-mark" src="/extension/icons/mark-plain.svg" alt="0x">tagger</span></footer>
 </div>
 <script type="module">
   import { checksumAddress } from '../../extension/checksum.js';
@@ -39,7 +39,7 @@
     '0xdbF03B407c01E7cD3CBea99509d93f8DDDC8C6FB', '0xD1220A0cf47c7B9Be7A2E6BA89F429762e7b9aDb',
   ];
   const names = ['Treasury', 'Payroll', 'Exchange deposit', 'Cold storage', 'Multisig', 'Operations', 'Research'];
-  window.demoRecords = names.map((name,i) => ({address:addresses[i].toLowerCase(),scope:'global',labels:[name],version:'demo'}));
+  window.demoRecords = names.map((name,i) => ({address:addresses[i].toLowerCase(),scope:'global',tags:[name],version:'demo'}));
   const wallets = (index) => {
     const address = checksumAddress(addresses[index]);
     return `<a class="hash-tag" href="/address/${address}" title="${address}">${address.slice(0,8)}…${address.slice(-8)}</a><button class="copy" aria-label="Copy address" data-copy="${address}">${COPY_ICON}</button>`;

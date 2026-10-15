@@ -12,10 +12,10 @@ const headers = { Authorization: 'Bearer test-only-token' };
 test('installed extension: a book that works with no setup, moving it to a server, alarm pulls, editor and native copy', async () => {
   test.setTimeout(90000);
   const api = await request.newContext({ ignoreHTTPSErrors: true, extraHTTPHeaders: headers });
-  const seed = await api.put(`${local}/labels/global/${address}`, { data: { labels: ['Local treasury'], version: null } });
+  const seed = await api.put(`${local}/tags/global/${address}`, { data: { tags: ['Local treasury'], version: null } });
   expect(seed.ok()).toBeTruthy();
   const localRecord = (await seed.json()).record;
-  const profile = await mkdtemp(path.join(tmpdir(), '0xlabel-chrome-test-'));
+  const profile = await mkdtemp(path.join(tmpdir(), '0xtagger-chrome-test-'));
   const extension = path.join(profile, 'extension');
   await cp(path.resolve('extension'), extension, { recursive: true });
   // Native permission dialogs are outside Playwright's headless DOM. Grant only
@@ -34,7 +34,7 @@ test('installed extension: a book that works with no setup, moving it to a serve
     const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker');
     const id = worker.url().split('/')[2];
     // The toolbar is the only at-a-glance signal of whether a website is being
-    // labeled, so record which icon the worker actually asks Chrome to show.
+    // tagged, so record which icon the worker actually asks Chrome to show.
     await worker.evaluate(() => {
       const setIcon = chrome.action.setIcon.bind(chrome.action);
       chrome.action.setIcon = details => { globalThis.shownIcon = details.path?.[16]; return setIcon(details); };
@@ -63,8 +63,8 @@ test('installed extension: a book that works with no setup, moving it to a serve
     await expect(siteSwitch).not.toBeChecked();
     await popup.locator('#site-toggle').click();
     await expect(siteSwitch).toBeChecked();
-    await expect.poll(toolbar).toEqual({ icon: 'icons/mark-16.png', title: '0xlabel · Active on this page' });
-    // Label an address with no server anywhere in the picture. One name changing
+    await expect.poll(toolbar).toEqual({ icon: 'icons/mark-16.png', title: '0xtagger · Active on this page' });
+    // Tag an address with no server anywhere in the picture. One name changing
     // is announced as that name: the book is not sent to every tab again.
     await popup.evaluate(() => {
       window.heard = [];
@@ -72,10 +72,10 @@ test('installed extension: a book that works with no setup, moving it to a serve
         if (message?.type === 'Updated') window.heard.push(message.state ? 'book' : 'record');
       });
     });
-    await website.getByRole('button', { name: 'Edit wallet labels', exact: true }).first().click();
-    await website.getByRole('textbox', { name: 'Label 1' }).fill('Kept on this device');
-    await website.getByRole('textbox', { name: 'Label 1' }).press('Enter');
-    await expect(website.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Kept on this device');
+    await website.getByRole('button', { name: 'Edit wallet tags', exact: true }).first().click();
+    await website.getByRole('textbox', { name: 'Tag 1' }).fill('Kept on this device');
+    await website.getByRole('textbox', { name: 'Tag 1' }).press('Enter');
+    await expect(website.locator('#wallet')).toHaveAttribute('data-0xtagger-tag', 'Kept on this device');
     expect(await popup.evaluate(() => window.heard)).toEqual(['record']);
 
     // Moving the book onto a server takes one pasted line and nothing else.
@@ -95,11 +95,11 @@ test('installed extension: a book that works with no setup, moving it to a serve
     await expect(popup.locator('#server')).toBeHidden({ timeout: 10000 });
     await expect(popup.locator('#location')).toHaveText('Local');
     // The new book holds what its server holds, and nothing was copied into it.
-    expect((await (await api.get(local+'/labels')).json()).records).toEqual([localRecord]);
-    await expect(website.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Local treasury');
-    await expect(embedded.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Local treasury');
-    await expect(external.locator('[data-0xlabel-address],[data-0xlabel-ui]')).toHaveCount(0);
-    await expect(website.locator('[data-0xlabel-address]')).toHaveCount(500);
+    expect((await (await api.get(local+'/tags')).json()).records).toEqual([localRecord]);
+    await expect(website.locator('#wallet')).toHaveAttribute('data-0xtagger-tag', 'Local treasury');
+    await expect(embedded.locator('#wallet')).toHaveAttribute('data-0xtagger-tag', 'Local treasury');
+    await expect(external.locator('[data-0xtagger-address],[data-0xtagger-ui]')).toHaveCount(0);
+    await expect(website.locator('[data-0xtagger-address]')).toHaveCount(500);
     const websiteTabId = (await popup.evaluate(() => chrome.tabs.query({url:'http://127.0.0.1:8719/*'})))[0].id;
     const contents = await worker.evaluate(async tabId => chrome.scripting.executeScript({ target:{tabId, allFrames: true}, func:async () => {
       const state = await chrome.runtime.sendMessage({type:'State'});
@@ -130,7 +130,7 @@ test('installed extension: a book that works with no setup, moving it to a serve
       expect(frame.result.state.result).toEqual({ enabled: false });
       expect(frame.result.save.ok).toBe(false);
     }
-    await expect(foreign.frameLocator('iframe').locator('[data-0xlabel-address],[data-0xlabel-ui]')).toHaveCount(0);
+    await expect(foreign.frameLocator('iframe').locator('[data-0xtagger-address],[data-0xtagger-ui]')).toHaveCount(0);
     await foreign.close(); await website.bringToFront();
 
     // A key the server refuses never becomes a book.
@@ -153,18 +153,18 @@ test('installed extension: a book that works with no setup, moving it to a serve
     })).toBe(true);
     await popup.keyboard.press('Escape');
     await popup.setViewportSize({ width: 380, height: 600 });
-    await expect(website.locator('#wallet')).not.toHaveAttribute('data-0xlabel-label');
-    await expect(embedded.locator('#wallet')).not.toHaveAttribute('data-0xlabel-label');
-    expect((await (await api.get(local+'/labels')).json()).records).toEqual([localRecord]);
+    await expect(website.locator('#wallet')).not.toHaveAttribute('data-0xtagger-tag');
+    await expect(embedded.locator('#wallet')).not.toHaveAttribute('data-0xtagger-tag');
+    expect((await (await api.get(local+'/tags')).json()).records).toEqual([localRecord]);
 
-    const remoteRecord = (await (await api.put(`${remote}/labels/global/${address}`, { data:{labels:['Remote vault'],version:null} })).json()).record;
+    const remoteRecord = (await (await api.put(`${remote}/tags/global/${address}`, { data:{tags:['Remote vault'],version:null} })).json()).record;
     // Exercise the real alarm listener with an accelerated one-shot test alarm.
     await worker.evaluate(() => chrome.alarms.create('sync', { when:Date.now()+100 }));
-    await expect(website.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Remote vault', { timeout:10000 });
-    await expect(embedded.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Remote vault');
-    await api.put(`${remote}/labels/global/${address}`, { data:{labels:[],version:remoteRecord.version} });
+    await expect(website.locator('#wallet')).toHaveAttribute('data-0xtagger-tag', 'Remote vault', { timeout:10000 });
+    await expect(embedded.locator('#wallet')).toHaveAttribute('data-0xtagger-tag', 'Remote vault');
+    await api.put(`${remote}/tags/global/${address}`, { data:{tags:[],version:remoteRecord.version} });
     await worker.evaluate(() => chrome.alarms.create('sync', { when:Date.now()+100 }));
-    await expect(website.locator('#wallet')).not.toHaveAttribute('data-0xlabel-label', /./, { timeout:10000 });
+    await expect(website.locator('#wallet')).not.toHaveAttribute('data-0xtagger-tag', /./, { timeout:10000 });
     // A pull that learns nothing changes nothing: no new revision, so no view
     // is told anything and no page repaints.
     const revisionNow = async () => (await popup.evaluate(() => chrome.runtime.sendMessage({ type: 'State' }))).result.state.stateRevision;
@@ -173,66 +173,66 @@ test('installed extension: a book that works with no setup, moving it to a serve
     await popup.waitForTimeout(1000);
     expect(await revisionNow()).toBe(settled);
     await switchTo('Local');
-    await expect(website.locator('#wallet')).toHaveAttribute('data-0xlabel-label','Local treasury');
-    await website.getByRole('button',{name:'Edit wallet labels',exact:true}).first().click();
-    await website.getByRole('textbox',{name:'Label 1'}).fill('Local edited');
-    await website.getByRole('textbox',{name:'Label 1'}).press('Enter');
-    await expect(website.locator('#wallet')).toHaveAttribute('data-0xlabel-label','Local edited');
-    await expect(embedded.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Local edited');
-    await embedded.getByRole('button', { name: 'Edit wallet labels', exact: true }).click();
-    await embedded.getByRole('textbox', { name: 'Label 1' }).fill('Edited in embedded view');
-    await embedded.getByRole('textbox', { name: 'Label 1' }).press('Enter');
-    await expect(website.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Edited in embedded view');
-    await embedded.getByRole('button', { name: 'Edit wallet labels', exact: true }).click();
-    await embedded.getByRole('textbox', { name: 'Label 1' }).fill('Local edited');
-    await embedded.getByRole('textbox', { name: 'Label 1' }).press('Enter');
-    await expect(website.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Local edited');
+    await expect(website.locator('#wallet')).toHaveAttribute('data-0xtagger-tag','Local treasury');
+    await website.getByRole('button',{name:'Edit wallet tags',exact:true}).first().click();
+    await website.getByRole('textbox',{name:'Tag 1'}).fill('Local edited');
+    await website.getByRole('textbox',{name:'Tag 1'}).press('Enter');
+    await expect(website.locator('#wallet')).toHaveAttribute('data-0xtagger-tag','Local edited');
+    await expect(embedded.locator('#wallet')).toHaveAttribute('data-0xtagger-tag', 'Local edited');
+    await embedded.getByRole('button', { name: 'Edit wallet tags', exact: true }).click();
+    await embedded.getByRole('textbox', { name: 'Tag 1' }).fill('Edited in embedded view');
+    await embedded.getByRole('textbox', { name: 'Tag 1' }).press('Enter');
+    await expect(website.locator('#wallet')).toHaveAttribute('data-0xtagger-tag', 'Edited in embedded view');
+    await embedded.getByRole('button', { name: 'Edit wallet tags', exact: true }).click();
+    await embedded.getByRole('textbox', { name: 'Tag 1' }).fill('Local edited');
+    await embedded.getByRole('textbox', { name: 'Tag 1' }).press('Enter');
+    await expect(website.locator('#wallet')).toHaveAttribute('data-0xtagger-tag', 'Local edited');
     await embedded.locator('#copy').click();
     expect(await website.evaluate(() => navigator.clipboard.readText())).toBe(address);
-    expect((await (await api.get(remote+'/labels')).json()).records).toEqual([]);
+    expect((await (await api.get(remote+'/tags')).json()).records).toEqual([]);
     await website.locator('#copy').click();
     expect(await website.evaluate(async address=>(await navigator.clipboard.readText())===address,address)).toBe(true);
 
     const another = await context.newPage();
     await another.goto('http://127.0.0.1:8719/tests/fixtures/generic.html');
-    await expect(another.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Local edited');
+    await expect(another.locator('#wallet')).toHaveAttribute('data-0xtagger-tag', 'Local edited');
     await another.evaluate(() => {
       const frame = document.createElement('iframe'); frame.id = 'late-frame'; frame.src = '/tests/fixtures/frame.html'; document.body.append(frame);
     });
-    await expect(another.frameLocator('#late-frame').locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Local edited');
-    const savedBeforeReveal = (await (await api.get(local + '/labels')).json()).records;
-    await website.getByRole('button', { name: 'Edit wallet labels', exact: true }).first().click();
+    await expect(another.frameLocator('#late-frame').locator('#wallet')).toHaveAttribute('data-0xtagger-tag', 'Local edited');
+    const savedBeforeReveal = (await (await api.get(local + '/tags')).json()).records;
+    await website.getByRole('button', { name: 'Edit wallet tags', exact: true }).first().click();
     const addressSwitch = website.getByRole('switch', { name: 'Show my tags for this address', exact: true });
     await expect(addressSwitch).toBeChecked();
     await addressSwitch.click();
     await expect(addressSwitch).not.toBeChecked();
-    await expect(website.locator('[data-0xlabel-label]')).toHaveCount(0);
-    await expect(website.locator('[data-0xlabel-edit]')).toHaveCount(500);
-    await expect(another.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Local edited');
-    expect((await (await api.get(local + '/labels')).json()).records).toEqual(savedBeforeReveal);
+    await expect(website.locator('[data-0xtagger-tag]')).toHaveCount(0);
+    await expect(website.locator('[data-0xtagger-edit]')).toHaveCount(500);
+    await expect(another.locator('#wallet')).toHaveAttribute('data-0xtagger-tag', 'Local edited');
+    expect((await (await api.get(local + '/tags')).json()).records).toEqual(savedBeforeReveal);
     await website.reload();
-    await expect(website.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Local edited');
+    await expect(website.locator('#wallet')).toHaveAttribute('data-0xtagger-tag', 'Local edited');
     await website.evaluate(() => {
       const frame = document.createElement('iframe'); frame.id = 'embedded'; frame.src = '/tests/fixtures/frame.html'; document.body.prepend(frame);
     });
-    await expect(embedded.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Local edited');
+    await expect(embedded.locator('#wallet')).toHaveAttribute('data-0xtagger-tag', 'Local edited');
     await popup.locator('#site-toggle').click();
     await expect(siteSwitch).not.toBeChecked();
-    await expect.poll(toolbar).toEqual({ icon: 'icons/mark-idle-16.png', title: '0xlabel' });
-    await expect(website.locator('[data-0xlabel-address],[data-0xlabel-label],[data-0xlabel-ui]')).toHaveCount(0);
-    await expect(another.locator('[data-0xlabel-address],[data-0xlabel-label],[data-0xlabel-ui]')).toHaveCount(0);
-    await expect(embedded.locator('[data-0xlabel-address],[data-0xlabel-label],[data-0xlabel-ui]')).toHaveCount(0);
-    await expect(another.frameLocator('#late-frame').locator('[data-0xlabel-address],[data-0xlabel-label],[data-0xlabel-ui]')).toHaveCount(0);
+    await expect.poll(toolbar).toEqual({ icon: 'icons/mark-idle-16.png', title: '0xtagger' });
+    await expect(website.locator('[data-0xtagger-address],[data-0xtagger-tag],[data-0xtagger-ui]')).toHaveCount(0);
+    await expect(another.locator('[data-0xtagger-address],[data-0xtagger-tag],[data-0xtagger-ui]')).toHaveCount(0);
+    await expect(embedded.locator('[data-0xtagger-address],[data-0xtagger-tag],[data-0xtagger-ui]')).toHaveCount(0);
+    await expect(another.frameLocator('#late-frame').locator('[data-0xtagger-address],[data-0xtagger-tag],[data-0xtagger-ui]')).toHaveCount(0);
     await expect(website.locator('#wallet')).toHaveText(address);
     await website.reload();
-    await expect(website.locator('[data-0xlabel-address]')).toHaveCount(0);
+    await expect(website.locator('[data-0xtagger-address]')).toHaveCount(0);
     await popup.locator('#site-toggle').click();
     await expect(siteSwitch).toBeChecked();
-    await expect.poll(toolbar).toEqual({ icon: 'icons/mark-16.png', title: '0xlabel · Active on this page' });
-    await expect(website.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Local edited');
-    await expect(another.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Local edited');
+    await expect.poll(toolbar).toEqual({ icon: 'icons/mark-16.png', title: '0xtagger · Active on this page' });
+    await expect(website.locator('#wallet')).toHaveAttribute('data-0xtagger-tag', 'Local edited');
+    await expect(another.locator('#wallet')).toHaveAttribute('data-0xtagger-tag', 'Local edited');
     await popup.locator('#site-toggle').click();
-    await expect(website.locator('[data-0xlabel-address],[data-0xlabel-label],[data-0xlabel-ui]')).toHaveCount(0);
+    await expect(website.locator('[data-0xtagger-address],[data-0xtagger-tag],[data-0xtagger-ui]')).toHaveCount(0);
     await another.close();
     const bookPromise = context.waitForEvent('page');
     await popup.getByRole('button', { name: 'Open address book', exact: false }).click();
@@ -249,19 +249,19 @@ test('installed extension: a book that works with no setup, moving it to a serve
     await book.getByRole('button', { name: '+ Add address', exact: true }).click();
     await book.locator('#manual-address').fill(added); await book.locator('#network').fill('8453');
     await book.getByRole('button',{name:'Add tags',exact:true}).click();
-    await book.getByRole('textbox',{name:'Label 1'}).fill('New Base wallet');
+    await book.getByRole('textbox',{name:'Tag 1'}).fill('New Base wallet');
     // Switching books under an open draft must not let it save into the new one.
     await switchTo('Remote');
     await expect(book.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
-    await expect(book.getByRole('textbox', { name: 'Label 1' })).toHaveValue('New Base wallet');
+    await expect(book.getByRole('textbox', { name: 'Tag 1' })).toHaveValue('New Base wallet');
     await switchTo('Local');
     await expect(book.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
-    await book.getByRole('button',{name:'Add label',exact:false}).click();
-    await book.getByRole('textbox',{name:'Label 2'}).fill('Second alias');
-    await book.getByRole('textbox',{name:'Label 2'}).press('Enter');
+    await book.getByRole('button',{name:'Add tag',exact:false}).click();
+    await book.getByRole('textbox',{name:'Tag 2'}).fill('Second alias');
+    await book.getByRole('textbox',{name:'Tag 2'}).press('Enter');
     await expect(book.getByRole('dialog')).toHaveCount(0);
-    const addedRecord=(await (await api.get(local+'/labels')).json()).records.find(record=>record.address===added);
-    expect(addedRecord).toMatchObject({address:added,scope:'eip155:8453',labels:['New Base wallet','Second alias']});
+    const addedRecord=(await (await api.get(local+'/tags')).json()).records.find(record=>record.address===added);
+    expect(addedRecord).toMatchObject({address:added,scope:'eip155:8453',tags:['New Base wallet','Second alias']});
     await book.locator('#search').fill('Second alias');
     await expect(book.locator('.record')).toHaveCount(1);
     await expect(book.locator('.record')).toContainText('New Base wallet');
@@ -283,19 +283,19 @@ test('installed extension: a book that works with no setup, moving it to a serve
     expect(JSON.stringify(exported)).not.toContain('token');
     await book.locator('.record').click();
     await book.getByRole('button', { name: 'Remove tags', exact: true }).click();
-    expect((await (await api.get(local+'/labels')).json()).records).toContainEqual(addedRecord);
+    expect((await (await api.get(local+'/tags')).json()).records).toContainEqual(addedRecord);
     await book.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(book.getByRole('dialog')).toHaveCount(0);
-    expect((await (await api.get(local+'/labels')).json()).records.some(record=>record.address===added)).toBe(false);
+    expect((await (await api.get(local+'/tags')).json()).records.some(record=>record.address===added)).toBe(false);
     await popup.getByRole('button', { name: 'Open address book', exact: false }).click();
     expect(context.pages().filter(page=>page.url()===`chrome-extension://${id}/book.html`)).toHaveLength(1);
     // Reopening the book preserves a user's search and unsaved draft.
     await book.locator('#search').fill('Local');
     await book.locator('.record').click();
-    await book.getByRole('textbox', { name: 'Label 1' }).fill('Unsaved book edit');
+    await book.getByRole('textbox', { name: 'Tag 1' }).fill('Unsaved book edit');
     await popup.getByRole('button', { name: 'Open address book', exact: false }).click();
     await expect(book.locator('#search')).toHaveValue('Local');
-    await expect(book.getByRole('textbox', { name: 'Label 1' })).toHaveValue('Unsaved book edit');
+    await expect(book.getByRole('textbox', { name: 'Tag 1' })).toHaveValue('Unsaved book edit');
     expect(context.pages().filter(page=>page.url()===`chrome-extension://${id}/book.html`)).toHaveLength(1);
     await book.close();
     const reopenedPromise = context.waitForEvent('page');
@@ -328,7 +328,7 @@ test('installed extension: a book that works with no setup, moving it to a serve
     await reopened.locator('#confirm-remove').click();
     await expect(reopened.locator('#remove-dialog')).toBeHidden();
     // The server still has every record the forgotten book was showing.
-    expect((await (await api.get(local+'/labels')).json()).records.length).toBeGreaterThan(0);
+    expect((await (await api.get(local+'/tags')).json()).records.length).toBeGreaterThan(0);
     await expect(reopened.locator('#location')).not.toHaveText('Local notebook');
     await reopened.locator('#remove-book').click();
     await expect(reopened.locator('#remove-copy')).toContainText('cannot be undone');
@@ -345,7 +345,7 @@ test('installed extension: a book that works with no setup, moving it to a serve
     // it, and carrying one in is a single pass over its pages.
     const carried = Array.from({ length: 300 }, (_, index) => ({
       address: '0x' + index.toString(16).padStart(40, '0'), scope: 'global',
-      labels: ['Carried in ' + index], version: 'from-file',
+      tags: ['Carried in ' + index], version: 'from-file',
     }));
     const importing = Date.now();
     expect(await reopened.evaluate(async records =>

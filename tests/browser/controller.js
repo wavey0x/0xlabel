@@ -3,7 +3,7 @@
 // covers the real worker, storage, messages and HTTP(S) APIs.
 export const address = '0x' + 'ab'.repeat(20);
 export const other = '0x' + 'cd'.repeat(20);
-export const record = { address, scope: 'global', labels: ['Treasury', 'Operations'], version: 'one' };
+export const record = { address, scope: 'global', tags: ['Treasury', 'Operations'], version: 'one' };
 export const wallets = `<header>Explorer <input id="native-input"></header><main>
   <p><a id="first" href="/address/${address}">${address}</a><button id="native-copy">Copy address</button></p>
   <p><a id="second" href="/address/${other}">${other}</a></p></main>
@@ -31,12 +31,12 @@ export async function start(page, { html = wallets, site = 'https://etherscan.io
           if (window.conflict) { error.status = 409; error.current = window.conflict; }
           throw error;
         }
-        const entry = draft.labels.length ? { ...draft, version: 'saved' } : null;
+        const entry = draft.tags.length ? { ...draft, version: 'saved' } : null;
         window.state.records = [...window.state.records.filter(item => item.address !== draft.address || item.scope !== draft.scope), ...(entry ? [entry] : [])];
         window.state.stateRevision += 1;
         window.saveCompleted = true;
         // The worker answers the save, then tells every page what changed —
-        // including this one, which is how its own labels come to be repainted.
+        // including this one, which is how its own tags come to be repainted.
         const announced = { type: 'Updated', activeBook: window.state.activeBook,
           stateRevision: window.state.stateRevision, syncedAt: null,
           change: { address: draft.address, scope: draft.scope, record: entry } };
@@ -49,18 +49,18 @@ export async function start(page, { html = wallets, site = 'https://etherscan.io
   }, { site, records, framed });
 }
 
-export const edit = (page, index = 0) => page.getByRole('button', { name: 'Edit wallet labels', exact: true }).nth(index);
+export const edit = (page, index = 0) => page.getByRole('button', { name: 'Edit wallet tags', exact: true }).nth(index);
 // The glyph belonging to one address display, wherever it had to be put: beside
 // an inline display, inside one that would otherwise push it onto its own line.
-export const tagFor = (page, id) => page.locator(`#${id} + [data-0xlabel-edit], #${id} [data-0xlabel-edit]`).getByRole('button');
-export const input = page => page.getByRole('textbox', { name: 'Label 1', exact: true });
+export const tagFor = (page, id) => page.locator(`#${id} + [data-0xtagger-edit], #${id} [data-0xtagger-edit]`).getByRole('button');
+export const input = page => page.getByRole('textbox', { name: 'Tag 1', exact: true });
 export const save = page => page.getByRole('button', { name: 'Save', exact: true });
 export const shownAddress = page => page.getByRole('dialog').locator('code');
 export const health = page => page.evaluate(() => window.controller.health);
 // What the toolbar is told: the controller's own health plus the adapter reading the page.
 export const reported = page => page.evaluate(() => window.reports.at(-1));
 
-// WCAG contrast between two resolved CSS colours, for asserting that a label
+// WCAG contrast between two resolved CSS colours, for asserting that a tag
 // stays legible against the website it is painted on.
 export function contrast(a, b) {
   const channels = value => value.match(/[\d.]+/g).slice(0, 3).map(Number);

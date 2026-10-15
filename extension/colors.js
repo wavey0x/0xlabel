@@ -5,7 +5,7 @@ const black = '#000000';
 const tint = (color, percent) => `color-mix(in srgb, ${color} ${percent}%, transparent)`;
 const accent = '#5b21b6';
 // Deep purple reads at 2.1:1 on a dark surface, far short of the 4.5:1 a
-// label needs. Lightened for dark websites only; the tints stay as they are.
+// tag needs. Lightened for dark websites only; the tints stay as they are.
 const accentOnDark = '#a78bfa';
 // The accent is both a text colour and a fill, so whatever sits on top of it
 // has to be themed with it: white on the lightened purple is only 2.72:1.

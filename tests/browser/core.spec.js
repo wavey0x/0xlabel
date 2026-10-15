@@ -9,7 +9,7 @@ test('500 addresses retain native text, navigation, selection and copying; disab
     document.querySelector('a').onclick=event=>{event.preventDefault();window.nativeClick={href:event.currentTarget.getAttribute('href'),ctrl:event.ctrlKey};};
     </script>` });
   const link = page.locator('main a').first();
-  await expect(page.locator('[data-0xlabel-label]')).toHaveCount(500);
+  await expect(page.locator('[data-0xtagger-tag]')).toHaveCount(500);
   await expect(edit(page)).toBeVisible();
   await expect(link).toHaveText('0xabab…abab');
   await link.dispatchEvent('click', { ctrlKey: true });
@@ -19,7 +19,7 @@ test('500 addresses retain native text, navigation, selection and copying; disab
   await link.evaluate(element => { const range=document.createRange();range.selectNodeContents(element);getSelection().removeAllRanges();getSelection().addRange(range); });
   expect(await page.evaluate(() => getSelection().toString())).toBe('0xabab…abab');
   await page.evaluate(() => window.controller.stop());
-  await expect(page.locator('[data-0xlabel-address],[data-0xlabel-label],[data-0xlabel-ui]')).toHaveCount(0);
+  await expect(page.locator('[data-0xtagger-address],[data-0xtagger-tag],[data-0xtagger-ui]')).toHaveCount(0);
   await expect(link).toHaveText('0xabab…abab');
   await page.locator('[data-copy]').first().click();
   expect(await page.evaluate(() => window.nativeCopied)).toBe(address);
@@ -42,7 +42,7 @@ test('switching addresses preserves unsaved edits; ranking and Enter save the ca
   expect(await page.evaluate(() => window.saves.length)).toBe(0);
   await input(page).press('Enter');
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  expect(await page.evaluate(() => window.saves[0])).toMatchObject({ address, scope: 'global', labels: ['Operations desk', 'Treasury'], version: 'one' });
+  expect(await page.evaluate(() => window.saves[0])).toMatchObject({ address, scope: 'global', tags: ['Operations desk', 'Treasury'], version: 'one' });
 });
 
 test('a pending save sends one write and its late completion cannot close a newer draft', async ({ page }) => {
@@ -93,102 +93,102 @@ test('website-script clicks and keypresses cannot submit edits', async ({ page }
 });
 
 test('the address switch reveals all matching addresses without changing the draft or book, and retains the comparison through updates and saves', async ({ page }) => {
-  await start(page, { records: [{ ...record, labels: ['Treasury'] }], html: `<header>Explorer</header><main>
+  await start(page, { records: [{ ...record, tags: ['Treasury'] }], html: `<header>Explorer</header><main>
     <a id="first" class="hash-tag" href="/address/${address}"><span>Website name</span></a>
     <a id="second" class="hash-tag" href="/address/${address}">Website name</a></main>` });
   await edit(page).click();
   await input(page).fill('Edited tag');
   await page.getByRole('switch', { name: 'Show my tags for this address' }).click();
   await expect(input(page)).toHaveValue('Edited tag');
-  await expect(page.locator('[data-0xlabel-label]')).toHaveCount(0);
+  await expect(page.locator('[data-0xtagger-tag]')).toHaveCount(0);
   await expect(page.locator('#first')).toHaveText('Website name');
-  expect(await page.evaluate(() => window.state.records[0].labels)).toEqual(['Treasury']);
+  expect(await page.evaluate(() => window.state.records[0].tags)).toEqual(['Treasury']);
   await page.evaluate(({ address }) => {
     document.querySelector('#first span').textContent = 'Updated website name';
     const row=document.createElement('p');row.innerHTML='<a class="hash-tag" href="/address/'+address+'">Added address</a>';document.querySelector('main').append(row);
-    window.state = { ...window.state, stateRevision: 2, records: window.state.records.map(record => ({ ...record, labels: ['Synced tag'] })) };
+    window.state = { ...window.state, stateRevision: 2, records: window.state.records.map(record => ({ ...record, tags: ['Synced tag'] })) };
     window.controller.updateState(window.state);
   }, { address });
-  await expect(page.locator('[data-0xlabel-address]')).toHaveCount(3);
-  await expect(page.locator('[data-0xlabel-label]')).toHaveCount(0);
+  await expect(page.locator('[data-0xtagger-address]')).toHaveCount(3);
+  await expect(page.locator('[data-0xtagger-tag]')).toHaveCount(0);
   await save(page).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(page.locator('[data-0xlabel-label]')).toHaveCount(0);
+  await expect(page.locator('[data-0xtagger-tag]')).toHaveCount(0);
   await edit(page).click();
   await expect(input(page)).toHaveValue('Edited tag');
   await page.getByRole('switch', { name: 'Show my tags for this address' }).click();
-  await expect(page.locator('[data-0xlabel-label="Edited tag"]')).toHaveCount(3);
+  await expect(page.locator('[data-0xtagger-tag="Edited tag"]')).toHaveCount(3);
   await expect(page.locator('#first')).toHaveText('Updated website name');
   await page.getByRole('switch', { name: 'Show my tags for this address' }).click();
   await input(page).press('Escape');
   await page.evaluate(() => { window.site = new URL('https://etherscan.io/accounts?p=2'); window.controller.retry(); });
-  await expect(page.locator('[data-0xlabel-label="Edited tag"]')).toHaveCount(3);
+  await expect(page.locator('[data-0xtagger-tag="Edited tag"]')).toHaveCount(3);
 });
 
 test('Safe resolves loading and composed addresses; the address switch isolates chains and suppresses global fallback after scoped deletion', async ({ page }) => {
-  const records = [{ ...record, labels: ['Global'] }, { ...record, scope: 'eip155:1', labels: ['Ethereum'], version: 'network' }];
+  const records = [{ ...record, tags: ['Global'] }, { ...record, scope: 'eip155:1', tags: ['Ethereum'], version: 'network' }];
   const html = `<header><span id="wallet" data-testid="safe-selector-trigger-address"><b>0xabab</b><span>${'ab'.repeat(16)}</span><b>abab</b></span>
     <a data-testid="safe-item-explorer-link" href="https://etherscan.io/address/${address}">Explorer</a></header>
     <main><a id="base" href="https://basescan.org/address/${address}">${address}</a><div id="loading" role="progressbar"></div></main>`;
   await start(page, { html, site: 'https://app.safe.global/home?safe=eth:' + address, records });
   expect(await page.evaluate(() => window.controller.health.status)).toBe('waiting');
   await page.locator('#loading').evaluate(element => element.remove());
-  await expect(page.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Ethereum');
-  await expect(page.locator('#base')).toHaveAttribute('data-0xlabel-label', 'Global');
+  await expect(page.locator('#wallet')).toHaveAttribute('data-0xtagger-tag', 'Ethereum');
+  await expect(page.locator('#base')).toHaveAttribute('data-0xtagger-tag', 'Global');
   await edit(page).click();
   await page.getByRole('switch', { name: 'Show my tags for this address' }).click();
-  await page.getByRole('button', { name: 'Remove name 1' }).click();
+  await page.getByRole('button', { name: 'Remove tag 1' }).click();
   await save(page).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  expect(await page.evaluate(() => window.saves[0])).toMatchObject({ address, scope: 'eip155:1', labels: [], version: 'network' });
-  await expect(page.locator('#wallet')).not.toHaveAttribute('data-0xlabel-label');
-  await expect(page.locator('#base')).toHaveAttribute('data-0xlabel-label', 'Global');
+  expect(await page.evaluate(() => window.saves[0])).toMatchObject({ address, scope: 'eip155:1', tags: [], version: 'network' });
+  await expect(page.locator('#wallet')).not.toHaveAttribute('data-0xtagger-tag');
+  await expect(page.locator('#base')).toHaveAttribute('data-0xtagger-tag', 'Global');
   await start(page, { html: html.replace('<div id="loading" role="progressbar"></div>', ''), site: 'https://app.safe.global/home?safe=unknown:' + address, records });
-  await expect(page.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Global');
+  await expect(page.locator('#wallet')).toHaveAttribute('data-0xtagger-tag', 'Global');
 });
 
 test('switching address books resets comparisons, preserve source-bound drafts and reject older page snapshots', async ({ page }) => {
   await start(page);
   await page.evaluate(() => {
-    window.controller.updateState({ ...window.state, stateRevision: 3, records: [{ ...window.state.records[0], labels: ['Latest'] }] });
+    window.controller.updateState({ ...window.state, stateRevision: 3, records: [{ ...window.state.records[0], tags: ['Latest'] }] });
     window.controller.updateState({ ...window.state, stateRevision: 2 });
     const { stateRevision, ...incomplete } = window.state;
     window.controller.updateState({ ...incomplete, records: [] });
   });
-  await expect(page.locator('#first')).toHaveAttribute('data-0xlabel-label', 'Latest');
+  await expect(page.locator('#first')).toHaveAttribute('data-0xtagger-tag', 'Latest');
   await edit(page).click();
   await input(page).fill('Local draft');
   await page.getByRole('switch', { name: 'Show my tags for this address' }).click();
   await page.evaluate(() => window.controller.updateState({ ...window.state, stateRevision: 4, activeBook: 'book-2', bookName: 'Team',
       books: [...window.state.books, { id: 'book-2', name: 'Team', where: 'remote.example' }],
-      records: [{ ...window.state.records[0], labels: ['Remote'] }] }));
-  await expect(page.locator('#first')).toHaveAttribute('data-0xlabel-label', 'Remote');
+      records: [{ ...window.state.records[0], tags: ['Remote'] }] }));
+  await expect(page.locator('#first')).toHaveAttribute('data-0xtagger-tag', 'Remote');
   await expect(save(page)).toBeDisabled();
   await expect(input(page)).toHaveValue('Local draft');
   await expect(page.locator('.visibility')).toBeDisabled();
   await page.locator('.visibility').dispatchEvent('click');
-  await expect(page.locator('#first')).toHaveAttribute('data-0xlabel-label', 'Remote');
+  await expect(page.locator('#first')).toHaveAttribute('data-0xtagger-tag', 'Remote');
   await page.evaluate(() => window.controller.updateState(window.state));
-  await expect(page.locator('#first')).toHaveAttribute('data-0xlabel-label', 'Remote');
+  await expect(page.locator('#first')).toHaveAttribute('data-0xtagger-tag', 'Remote');
   await page.evaluate(() => window.controller.updateState({ ...window.state, stateRevision: 5 }));
-  await expect(page.locator('#first')).toHaveAttribute('data-0xlabel-label', 'Treasury');
+  await expect(page.locator('#first')).toHaveAttribute('data-0xtagger-tag', 'Treasury');
   await expect(save(page)).toBeEnabled();
   await expect(input(page)).toHaveValue('Local draft');
 });
 
 test('recycled rows cannot redirect an open draft or its visibility control to another address', async ({ page }) => {
-  await start(page, { records: [record, { ...record, address: other, labels: ['Other wallet'] }] });
+  await start(page, { records: [record, { ...record, address: other, tags: ['Other wallet'] }] });
   await edit(page).click();
   await input(page).fill('Captured original');
   const link = page.locator('#first');
   await link.evaluate((element, other) => { element.href='/address/'+other; element.textContent=other; }, other);
-  await expect(link).toHaveAttribute('data-0xlabel-label', 'Other wallet');
+  await expect(link).toHaveAttribute('data-0xtagger-tag', 'Other wallet');
   await expect(page.locator('.visibility')).toBeDisabled();
   await page.locator('.visibility').dispatchEvent('click');
-  await expect(link).toHaveAttribute('data-0xlabel-label', 'Other wallet');
+  await expect(link).toHaveAttribute('data-0xtagger-tag', 'Other wallet');
   await save(page).click();
   expect(await page.evaluate(() => window.saves[0].address)).toBe(address);
-  await expect(link).toHaveAttribute('data-0xlabel-label', 'Other wallet');
+  await expect(link).toHaveAttribute('data-0xtagger-tag', 'Other wallet');
 });
 
 test('an inconsistent integration clears annotations but preserves its draft; retry only resumes with valid landmarks', async ({ page }) => {
@@ -197,15 +197,15 @@ test('an inconsistent integration clears annotations but preserves its draft; re
   await input(page).fill('Still safe');
   await page.locator('body > header').evaluate(element => element.remove());
   await expect.poll(() => page.evaluate(() => window.controller.health.status)).toBe('stale');
-  await expect(page.locator('[data-0xlabel-address],[data-0xlabel-label]')).toHaveCount(0);
+  await expect(page.locator('[data-0xtagger-address],[data-0xtagger-tag]')).toHaveCount(0);
   await expect(input(page)).toHaveValue('Still safe');
   await expect(page.locator('.visibility')).toBeDisabled();
   await save(page).click();
-  expect(await page.evaluate(() => window.saves[0].labels[0])).toBe('Still safe');
+  expect(await page.evaluate(() => window.saves[0].tags[0])).toBe('Still safe');
   await page.evaluate(() => window.controller.retry());
   expect(await page.evaluate(() => window.controller.health.status)).toBe('stale');
   await page.evaluate(() => { document.body.prepend(document.createElement('header')); window.controller.retry(); });
-  await expect(page.locator('#first')).toHaveAttribute('data-0xlabel-label', 'Still safe');
+  await expect(page.locator('#first')).toHaveAttribute('data-0xtagger-tag', 'Still safe');
 });
 
 test('failed and conflicting saves retain the draft; a refusal offers both answers in one click', async ({ page }) => {
@@ -216,19 +216,19 @@ test('failed and conflicting saves retain the draft; a refusal offers both answe
   await save(page).click();
   await expect(input(page)).toBeEnabled();
   await expect(input(page)).toHaveValue('My edit');
-  await page.evaluate(({ record }) => { window.saveError='Conflict'; window.conflict={ ...record, labels:['Newer name'], version:'newer' }; }, { record });
+  await page.evaluate(({ record }) => { window.saveError='Conflict'; window.conflict={ ...record, tags:['Newer name'], version:'newer' }; }, { record });
   await save(page).click();
   await expect(input(page)).toHaveValue('My edit');
   // What the book now says, with both answers to it one click away.
   await expect(page.locator('.conflict')).toContainText('Newer name');
   await page.getByRole('button', { name: 'Keep mine' }).click();
-  expect(await page.evaluate(() => window.saves.at(-1))).toMatchObject({ address, labels: ['My edit', 'Operations'], version: 'newer' });
+  expect(await page.evaluate(() => window.saves.at(-1))).toMatchObject({ address, tags: ['My edit', 'Operations'], version: 'newer' });
   await page.getByRole('button', { name: 'Use these' }).click();
   await expect(input(page)).toHaveValue('Newer name');
   await expect(page.locator('.conflict')).toBeHidden();
   await page.evaluate(() => { window.saveError=null; });
   await save(page).click();
-  expect(await page.evaluate(() => window.saves.at(-1))).toMatchObject({ address, labels: ['Newer name'], version: 'newer' });
+  expect(await page.evaluate(() => window.saves.at(-1))).toMatchObject({ address, tags: ['Newer name'], version: 'newer' });
 });
 
 test('a stray space is not an edit, and a link that names nothing opens nothing', async ({ page }) => {
@@ -254,20 +254,20 @@ test('a stray space is not an edit, and a link that names nothing opens nothing'
 
 test('a draft nobody has touched follows the book; one with typing in it is never overwritten', async ({ page }) => {
   await start(page);
-  const elsewhere = labels => page.evaluate(({ address, labels }) => window.controller.updateState({
+  const elsewhere = tags => page.evaluate(({ address, tags }) => window.controller.updateState({
     ...window.state, stateRevision: window.state.stateRevision + 5,
-    records: [{ address, scope: 'global', labels, version: 'from-elsewhere-' + labels.join('-') }],
-  }), { address, labels });
+    records: [{ address, scope: 'global', tags, version: 'from-elsewhere-' + tags.join('-') }],
+  }), { address, tags });
 
   await edit(page).click();
   await expect(input(page)).toHaveValue('Treasury');
   await elsewhere(['Saved in another tab']);
   await expect(input(page)).toHaveValue('Saved in another tab');
-  await expect(page.locator('#first')).toHaveAttribute('data-0xlabel-label', 'Saved in another tab');
+  await expect(page.locator('#first')).toHaveAttribute('data-0xtagger-tag', 'Saved in another tab');
   // Saving the followed draft carries that record's version, so a book written
   // elsewhere is not asked to resolve a conflict that no longer exists.
   await save(page).click();
-  expect(await page.evaluate(() => window.saves.at(-1))).toMatchObject({ labels: ['Saved in another tab'], version: 'from-elsewhere-Saved in another tab' });
+  expect(await page.evaluate(() => window.saves.at(-1))).toMatchObject({ tags: ['Saved in another tab'], version: 'from-elsewhere-Saved in another tab' });
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
   await edit(page).click();
@@ -306,7 +306,7 @@ test('editing a search suggestion survives native blur dismissal without selecti
   await input(page).fill('Search tag');
   await save(page).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  expect(await page.evaluate(() => window.saves[0])).toMatchObject({ address, labels: ['Search tag', 'Operations'] });
+  expect(await page.evaluate(() => window.saves[0])).toMatchObject({ address, tags: ['Search tag', 'Operations'] });
   await search.click();
   await page.locator('#suggestion').click();
   expect(await page.evaluate(() => window.nativeSearchSelection)).toBe('/address/' + address);
@@ -349,9 +349,9 @@ test('explorer identities come from complete sources, including search suggestio
       link.onclick=event=>event.preventDefault();
     });
     </script>` });
-  for (const id of ['recent','recent-name','suggested-name','ens','fragment','fee','table']) await expect(page.locator('#'+id)).toHaveAttribute('data-0xlabel-address', address);
-  await expect(page.locator('#recent-tag')).toHaveAttribute('data-0xlabel-address', other);
-  await expect(page.locator('[data-0xlabel-address]')).toHaveCount(8);
+  for (const id of ['recent','recent-name','suggested-name','ens','fragment','fee','table']) await expect(page.locator('#'+id)).toHaveAttribute('data-0xtagger-address', address);
+  await expect(page.locator('#recent-tag')).toHaveAttribute('data-0xtagger-address', other);
+  await expect(page.locator('[data-0xtagger-address]')).toHaveCount(8);
   await tagFor(page, 'recent').click();
   await expect(shownAddress(page)).toHaveText(checksumAddress(address));
   expect(await page.evaluate(() => window.nativeSearchSelection)).toBeUndefined();
@@ -370,7 +370,7 @@ test('explorer identities come from complete sources, including search suggestio
     await expect(page.locator('#'+id)).toHaveText(text);
   }
   await page.locator('#suggested-name').evaluate(element => { element.querySelector('h6').textContent = 'Updated website name'; });
-  await expect(page.locator('#suggested-name')).toHaveAttribute('data-0xlabel-address', address);
+  await expect(page.locator('#suggested-name')).toHaveAttribute('data-0xtagger-address', address);
   await page.locator('#fee span').evaluate(element => { element.dataset.bsOriginalTitle=element.title; element.removeAttribute('title'); });
   await tagFor(page, 'fee').click();
   await expect(shownAddress(page)).toHaveText(checksumAddress(address));
@@ -384,22 +384,22 @@ test("an address page keeps its own address beside the name it is given", async 
   await start(page, { site: `https://etherscan.io/address/${address}`, html: `<header>Explorer</header><main>
     <h1>Contract <span id="mainaddress" data-highlight-target="${address}">${address}</span></h1>
     <p>Seen again in <a id="elsewhere" href="/address/${address}">${address}</a></p></main>` });
-  await expect(page.locator('#mainaddress')).toHaveAttribute('data-0xlabel-label', 'Treasury');
-  await expect(page.locator('#mainaddress')).toHaveAttribute('data-0xlabel-short', '0xABaB…ABaB');
+  await expect(page.locator('#mainaddress')).toHaveAttribute('data-0xtagger-tag', 'Treasury');
+  await expect(page.locator('#mainaddress')).toHaveAttribute('data-0xtagger-short', '0xABaB…ABaB');
   expect(await page.locator('#mainaddress').evaluate(element => getComputedStyle(element, '::after').content))
     .toContain('0xABaB…ABaB');
   // Everywhere else on the page the name stands on its own.
-  await expect(page.locator('#elsewhere')).toHaveAttribute('data-0xlabel-label', 'Treasury');
-  await expect(page.locator('#elsewhere')).not.toHaveAttribute('data-0xlabel-short', /./);
+  await expect(page.locator('#elsewhere')).toHaveAttribute('data-0xtagger-tag', 'Treasury');
+  await expect(page.locator('#elsewhere')).not.toHaveAttribute('data-0xtagger-short', /./);
   // Nothing of ours outlives the name it belonged to.
   await page.evaluate(() => window.controller.updateState({ ...window.state, records: [], stateRevision: 9 }));
-  await expect(page.locator('#mainaddress')).not.toHaveAttribute('data-0xlabel-short', /./);
+  await expect(page.locator('#mainaddress')).not.toHaveAttribute('data-0xtagger-short', /./);
   await expect(page.locator('#mainaddress')).toHaveText(address);
 });
 
 test('a menu of owners is content: rows keep the explorer\'s own name and still take a glyph', async ({ page }) => {
   await start(page, { site: 'https://etherscan.io/', records: [record,
-    { address: other, scope: 'global', labels: ['Second owner'], version: 'two' }],
+    { address: other, scope: 'global', tags: ['Second owner'], version: 'two' }],
     html: `<style>.dropdown-menu{display:flex;flex-direction:column}.dropdown-item{display:block;width:100%}</style>
     <header>Explorer</header><main><div class="dropdown-menu">
       <a id="named-owner" class="dropdown-item" href="/address/${address}"><span class="hash-tag">Explorer name tag</span></a>
@@ -407,18 +407,18 @@ test('a menu of owners is content: rows keep the explorer\'s own name and still 
     </div><nav><a id="nav-card" class="hash-tag" href="/address/${address}">View address</a></nav></main>` });
   // The explorer's own name stands; knowing whose wallet it is adds the glyph.
   await expect(page.locator('#named-owner .hash-tag')).toHaveText('Explorer name tag');
-  await expect(page.locator('#named-owner .hash-tag')).toHaveAttribute('data-0xlabel-address', address);
-  await expect(page.locator('#named-owner [data-0xlabel-label]')).toHaveCount(0);
+  await expect(page.locator('#named-owner .hash-tag')).toHaveAttribute('data-0xtagger-address', address);
+  await expect(page.locator('#named-owner [data-0xtagger-tag]')).toHaveCount(0);
   // A row showing the address itself is named like anywhere else on the site.
-  await expect(page.locator('#plain-owner')).toHaveAttribute('data-0xlabel-label', 'Second owner');
+  await expect(page.locator('#plain-owner')).toHaveAttribute('data-0xtagger-tag', 'Second owner');
   // Neither glyph is pushed onto a line of its own: a row that would do that
   // carries it inside the display instead of after it.
-  await expect(page.locator('#named-owner > [data-0xlabel-edit]')).toHaveCount(1);
-  await expect(page.locator('#plain-owner > [data-0xlabel-edit]')).toHaveCount(1);
-  await expect(page.locator('.dropdown-menu > [data-0xlabel-edit]')).toHaveCount(0);
+  await expect(page.locator('#named-owner > [data-0xtagger-edit]')).toHaveCount(1);
+  await expect(page.locator('#plain-owner > [data-0xtagger-edit]')).toHaveCount(1);
+  await expect(page.locator('.dropdown-menu > [data-0xtagger-edit]')).toHaveCount(0);
   // Site navigation is left alone entirely, name and glyph both.
-  await expect(page.locator('#nav-card')).not.toHaveAttribute('data-0xlabel-address', /./);
-  await expect(page.locator('#nav-card [data-0xlabel-edit]')).toHaveCount(0);
+  await expect(page.locator('#nav-card')).not.toHaveAttribute('data-0xtagger-address', /./);
+  await expect(page.locator('#nav-card [data-0xtagger-edit]')).toHaveCount(0);
   await tagFor(page, 'named-owner').click();
   await expect(shownAddress(page)).toHaveText(checksumAddress(address));
 });
@@ -432,40 +432,40 @@ test('contradictory address evidence disqualifies only that element; generic det
     // One element's disagreement must never cost the rest of the page its tags.
     await start(page, { html: `<header></header><main>${conflict}${sound}</main>` });
     expect(await page.evaluate(() => window.controller.health.status)).toBe('ready');
-    await expect(page.locator('#conflict')).not.toHaveAttribute('data-0xlabel-address');
-    await expect(page.locator('#sound')).toHaveAttribute('data-0xlabel-label', 'Treasury');
+    await expect(page.locator('#conflict')).not.toHaveAttribute('data-0xtagger-address');
+    await expect(page.locator('#sound')).toHaveAttribute('data-0xtagger-tag', 'Treasury');
   }
   await start(page, { site: 'https://plain.example', html: `<main><p id="wallet">${address}</p><p>0xabab…abab</p>
     <button>${address}</button><input value="${address}"><div contenteditable="true">${address}</div></main>` });
-  await expect(page.locator('[data-0xlabel-address]')).toHaveCount(1);
-  await expect(page.locator('#wallet')).toHaveAttribute('data-0xlabel-label', 'Treasury');
+  await expect(page.locator('[data-0xtagger-address]')).toHaveCount(1);
+  await expect(page.locator('#wallet')).toHaveAttribute('data-0xtagger-tag', 'Treasury');
 });
 
 // Every theming defect this project has had was invisible to the suite: the
-// labels were present and correct, and unreadable. Legibility is the contract.
+// tags were present and correct, and unreadable. Legibility is the contract.
 const legible = async (page, surface) => {
-  await expect.poll(() => page.evaluate(() => document.documentElement.getAttribute('data-0xlabel-surface'))).toBe(surface);
+  await expect.poll(() => page.evaluate(() => document.documentElement.getAttribute('data-0xtagger-surface'))).toBe(surface);
   const behind = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-  const label = await page.locator('#first').evaluate(element => getComputedStyle(element, '::before').color);
-  const tag = await edit(page).evaluate(element => getComputedStyle(element).color);
-  expect(contrast(label, behind), `${surface}: label on the page`).toBeGreaterThanOrEqual(4.5);
-  expect(contrast(tag, behind), `${surface}: tag button on the page`).toBeGreaterThanOrEqual(4.5);
+  const painted = await page.locator('#first').evaluate(element => getComputedStyle(element, '::before').color);
+  const glyph = await edit(page).evaluate(element => getComputedStyle(element).color);
+  expect(contrast(painted, behind), `${surface}: tag on the page`).toBeGreaterThanOrEqual(4.5);
+  expect(contrast(glyph, behind), `${surface}: tag button on the page`).toBeGreaterThanOrEqual(4.5);
   await edit(page).click();
   const primary = await save(page).evaluate(element => {
     const style = getComputedStyle(element);
     return { ink: style.color, fill: style.backgroundColor };
   });
-  expect(contrast(primary.ink, primary.fill), `${surface}: Save label on its own fill`).toBeGreaterThanOrEqual(4.5);
+  expect(contrast(primary.ink, primary.fill), `${surface}: Save tag on its own fill`).toBeGreaterThanOrEqual(4.5);
   await input(page).press('Escape');
 };
 
-test('labels, tag buttons and editor controls stay legible on light and dark websites', async ({ page }) => {
-  // A website already on its surface when labeling starts.
+test('tags, tag buttons and editor controls stay legible on light and dark websites', async ({ page }) => {
+  // A website already on its surface when tagging starts.
   for (const [surface, colour] of [['light', '#ffffff'], ['dark', '#101113']]) {
     await start(page, { html: `<style>body{background:${colour}}</style>${wallets}` });
     await legible(page, surface);
   }
-  // And a website that changes surface under labels already on the page.
+  // And a website that changes surface under tags already on the page.
   await start(page, { html: `<style>body{background:#ffffff}</style>${wallets}` });
   await legible(page, 'light');
   await page.evaluate(() => { document.body.style.background = '#101113'; });
@@ -475,7 +475,7 @@ test('labels, tag buttons and editor controls stay legible on light and dark web
     await start(page, { site: `https://etherscan.io/address/${address}`,
       html: `<style>body{background:${colour}}</style><header>Explorer</header>
         <main><h1><span id="mainaddress" data-highlight-target="${address}">${address}</span></h1></main>` });
-    await expect(page.locator('#mainaddress')).toHaveAttribute('data-0xlabel-short', /./);
+    await expect(page.locator('#mainaddress')).toHaveAttribute('data-0xtagger-short', /./);
     const [trailer, behind] = await page.locator('#mainaddress').evaluate(element =>
       [getComputedStyle(element, '::after').color, getComputedStyle(document.body).backgroundColor]);
     expect(contrast(trailer, behind), `${colour}: the address beside the name`).toBeGreaterThanOrEqual(4.5);
@@ -490,7 +490,7 @@ test('a website surface is read from what the browser actually paints', async ({
   ];
   for (const [shape, style, expected] of shapes) {
     await start(page, { html: style + wallets });
-    await expect.poll(() => page.evaluate(() => document.documentElement.getAttribute('data-0xlabel-surface')),
+    await expect.poll(() => page.evaluate(() => document.documentElement.getAttribute('data-0xtagger-surface')),
       { message: shape }).toBe(expected);
   }
 });

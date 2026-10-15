@@ -1,4 +1,4 @@
-<h1 align="center">0xlabel</h1>
+<h1 align="center">0xtagger</h1>
 <p align="center"><strong>One private address book. A clearer view of the web.</strong><br>A single source of truth for your tags, overlaid on the websites you use.<br>Self-hosted on your laptop or server. No central service or account.</p>
 <p align="center"><a href="#get-started">Get started</a> · <a href="INSTALL.md">Setup guide</a> · <a href="LICENSE">MIT</a></p>
 
@@ -20,18 +20,18 @@ Works with Etherscan-family explorers and Safe. Other enabled sites use conserva
 
 ### Privacy
 
-Your addresses stay in your browser profile unless you put a book on a server you run, in which case it lives in a SQLite file you control behind an authenticated API. 0xlabel has no central service, accounts, or analytics. Access keys stay in trusted extension storage and never reach content scripts.
+Your addresses stay in your browser profile unless you put a book on a server you run, in which case it lives in a SQLite file you control behind an authenticated API. 0xtagger has no central service, accounts, or analytics. Access keys stay in trusted extension storage and never reach content scripts.
 
 **Tags displayed on a website are readable by that website.** The extension keeps your stored book under your control; its on-page overlay is not hidden from the site.
 
 ### Get started
 
 ```sh
-git clone https://github.com/wavey0x/0xlabel.git
+git clone https://github.com/wavey0x/0xtagger.git
 ```
 
 1. Open `brave://extensions` or `chrome://extensions`, enable **Developer mode**, and **Load unpacked** → this project's `extension` folder.
-2. Enable the website in the popup. Click a purple tag beside an address to name it.
+2. Enable the website in the popup. Click the purple tag glyph beside an address to tag it.
 
 That is the whole setup. Your addresses are kept on this device, with no server and nothing to configure.
 
@@ -40,10 +40,10 @@ That is the whole setup. Your addresses are kept on this device, with no server 
 Run a server, with Python 3.10+ and [uv](https://docs.astral.sh/uv/getting-started/installation/):
 
 ```sh
-uv run 0xlabel
+uv run 0xtagger
 ```
 
-It prints one line. In 0xlabel, open the address book menu, choose **+ Add an address book**, and paste it. The new book lives on that server; the one on your device stays where it is, and you switch between them in the same menu.
+It prints one line. In 0xtagger, open the address book menu, choose **+ Add an address book**, and paste it. The new book lives on that server; the one on your device stays where it is, and you switch between them in the same menu.
 
 ![The compact translucent editor adding a tag directly to a transfer list](docs/images/editor.png)
 

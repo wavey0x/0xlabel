@@ -37,7 +37,7 @@ function render(next = state) {
   // Only a book kept somewhere else can be out of date with what it holds.
   $('#refresh').hidden = state.bookKind !== 'server';
   $('#remove-book').disabled = state.books.length < 2;
-  $('#remove-book').title = state.books.length < 2 ? '0xlabel keeps at least one address book.' : 'Remove this address book';
+  $('#remove-book').title = state.books.length < 2 ? '0xtagger keeps at least one address book.' : 'Remove this address book';
   $('#refresh').disabled = busy || $('#refresh').hasAttribute('aria-busy');
   $('#export').disabled = !state.records.length;
   $('#sync').textContent = busy ? 'Connecting…' : syncText(state);
@@ -48,8 +48,8 @@ function render(next = state) {
   // Sorted by name, so the order is a property of the book rather than of the
   // order it happened to be written in.
   entries = state.records
-    .map(record => ({ record, text: [record.address, ...record.labels].join('\n').toLocaleLowerCase(), row: null }))
-    .sort((one, two) => one.record.labels[0].localeCompare(two.record.labels[0]) ||
+    .map(record => ({ record, text: [record.address, ...record.tags].join('\n').toLocaleLowerCase(), row: null }))
+    .sort((one, two) => one.record.tags[0].localeCompare(two.record.tags[0]) ||
       one.record.address.localeCompare(two.record.address));
   if (editor) editor.updateState(state);
   search();
@@ -66,7 +66,7 @@ function bookRow(record) {
   const row = document.createElement('tr');
   row.innerHTML = '<td><button class="record"><strong></strong><small></small></button></td><td><code></code></td><td></td>';
   const open = row.querySelector('.record');
-  open.querySelector('strong').textContent = record.labels.join(' · ');
+  open.querySelector('strong').textContent = record.tags.join(' · ');
   open.querySelector('small').textContent = scopeName(record.scope);
   open.title = displayAddress; open.setAttribute('aria-label', `Edit tags for ${displayAddress}`);
   open.onclick = () => edit(record.address, record.scope);
@@ -126,7 +126,7 @@ $('#remove-book').onclick = () => {
   $('#remove-heading').textContent = here ? 'Delete address book' : 'Remove address book';
   $('#remove-copy').textContent = here
     ? `Deletes ${current.name} and its ${addresses}. This cannot be undone.`
-    : `Removes ${current.name} from 0xlabel. ${current.where} keeps its ${addresses}.`;
+    : `Removes ${current.name} from 0xtagger. ${current.where} keeps its ${addresses}.`;
   $('#confirm-remove').textContent = here ? 'Delete' : 'Remove';
   $('#remove-name').hidden = !here;
   $('#remove-name').value = '';
@@ -177,13 +177,13 @@ $('#import-file').onchange = async event => {
     const result = await rpc({ type: 'Import', records: parsed.records ?? parsed });
     tell(`Added ${result.added} address${result.added === 1 ? '' : 'es'} to ${state.bookName}.`);
   } catch (error) {
-    tell(error instanceof SyntaxError ? 'That file is not a 0xlabel export.' : error);
+    tell(error instanceof SyntaxError ? 'That file is not a 0xtagger export.' : error);
   }
 };
 $('#export').onclick = () => {
   const blob = new Blob([JSON.stringify({ records: state.records }, null, 2) + '\n'], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
-  const link = document.createElement('a'); link.href = url; link.download = '0xlabel-book.json'; link.click();
+  const link = document.createElement('a'); link.href = url; link.download = '0xtagger-book.json'; link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 watchBook(() => state, render);

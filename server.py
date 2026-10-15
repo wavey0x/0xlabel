@@ -18,8 +18,8 @@ import uvicorn
 
 ADDRESS = re.compile(r"0x[0-9a-f]{40}", re.IGNORECASE)
 NETWORK = re.compile(r"eip155:([1-9][0-9]*)")
-MAX_LABELS = 32
-MAX_NAME_LENGTH = 80
+MAX_TAGS = 32
+MAX_TAG_LENGTH = 80
 
 
 def address_key(value: str) -> str:
@@ -37,37 +37,37 @@ def scope_key(value: str) -> str:
     return value
 
 
-class LabelWrite(BaseModel):
+class TagWrite(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    labels: list[str] = Field(max_length=MAX_LABELS)
+    tags: list[str] = Field(max_length=MAX_TAGS)
     version: str | None = Field(max_length=128)
 
-    @field_validator("labels")
+    @field_validator("tags")
     @classmethod
-    def clean_names(cls, names: list[str]) -> list[str]:
+    def clean_tags(cls, tags: list[str]) -> list[str]:
         cleaned = []
         seen = set()
-        for name in names:
-            name = name.strip()
-            if not name or len(name) > MAX_NAME_LENGTH:
-                raise ValueError(f"Names must contain 1–{MAX_NAME_LENGTH} characters.")
-            if any(ord(character) < 32 or ord(character) == 127 for character in name):
-                raise ValueError("Names cannot contain control characters.")
-            if name.casefold() in seen:
-                raise ValueError("Each name in a list must be distinct.")
-            seen.add(name.casefold())
-            cleaned.append(name)
+        for tag in tags:
+            tag = tag.strip()
+            if not tag or len(tag) > MAX_TAG_LENGTH:
+                raise ValueError(f"Tags must contain 1–{MAX_TAG_LENGTH} characters.")
+            if any(ord(character) < 32 or ord(character) == 127 for character in tag):
+                raise ValueError("Tags cannot contain control characters.")
+            if tag.casefold() in seen:
+                raise ValueError("Each tag in a list must be distinct.")
+            seen.add(tag.casefold())
+            cleaned.append(tag)
         return cleaned
 
 
-class LabelChange(LabelWrite):
+class TagChange(TagWrite):
     address: str
     scope: str
 
 
 class BookWrite(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    changes: list[LabelChange] = Field(max_length=5000)
+    changes: list[TagChange] = Field(max_length=5000)
 
 
 def record(row: sqlite3.Row | None) -> dict | None:
@@ -76,7 +76,7 @@ def record(row: sqlite3.Row | None) -> dict | None:
     return {
         "address": row["address"],
         "scope": row["scope"],
-        "labels": json.loads(row["labels_json"]),
+        "tags": json.loads(row["tags_json"]),
         "version": row["version"],
     }
 
@@ -94,10 +94,10 @@ def create_app(database: str | Path, token: str) -> FastAPI:
 
     with closing(connect()) as connection, connection:
         connection.execute("""
-            CREATE TABLE IF NOT EXISTS labels (
+            CREATE TABLE IF NOT EXISTS tags (
                 address TEXT NOT NULL,
                 scope TEXT NOT NULL,
-                labels_json TEXT NOT NULL,
+                tags_json TEXT NOT NULL,
                 version TEXT NOT NULL,
                 PRIMARY KEY (address, scope)
             )
@@ -117,7 +117,7 @@ def create_app(database: str | Path, token: str) -> FastAPI:
         if not hmac.compare_digest(supplied.encode(), token.encode()):
             raise HTTPException(401, "Access token required.", headers={"WWW-Authenticate": "Bearer"})
 
-    app = FastAPI(title="0xlabel", docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(title="0xtagger", docs_url=None, redoc_url=None, openapi_url=None)
 
     @app.middleware("http")
     async def no_cache(request, call_next):
@@ -133,7 +133,7 @@ def create_app(database: str | Path, token: str) -> FastAPI:
         connection.execute("UPDATE book SET revision = revision + 1")
         return revision_of(connection)
 
-    @app.get("/labels", dependencies=[Depends(authenticated)])
+    @app.get("/tags", dependencies=[Depends(authenticated)])
     def read_book(request: Request):
         with closing(connect()) as connection:
             mark = f'"{revision_of(connection)}"'
@@ -141,28 +141,28 @@ def create_app(database: str | Path, token: str) -> FastAPI:
             # answer, so it is the one worth making cheap.
             if request.headers.get("if-none-match") == mark:
                 return Response(status_code=304, headers={"ETag": mark})
-            rows = connection.execute("SELECT * FROM labels ORDER BY scope, address").fetchall()
+            rows = connection.execute("SELECT * FROM tags ORDER BY scope, address").fetchall()
         return JSONResponse({"records": [record(row) for row in rows]}, headers={"ETag": mark})
 
-    def apply(connection: sqlite3.Connection, address: str, scope: str, change: LabelWrite) -> dict | None:
+    def apply(connection: sqlite3.Connection, address: str, scope: str, change: TagWrite) -> dict | None:
         """Write one record inside a transaction the caller owns."""
-        if not change.labels:
-            connection.execute("DELETE FROM labels WHERE address = ? AND scope = ?", (address, scope))
+        if not change.tags:
+            connection.execute("DELETE FROM tags WHERE address = ? AND scope = ?", (address, scope))
             return None
         saved = {
             "address": address, "scope": scope,
-            "labels": change.labels, "version": secrets.token_hex(16),
+            "tags": change.tags, "version": secrets.token_hex(16),
         }
         connection.execute(
-            "INSERT INTO labels VALUES (?, ?, ?, ?) "
-            "ON CONFLICT(address, scope) DO UPDATE SET labels_json=excluded.labels_json, version=excluded.version",
-            (address, scope, json.dumps(change.labels, ensure_ascii=False), saved["version"]),
+            "INSERT INTO tags VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(address, scope) DO UPDATE SET tags_json=excluded.tags_json, version=excluded.version",
+            (address, scope, json.dumps(change.tags, ensure_ascii=False), saved["version"]),
         )
         return saved
 
     def held(connection: sqlite3.Connection, address: str, scope: str) -> sqlite3.Row | None:
         return connection.execute(
-            "SELECT * FROM labels WHERE address = ? AND scope = ?", (address, scope)
+            "SELECT * FROM tags WHERE address = ? AND scope = ?", (address, scope)
         ).fetchone()
 
     def unlocked(work):
@@ -173,8 +173,8 @@ def create_app(database: str | Path, token: str) -> FastAPI:
                 raise HTTPException(503, "The book is busy. Refresh and try again.") from error
             raise
 
-    @app.put("/labels/{scope}/{address}", dependencies=[Depends(authenticated)])
-    def replace_list(scope: str, address: str, change: LabelWrite):
+    @app.put("/tags/{scope}/{address}", dependencies=[Depends(authenticated)])
+    def replace_list(scope: str, address: str, change: TagWrite):
         address, scope = address_key(address), scope_key(scope)
 
         def work():
@@ -194,7 +194,7 @@ def create_app(database: str | Path, token: str) -> FastAPI:
 
     # A file carried in is one decision, so it is one transaction: either the
     # whole batch lands or none of it does, and either way it is one round trip.
-    @app.put("/labels", dependencies=[Depends(authenticated)])
+    @app.put("/tags", dependencies=[Depends(authenticated)])
     def replace_many(write: BookWrite):
         changes = [(address_key(change.address), scope_key(change.scope), change) for change in write.changes]
         seen = set()
@@ -226,7 +226,7 @@ def create_app(database: str | Path, token: str) -> FastAPI:
 
 
 def load_token(directory: Path) -> str:
-    configured = os.environ.get("OXLABEL_TOKEN")
+    configured = os.environ.get("OXTAGGER_TOKEN")
     if configured:
         return configured
     path = directory / "token.txt"
@@ -253,20 +253,20 @@ def main() -> None:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8712)
     parser.add_argument("--data-dir", type=Path,
-                        default=Path(os.environ.get("OXLABEL_DATA_DIR", Path.home() / ".local/share/0xlabel")))
+                        default=Path(os.environ.get("OXTAGGER_DATA_DIR", Path.home() / ".local/share/0xtagger")))
     parser.add_argument("--public-url", help="HTTPS base URL when hosted behind a reverse proxy")
     args = parser.parse_args()
     args.data_dir.mkdir(parents=True, exist_ok=True)
     if os.name != "nt":
         args.data_dir.chmod(0o700)
     token = load_token(args.data_dir)
-    app = create_app(args.data_dir / "labels.sqlite3", token)
+    app = create_app(args.data_dir / "tags.sqlite3", token)
     base = args.public_url or f"http://127.0.0.1:{args.port}"
     # One line to paste. The key rides in the fragment, which a browser never
     # sends to a server, so the link cannot carry it back out over the wire.
-    print("0xlabel is ready. Paste this link into the extension:", flush=True)
+    print("0xtagger is ready. Paste this link into the extension:", flush=True)
     print(connect_link(base, token), flush=True)
-    print(f"Keep it private. Book: {args.data_dir / 'labels.sqlite3'}", flush=True)
+    print(f"Keep it private. Book: {args.data_dir / 'tags.sqlite3'}", flush=True)
     uvicorn.run(app, host=args.host, port=args.port, access_log=False)
 
 

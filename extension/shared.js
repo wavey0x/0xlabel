@@ -1,9 +1,9 @@
-export const MAX_LABELS = 32;
-export const MAX_NAME_LENGTH = 80;
+export const MAX_TAGS = 32;
+export const MAX_TAG_LENGTH = 80;
 
-// Marks every element 0xlabel adds to a page. Nothing carrying it is website
+// Marks every element 0xtagger adds to a page. Nothing carrying it is website
 // content, so nothing carrying it is ever read as a wallet display.
-export const UI_ATTRIBUTE = 'data-0xlabel-ui';
+export const UI_ATTRIBUTE = 'data-0xtagger-ui';
 export const UI = `[${UI_ATTRIBUTE}]`;
 
 // Elements that are editable, interactive, or not a display surface. The
@@ -47,19 +47,19 @@ export function hostPermission(value) {
 
 export function normalizeScope(value) {
   if (value === 'global') return value;
-  if (typeof value !== 'string' || !/^eip155:[1-9][0-9]{0,19}$/.test(value)) throw new Error('Use a known network or global labels.');
+  if (typeof value !== 'string' || !/^eip155:[1-9][0-9]{0,19}$/.test(value)) throw new Error('Use a known network or global tags.');
   return value;
 }
 
-export function normalizeLabels(values) {
-  if (!Array.isArray(values) || values.length > MAX_LABELS) throw new Error(`Use at most ${MAX_LABELS} names.`);
+export function normalizeTags(values) {
+  if (!Array.isArray(values) || values.length > MAX_TAGS) throw new Error(`Use at most ${MAX_TAGS} tags.`);
   const seen = new Set();
   return values.map(value => {
-    if (typeof value !== 'string') throw new Error('Names must be plain text.');
+    if (typeof value !== 'string') throw new Error('Tags must be plain text.');
     const name = value.trim();
-    if (!name || name.length > MAX_NAME_LENGTH || /[\x00-\x1f\x7f]/.test(name)) throw new Error(`Names must contain 1–${MAX_NAME_LENGTH} characters.`);
+    if (!name || name.length > MAX_TAG_LENGTH || /[\x00-\x1f\x7f]/.test(name)) throw new Error(`Tags must contain 1–${MAX_TAG_LENGTH} characters.`);
     const key = name.toLocaleLowerCase();
-    if (seen.has(key)) throw new Error('Each name in a list must be distinct.');
+    if (seen.has(key)) throw new Error('Each tag in a list must be distinct.');
     seen.add(key);
     return name;
   });
@@ -69,9 +69,9 @@ export function validateRecord(value) {
   if (!value || typeof value !== 'object') throw new Error('The API returned an invalid record.');
   const address = parseAddress(value.address);
   if (!address || typeof value.version !== 'string' || !value.version || value.version.length > 128) throw new Error('The API returned an invalid record.');
-  const labels = normalizeLabels(value.labels);
-  if (!labels.length) throw new Error('An API record cannot have an empty name list.');
-  return { address, scope: normalizeScope(value.scope), labels, version: value.version };
+  const tags = normalizeTags(value.tags);
+  if (!tags.length) throw new Error('An API record cannot have an empty tag list.');
+  return { address, scope: normalizeScope(value.scope), tags, version: value.version };
 }
 
 export function recordKey(address, scope = 'global') {
@@ -79,7 +79,7 @@ export function recordKey(address, scope = 'global') {
 }
 
 export function validateSnapshot(value) {
-  if (!value || !Array.isArray(value.records)) throw new Error('This server did not return a valid 0xlabel book.');
+  if (!value || !Array.isArray(value.records)) throw new Error('This server did not return a valid 0xtagger book.');
   const seen = new Set();
   return value.records.map(item => {
     const entry = validateRecord(item);
@@ -90,9 +90,9 @@ export function validateSnapshot(value) {
   });
 }
 
-// Two label lists mean the same thing only in the same order: the first name
+// Two tag lists mean the same thing only in the same order: the first name
 // is the one a website shows.
-export function sameLabels(left, right) {
+export function sameTags(left, right) {
   return left.length === right.length && left.every((name, index) => name === right[index]);
 }
 
@@ -114,7 +114,7 @@ export function applyChange(state, message) {
 }
 
 // What it would take for `held` to say what `incoming` says: the records that
-// differ, and the ones that are gone, named with no labels because that is how
+// differ, and the ones that are gone, named with no tags because that is how
 // a removal is written everywhere else. An empty answer means a sync learned
 // nothing, which should then cost nothing downstream.
 export function difference(held, incoming) {
@@ -122,7 +122,7 @@ export function difference(held, incoming) {
   const after = new Map(incoming.map(record => [recordKey(record.address, record.scope), record]));
   const changes = [];
   for (const [key, record] of after) if (before.get(key)?.version !== record.version) changes.push(record);
-  for (const [key, record] of before) if (!after.has(key)) changes.push({ address: record.address, scope: record.scope, labels: [] });
+  for (const [key, record] of before) if (!after.has(key)) changes.push({ address: record.address, scope: record.scope, tags: [] });
   return changes;
 }
 

@@ -1,7 +1,7 @@
 import { editorStyles } from './editor.js';
 import { UI_ATTRIBUTE } from './shared.js';
 
-// Everything 0xlabel draws on a website, and where it sits. One UI root outside
+// Everything 0xtagger draws on a website, and where it sits. One UI root outside
 // website-owned component trees; shadow DOM isolates our styles from the site's.
 export async function createOverlay(doc, win) {
   const host = doc.createElement('div');
@@ -45,7 +45,7 @@ export async function createOverlay(doc, win) {
       const canvas = canvasDark ? { r: 18, g: 18, b: 18, a: 1 } : { r: 255, g: 255, b: 255, a: 1 };
       const backdrop = over(layer(doc.body), over(layer(doc.documentElement), canvas));
       const dark = backdrop.r * .2126 + backdrop.g * .7152 + backdrop.b * .0722 < 110;
-      doc.documentElement.setAttribute('data-0xlabel-surface', dark ? 'dark' : 'light');
+      doc.documentElement.setAttribute('data-0xtagger-surface', dark ? 'dark' : 'light');
       host.toggleAttribute('data-dark', dark);
       return dark ? 'dark' : 'light';
     },
@@ -88,7 +88,7 @@ export async function createOverlay(doc, win) {
     destroy() {
       host.remove();
       siteStyles.remove();
-      doc.documentElement.removeAttribute('data-0xlabel-surface');
+      doc.documentElement.removeAttribute('data-0xtagger-surface');
     },
   };
 }

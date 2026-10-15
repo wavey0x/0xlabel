@@ -13,7 +13,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--port', type=int, required=True)
 parser.add_argument('--tls', action='store_true')
 args = parser.parse_args()
-with tempfile.TemporaryDirectory(prefix='0xlabel-test-') as directory:
+with tempfile.TemporaryDirectory(prefix='0xtagger-test-') as directory:
     root = Path(directory)
     options = {}
     if args.tls:

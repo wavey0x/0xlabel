@@ -1,4 +1,4 @@
-import { findRecord, MAX_LABELS, MAX_NAME_LENGTH, normalizeLabels, sameLabels } from './shared.js';
+import { findRecord, MAX_TAGS, MAX_TAG_LENGTH, normalizeTags, sameTags } from './shared.js';
 import { checksumAddress } from './checksum.js';
 import { EDITOR_MARK, COPY_ICON, COPIED_ICON, confirmCopied } from './icons.js';
 
@@ -29,15 +29,15 @@ export function createEditor(container, { address, scope = 'global', state, save
   const reading = from => {
     const mine = findRecord(from.records, address, scope);
     const shown = mine || (scope !== 'global' && findRecord(from.records, address, 'global'));
-    return { labels: shown?.labels || [], version: mine?.version || null };
+    return { tags: shown?.tags || [], version: mine?.version || null };
   };
   let loaded = reading(state);
-  const draft = { labels: [...(loaded.labels.length ? loaded.labels : [''])], version: loaded.version };
+  const draft = { tags: [...(loaded.tags.length ? loaded.tags : [''])], version: loaded.version };
   // Compared as a save would store them, so a stray space is not an edit.
-  const edited = () => !sameLabels(draft.labels.map(name => name.trim()).filter(Boolean), loaded.labels);
+  const edited = () => !sameTags(draft.tags.map(name => name.trim()).filter(Boolean), loaded.tags);
   const adopt = next => {
     loaded = next;
-    draft.labels = [...(next.labels.length ? next.labels : [''])];
+    draft.tags = [...(next.tags.length ? next.tags : [''])];
     draft.version = next.version;
   };
   let phase = 'idle';
@@ -45,12 +45,12 @@ export function createEditor(container, { address, scope = 'global', state, save
   let activeState = state;
   let pageNotice = '';
 
-  const panel = element(modal ? 'dialog' : 'section', undefined, { class: 'editor', role: 'dialog', 'aria-label': 'Edit wallet labels' });
-  panel.innerHTML = `<header><strong class="brand" role="img" aria-label="0xlabel">${EDITOR_MARK}label</strong><span class="source"></span>${visibility ? '<div class="visibility-group"><span>Show tags</span><button type="button" class="switch visibility" role="switch" aria-label="Show my tags for this address" aria-checked="true"><span></span></button></div>' : '<button type="button" class="quiet close" aria-label="Close editor" title="Close">×</button>'}</header>
+  const panel = element(modal ? 'dialog' : 'section', undefined, { class: 'editor', role: 'dialog', 'aria-label': 'Edit wallet tags' });
+  panel.innerHTML = `<header><strong class="brand" role="img" aria-label="0xtagger">${EDITOR_MARK}tagger</strong><span class="source"></span>${visibility ? '<div class="visibility-group"><span>Show tags</span><button type="button" class="switch visibility" role="switch" aria-label="Show my tags for this address" aria-checked="true"><span></span></button></div>' : '<button type="button" class="quiet close" aria-label="Close editor" title="Close">×</button>'}</header>
     <div class="address-line"><code></code><button type="button" class="quiet copy" aria-label="Copy">${COPY_ICON}</button></div>
     <div class="rows"></div>
     <p class="preview"></p><p class="notice" role="status"></p><div class="conflict" hidden></div>
-    <footer><button type="button" class="quiet add" aria-label="Add label" title="Add label">+</button>${modal && own ? '<button type="button" class="quiet clear">Remove tags</button>' : ''}<button type="button" class="primary save">Save</button></footer>`;
+    <footer><button type="button" class="quiet add" aria-label="Add tag" title="Add tag">+</button>${modal && own ? '<button type="button" class="quiet clear">Remove tags</button>' : ''}<button type="button" class="primary save">Save</button></footer>`;
   container.replaceChildren(panel);
   if (modal) panel.showModal();
   const get = selector => panel.querySelector(selector);
@@ -64,7 +64,7 @@ export function createEditor(container, { address, scope = 'global', state, save
     const path = event.composedPath();
     const box = modal && panel.getBoundingClientRect();
     const inside = path.includes(panel) && (!modal || event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom);
-    if (event.button === 0 && !inside && !path.some(node => node.matches?.('[data-0xlabel-edit]'))) finish();
+    if (event.button === 0 && !inside && !path.some(node => node.matches?.('[data-0xtagger-edit]'))) finish();
   }
   // Dismiss before the browser focuses the clicked website control. The
   // composed path distinguishes panel content across its shadow boundary.
@@ -92,7 +92,7 @@ export function createEditor(container, { address, scope = 'global', state, save
   if (visibility) get('.visibility').onclick = () => { if (!closed) { toggleVisibility(); updateVisibility(); } };
   else get('.close').onclick = finish;
   if (modal) panel.addEventListener('cancel', event => { event.preventDefault(); finish(); });
-  if (get('.clear')) get('.clear').onclick = () => { draft.labels = []; renderRows(); };
+  if (get('.clear')) get('.clear').onclick = () => { draft.tags = []; renderRows(); };
   get('.copy').onclick = async () => {
     try {
       await navigator.clipboard.writeText(displayAddress);
@@ -101,10 +101,10 @@ export function createEditor(container, { address, scope = 'global', state, save
     catch { get('.notice').textContent = 'Select the full address above to copy it.'; queueMicrotask(onLayout); }
   };
   function preview() {
-    const names = draft.labels;
-    const fallback = scope !== 'global' ? findRecord(activeState.records, address, 'global')?.labels[0] : null;
+    const names = draft.tags;
+    const fallback = scope !== 'global' ? findRecord(activeState.records, address, 'global')?.tags[0] : null;
     get('.preview').hidden = names.length > 0;
-    get('.preview').textContent = fallback ? `Removing this override will show ${fallback}.` : 'Removing all names restores the original address display.';
+    get('.preview').textContent = fallback ? `Removing this override will show ${fallback}.` : 'Removing all tags restores the original address display.';
     queueMicrotask(onLayout);
   }
   function guard() {
@@ -133,26 +133,26 @@ export function createEditor(container, { address, scope = 'global', state, save
       row.querySelector('[aria-label^="Move down"]').disabled = busy || index === rows.length - 1;
       row.querySelector('[aria-label^="Remove"]').disabled = busy;
     });
-    get('.add').disabled = busy || rows.length >= MAX_LABELS;
-    if (get('.clear')) get('.clear').disabled = busy || !draft.labels.length;
+    get('.add').disabled = busy || rows.length >= MAX_TAGS;
+    if (get('.clear')) get('.clear').disabled = busy || !draft.tags.length;
   }
   function renderRows(focus = 0) {
     const rows = get('.rows');
     rows.replaceChildren();
-    draft.labels.forEach((name, index) => {
+    draft.tags.forEach((name, index) => {
       const row = element('div', undefined, { class: 'row' });
       // Search inputs are excluded by Bitwarden even when ignore hints are disabled.
-      // Keep the accessible role a textbox: this edits a label, not a search query.
-      const input = element('input', undefined, { type: 'search', role: 'textbox', name: `0xlabel-label-${index + 1}`, maxlength: MAX_NAME_LENGTH, 'aria-label': `Label ${index + 1}`, placeholder: 'Add a label', autocomplete: 'off', 'data-bwignore': 'true', spellcheck: 'false' });
+      // Keep the accessible role a textbox: this edits a tag, not a search query.
+      const input = element('input', undefined, { type: 'search', role: 'textbox', name: `0xtagger-tag-${index + 1}`, maxlength: MAX_TAG_LENGTH, 'aria-label': `Tag ${index + 1}`, placeholder: 'Add a tag', autocomplete: 'off', 'data-bwignore': 'true', spellcheck: 'false' });
       input.value = name;
       // Typing changes no panel geometry; avoid positioning/layout work per letter.
-      input.oninput = () => { draft.labels[index] = input.value; };
+      input.oninput = () => { draft.tags[index] = input.value; };
       const controls = element('div', undefined, { class: 'rank' });
-      if (index === 0 && draft.labels.length > 1) controls.append(element('small', 'Default', { class: 'default' }));
-      for (const [text, label, offset] of [['↑', 'Move up', -1], ['↓', 'Move down', 1], ['×', 'Remove name', 0]]) {
-        const button = element('button', text, { type: 'button', class: 'quiet', 'aria-label': `${label} ${index + 1}` });
+      if (index === 0 && draft.tags.length > 1) controls.append(element('small', 'Default', { class: 'default' }));
+      for (const [text, tag, offset] of [['↑', 'Move up', -1], ['↓', 'Move down', 1], ['×', 'Remove tag', 0]]) {
+        const button = element('button', text, { type: 'button', class: 'quiet', 'aria-label': `${tag} ${index + 1}` });
         button.onclick = () => {
-          const names = draft.labels;
+          const names = draft.tags;
           if (!offset) names.splice(index, 1);
           else [names[index], names[index + offset]] = [names[index + offset], names[index]];
           renderRows(Math.max(0, index + offset));
@@ -169,17 +169,17 @@ export function createEditor(container, { address, scope = 'global', state, save
     if (input) { input.focus(); input.select(); }
     else get('.add').focus();
   }
-  get('.add').onclick = () => { draft.labels.push(''); renderRows(draft.labels.length - 1); };
+  get('.add').onclick = () => { draft.tags.push(''); renderRows(draft.tags.length - 1); };
 
   async function submit() {
     if (closed || phase !== 'idle' || activeState.activeBook !== book) return;
-    let labels;
-    try { labels = normalizeLabels(draft.labels); }
+    let tags;
+    try { tags = normalizeTags(draft.tags); }
     catch (error) { get('.notice').textContent = error.message; queueMicrotask(onLayout); return; }
     phase = 'saving';
     guard();
     try {
-      await save({ book, address, scope, labels, version: draft.version });
+      await save({ book, address, scope, tags, version: draft.version });
       if (closed) return;
       phase = 'saved';
       guard();
@@ -187,7 +187,7 @@ export function createEditor(container, { address, scope = 'global', state, save
       // whether a save succeeded. Keep the button locked until it closes.
       const frames = matchMedia('(prefers-reduced-motion: reduce)').matches ? [{ opacity: 1 }, { opacity: 1 }] : [
         { transform: 'scale(1)', boxShadow: '0 0 0 0 transparent' },
-        { transform: 'scale(1.06)', boxShadow: '0 0 0 4px var(--0xlabel-accent-pulse)', offset: .35 },
+        { transform: 'scale(1.06)', boxShadow: '0 0 0 4px var(--0xtagger-accent-pulse)', offset: .35 },
         { transform: 'scale(1)', boxShadow: '0 0 0 0 transparent' },
       ];
       await get('.save').animate(frames, { duration: 300, easing: 'ease-out' }).finished.catch(() => {});
@@ -198,14 +198,14 @@ export function createEditor(container, { address, scope = 'global', state, save
       // A refusal only ever means the book now says something else. Show what
       // it says and offer the two answers, each of them one click.
       if (error.status === 409) {
-        const theirs = { labels: error.current?.labels || [], version: error.current?.version || null };
+        const theirs = { tags: error.current?.tags || [], version: error.current?.version || null };
         const box = get('.conflict');
         box.hidden = false;
         const take = element('button', 'Use these', { type: 'button', class: 'quiet' });
         take.onclick = () => { adopt(theirs); box.hidden = true; get('.notice').textContent = ''; renderRows(); };
         const keep = element('button', 'Keep mine', { type: 'button', class: 'quiet' });
         keep.onclick = () => { draft.version = theirs.version; box.hidden = true; get('.notice').textContent = ''; submit(); };
-        box.replaceChildren(element('p', theirs.labels.join(' · ') || 'No names'), take, keep);
+        box.replaceChildren(element('p', theirs.tags.join(' · ') || 'No tags'), take, keep);
       }
     } finally {
       phase = 'idle';
@@ -241,7 +241,7 @@ export function createEditor(container, { address, scope = 'global', state, save
       activeState = next;
       if (phase === 'idle' && !edited()) {
         const fresh = reading(next);
-        if (fresh.version !== loaded.version || !sameLabels(fresh.labels, loaded.labels)) {
+        if (fresh.version !== loaded.version || !sameTags(fresh.tags, loaded.tags)) {
           adopt(fresh);
           const inputs = [...panel.querySelectorAll('.row input')];
           const here = inputs.indexOf(panel.getRootNode().activeElement);

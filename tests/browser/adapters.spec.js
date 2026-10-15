@@ -46,22 +46,22 @@ for (const site of sites) {
       expect((await health(page)).network).toBe(site.network);
     });
 
-    test('labels a canonical display with the address it actually names', async ({ page }) => {
+    test('tags a canonical display with the address it actually names', async ({ page }) => {
       await open(page, site.canonical('subject'));
-      await expect(page.locator('#subject')).toHaveAttribute('data-0xlabel-address', address);
-      await expect(page.locator('#subject')).toHaveAttribute('data-0xlabel-label', 'Treasury');
+      await expect(page.locator('#subject')).toHaveAttribute('data-0xtagger-address', address);
+      await expect(page.locator('#subject')).toHaveAttribute('data-0xtagger-tag', 'Treasury');
     });
 
     test('never establishes identity from an abbreviation alone', async ({ page }) => {
       await open(page, site.fragment('subject'));
-      await expect(page.locator('#subject')).not.toHaveAttribute('data-0xlabel-address');
+      await expect(page.locator('#subject')).not.toHaveAttribute('data-0xtagger-address');
     });
 
     test('disqualifies contradictory evidence without costing the page its tags', async ({ page }) => {
       await open(page, site.conflict('subject') + site.canonical('sound'));
       expect(await health(page)).toMatchObject({ status: 'ready' });
-      await expect(page.locator('#subject')).not.toHaveAttribute('data-0xlabel-address');
-      await expect(page.locator('#sound')).toHaveAttribute('data-0xlabel-label', 'Treasury');
+      await expect(page.locator('#subject')).not.toHaveAttribute('data-0xtagger-address');
+      await expect(page.locator('#sound')).toHaveAttribute('data-0xtagger-tag', 'Treasury');
     });
 
     test('invalid links do not disable sound address annotations', async ({ page }) => {
@@ -69,19 +69,19 @@ for (const site of sites) {
       await open(page, `<a id="invalid" href="${href}">${address}</a>` + site.canonical('sound'));
       expect(await health(page)).toMatchObject({ status: 'ready' });
       for (const id of ['invalid', 'sound']) {
-        await expect(page.locator('#' + id)).toHaveAttribute('data-0xlabel-address', address);
-        await expect(page.locator('#' + id)).toHaveAttribute('data-0xlabel-label', 'Treasury');
+        await expect(page.locator('#' + id)).toHaveAttribute('data-0xtagger-address', address);
+        await expect(page.locator('#' + id)).toHaveAttribute('data-0xtagger-tag', 'Treasury');
       }
       await expect(page.locator('#invalid')).toHaveAttribute('href', href);
       await expect(page.locator('#invalid')).toHaveText(address);
     });
 
     // The controller's invalidation depends on this: it finds an affected
-    // ancestor with a single closest(), so a nested pair would strand a label.
+    // ancestor with a single closest(), so a nested pair would strand a tag.
     test('never annotates one element inside another, through re-rendering', async ({ page }) => {
       await open(page, site.nested('subject'));
       const survey = () => page.evaluate(() => {
-        const all = [...document.querySelectorAll('[data-0xlabel-address]')];
+        const all = [...document.querySelectorAll('[data-0xtagger-address]')];
         return { total: all.length, nested: all.filter(a => all.some(b => b !== a && b.contains(a))).length };
       });
       expect(await survey()).toEqual({ total: 1, nested: 0 });
@@ -93,14 +93,14 @@ for (const site of sites) {
     test('leaves editable and interactive content alone', async ({ page }) => {
       await open(page, `<input value="${address}"><button id="pressable">${address}</button>
         <div contenteditable="true">${address}</div><span aria-hidden="true">${address}</span>`);
-      await expect(page.locator('[data-0xlabel-address],[data-0xlabel-label]')).toHaveCount(0);
+      await expect(page.locator('[data-0xtagger-address],[data-0xtagger-tag]')).toHaveCount(0);
     });
 
     test('removes every trace of itself when stopped', async ({ page }) => {
       await open(page, site.canonical('subject'));
-      await expect(page.locator('#subject')).toHaveAttribute('data-0xlabel-label', 'Treasury');
+      await expect(page.locator('#subject')).toHaveAttribute('data-0xtagger-tag', 'Treasury');
       await page.evaluate(() => window.controller.stop());
-      await expect(page.locator('[data-0xlabel-address],[data-0xlabel-label],[data-0xlabel-ui]')).toHaveCount(0);
+      await expect(page.locator('[data-0xtagger-address],[data-0xtagger-tag],[data-0xtagger-ui]')).toHaveCount(0);
       await expect(page.locator('#subject')).toHaveText(address);
     });
   });
@@ -116,38 +116,38 @@ test.describe('Etherscan embedded transfers', () => {
     <td><span id="to" class="hash-tag" data-highlight-target="${address}">BuilderNet</span></td>
   </tr></tbody></table></div>`;
 
-  test('labels the headerless transfer table from canonical row identities and the explorer chain', async ({ page }) => {
+  test('tags the headerless transfer table from canonical row identities and the explorer chain', async ({ page }) => {
     await start(page, { site, html: table, framed: true, records: [record,
-      { ...record, scope: 'eip155:1', labels: ['Ethereum treasury'] },
-      { ...record, address: other, labels: ['Sender'] },
+      { ...record, scope: 'eip155:1', tags: ['Ethereum treasury'] },
+      { ...record, address: other, tags: ['Sender'] },
     ] });
     expect(await reported(page)).toMatchObject({ adapter: 'Etherscan', status: 'ready', network: 'eip155:1' });
-    await expect(page.locator('#from')).toHaveAttribute('data-0xlabel-label', 'Sender');
+    await expect(page.locator('#from')).toHaveAttribute('data-0xtagger-tag', 'Sender');
     await expect(page.locator('#from')).toHaveAttribute('href', `/address/${other}#tokentxns`);
     await expect(page.locator('#from')).toHaveAttribute('target', '_parent');
     await expect(page.locator('#from')).toHaveText('0xcdcd…cdcd');
-    await expect(page.locator('#to')).toHaveAttribute('data-0xlabel-address', address);
-    await expect(page.locator('#to')).toHaveAttribute('data-0xlabel-label', 'Ethereum treasury');
+    await expect(page.locator('#to')).toHaveAttribute('data-0xtagger-address', address);
+    await expect(page.locator('#to')).toHaveAttribute('data-0xtagger-tag', 'Ethereum treasury');
     await expect(page.locator('#to')).toHaveText('BuilderNet');
   });
 
   test('an embedded view still requires a table, and a page of its own still requires landmarks', async ({ page }) => {
     await start(page, { site, html: '<p>Unavailable</p>', framed: true });
     await expect.poll(() => health(page)).toMatchObject({ status: 'stale' });
-    await expect(page.locator('[data-0xlabel-address]')).toHaveCount(0);
+    await expect(page.locator('[data-0xtagger-address]')).toHaveCount(0);
     // The same table, in a document nothing embedded: an explorer page that has
     // lost its landmarks is an explorer we no longer read, not a frame.
     await start(page, { site: 'https://etherscan.io/accounts', html: table });
     await expect.poll(() => health(page)).toMatchObject({ status: 'stale' });
-    await expect(page.locator('[data-0xlabel-address]')).toHaveCount(0);
+    await expect(page.locator('[data-0xtagger-address]')).toHaveCount(0);
   });
 
-  test('a token page labels the table it embeds, whatever that frame is called', async ({ page }) => {
+  test('a token page tags the table it embeds, whatever that frame is called', async ({ page }) => {
     for (const frame of ['/token/generic-tokentxns2?a=' + address, '/address-tokenpage?a=' + address, '/whatever-they-rename-it-to']) {
       await start(page, { site: `https://etherscan.io${frame}`, html: table, framed: true,
-        records: [{ ...record, address: other, labels: ['Sender'] }] });
+        records: [{ ...record, address: other, tags: ['Sender'] }] });
       expect(await reported(page), frame).toMatchObject({ status: 'ready' });
-      await expect(page.locator('#from')).toHaveAttribute('data-0xlabel-label', 'Sender');
+      await expect(page.locator('#from')).toHaveAttribute('data-0xtagger-tag', 'Sender');
     }
   });
 });
@@ -162,11 +162,11 @@ test.describe('Generic address text', () => {
       document.querySelector('#split').append(document.createTextNode('${address.slice(0, 21)}'), document.createTextNode('${address.slice(21)}'));
       </script>` });
     for (const id of ['uppercase', 'prefix', 'split']) {
-      await expect(page.locator('#' + id)).toHaveAttribute('data-0xlabel-address', address);
-      await expect(page.locator('#' + id)).toHaveAttribute('data-0xlabel-label', 'Treasury');
+      await expect(page.locator('#' + id)).toHaveAttribute('data-0xtagger-address', address);
+      await expect(page.locator('#' + id)).toHaveAttribute('data-0xtagger-tag', 'Treasury');
     }
     for (const id of ['fragment', 'prose', 'long']) {
-      await expect(page.locator('#' + id)).not.toHaveAttribute('data-0xlabel-address');
+      await expect(page.locator('#' + id)).not.toHaveAttribute('data-0xtagger-address');
     }
     await expect(page.locator('#uppercase')).toHaveText(address.toUpperCase());
     await expect(page.locator('#prefix')).toHaveText(address.toUpperCase());
@@ -175,16 +175,16 @@ test.describe('Generic address text', () => {
 
   test('updates split address identity when the website replaces its text', async ({ page }) => {
     await start(page, { site: 'https://plain.example/wallets',
-      records: [record, { ...record, address: other, labels: ['Other wallet'] }],
+      records: [record, { ...record, address: other, tags: ['Other wallet'] }],
       html: `<main><span id="subject"></span></main><script>
       document.querySelector('#subject').append(document.createTextNode('0x'), document.createTextNode('${address.slice(2)}'));
       </script>`,
     });
     const subject = page.locator('#subject');
-    await expect(subject).toHaveAttribute('data-0xlabel-label', 'Treasury');
+    await expect(subject).toHaveAttribute('data-0xtagger-tag', 'Treasury');
     await subject.evaluate((element, other) => { element.lastChild.data = other.slice(2); }, other);
-    await expect(subject).toHaveAttribute('data-0xlabel-address', other);
-    await expect(subject).toHaveAttribute('data-0xlabel-label', 'Other wallet');
+    await expect(subject).toHaveAttribute('data-0xtagger-address', other);
+    await expect(subject).toHaveAttribute('data-0xtagger-tag', 'Other wallet');
     await expect(subject).toHaveText(other);
     expect(await health(page)).toMatchObject({ status: 'ready' });
   });

@@ -40,7 +40,7 @@ function render(next = state) {
 async function enable(enabled) {
   siteBusy = true; render();
   try {
-    if (!siteURL) throw new Error('Open a website to enable labeling.');
+    if (!siteURL) throw new Error('Open a website to enable tagging.');
     if (enabled && !await chrome.permissions.request({ origins: [hostPermission(siteURL.origin)] })) throw new Error('Website access was not granted.');
     sites = (await rpc({ type: 'Site', tabId: tab.id, enabled })).sites;
     $('#adapter-warning').hidden = true; tell('');
@@ -83,7 +83,7 @@ try {
   // conditional and rate limited, so opening the popup repeatedly costs little.
   rpc({ type: 'Sync' }).then(result => render({ ...state, syncedAt: result?.syncedAt ?? state.syncedAt })).catch(() => {});
   if (result.health?.status === 'stale' && sites[siteURL?.origin]) {
-    $('#adapter-warning p').textContent = `${result.health.adapter} labeling paused. Your book is safe.`;
+    $('#adapter-warning p').textContent = `${result.health.adapter} tagging paused. Your book is safe.`;
     $('#adapter-warning').hidden = false;
   }
 } catch (error) { tell(error); }

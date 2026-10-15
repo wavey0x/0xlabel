@@ -1,4 +1,4 @@
-import { sameLabels, validateRecord, validateSnapshot } from '../shared.js';
+import { sameTags, validateRecord, validateSnapshot } from '../shared.js';
 
 // A book kept by a server the person runs. This is only the transport: the
 // store above it owns the cached copy, so an unreachable server costs freshness
@@ -36,20 +36,20 @@ export function createServerBook({ url, token, fetch: fetcher = globalThis.fetch
     return { body, mark };
   }
 
-  function confirm(saved, { address, scope, labels }) {
+  function confirm(saved, { address, scope, tags }) {
     if ((saved && (saved.address !== address || saved.scope !== scope ||
-         !sameLabels(saved.labels, labels))) ||
-        (!saved && labels.length) || (saved && !labels.length)) {
+         !sameTags(saved.tags, tags))) ||
+        (!saved && tags.length) || (saved && !tags.length)) {
       throw new Error('That server confirmed a different record. Refresh before trying again.');
     }
     return saved;
   }
 
-  async function put({ address, scope, labels, version }) {
-    const { body } = await request(`/labels/${encodeURIComponent(scope)}/${address}`, {
-      method: 'PUT', body: JSON.stringify({ labels, version }),
+  async function put({ address, scope, tags, version }) {
+    const { body } = await request(`/tags/${encodeURIComponent(scope)}/${address}`, {
+      method: 'PUT', body: JSON.stringify({ tags, version }),
     });
-    return confirm(body.record === null ? null : validateRecord(body.record), { address, scope, labels });
+    return confirm(body.record === null ? null : validateRecord(body.record), { address, scope, tags });
   }
 
   return {
@@ -61,7 +61,7 @@ export function createServerBook({ url, token, fetch: fetcher = globalThis.fetch
     // the server answer "nothing changed" in a couple of hundred bytes, which
     // is the answer almost every sync gets.
     async load(mark) {
-      const answer = await request('/labels', { headers: mark ? { 'If-None-Match': mark } : {} });
+      const answer = await request('/tags', { headers: mark ? { 'If-None-Match': mark } : {} });
       if (answer.unchanged) return { records: null, mark: answer.mark || mark };
       return { records: validateSnapshot(answer.body), mark: answer.mark };
     },
@@ -72,7 +72,7 @@ export function createServerBook({ url, token, fetch: fetcher = globalThis.fetch
       const saved = [];
       for (let at = 0; at < wanted.length; at += BATCH) {
         const changes = wanted.slice(at, at + BATCH);
-        const { body } = await request('/labels', { method: 'PUT', body: JSON.stringify({ changes }) });
+        const { body } = await request('/tags', { method: 'PUT', body: JSON.stringify({ changes }) });
         if (!Array.isArray(body.records) || body.records.length !== changes.length) {
           throw new Error('That server confirmed a different number of records. Refresh before trying again.');
         }

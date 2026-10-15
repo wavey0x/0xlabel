@@ -1,4 +1,4 @@
-import { difference, findRecord, normalizeLabels, normalizeScope, parseAddress, recordKey, sameLabels, validateSnapshot } from './shared.js';
+import { difference, findRecord, normalizeTags, normalizeScope, parseAddress, recordKey, sameTags, validateSnapshot } from './shared.js';
 import { createRecords } from './records.js';
 import { createServerBook } from './stores/server.js';
 
@@ -7,7 +7,7 @@ const syncKey = id => `sync:${id}`;
 // How recently a book kept elsewhere has to have been asked about before asking
 // again is worth the round trip. Opening five tabs is not five syncs.
 const PULL_FLOOR = 60000;
-const erase = (address, scope) => ({ address, scope, labels: [] });
+const erase = (address, scope) => ({ address, scope, tags: [] });
 
 // Books are named things people switch between. Where a book is kept is a
 // property of that book, chosen once when it is made, so nothing below ever
@@ -15,7 +15,7 @@ const erase = (address, scope) => ({ address, scope, labels: [] });
 //
 // Every book's records are held here, in one place: for a book kept on this
 // device that is the book, and for one kept on a server it is the copy that
-// keeps labeling working when the server cannot be reached. A write goes to the
+// keeps tagging working when the server cannot be reached. A write goes to the
 // server first, if there is one, and then to the copy, which stores exactly
 // what the server confirmed.
 export function createStore({ storage, fetch: fetcher, notify = () => {}, now = Date.now,
@@ -112,7 +112,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
     const saved = await storage.get(['books', 'activeBook']);
     books = Array.isArray(saved.books) ? saved.books.filter(item => item?.id && item?.name && item?.storage?.kind) : [];
     if (!books.length) {
-      // Everyone starts with a book, so labeling works before anything is set up.
+      // Everyone starts with a book, so tagging works before anything is set up.
       books = [{ id: uuid(), name: 'default', storage: { kind: 'device' } }];
       active = books[0].id;
       await saveBooks();
@@ -190,7 +190,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
     if (!where || (where.kind !== 'device' && where.kind !== 'server')) throw new Error('Choose where to keep this book.');
     if (where.kind === 'server' && (!where.url || !where.token)) throw new Error('Paste the link your server printed.');
     return serial(async () => {
-      if (books.length >= 20) throw new Error('That is as many address books as 0xlabel keeps.');
+      if (books.length >= 20) throw new Error('That is as many address books as 0xtagger keeps.');
       if (where.kind === 'server' && books.some(other => other.storage.url === where.url)) {
         throw new Error('That server is already one of your address books.');
       }
@@ -207,7 +207,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
         if (!source) throw new Error('There is nothing to copy.');
         const from = source.id === active ? records : (await local.load(source.id)).records;
         // The receiving book issues its own versions, wherever it is kept.
-        const wanted = from.map(({ address, scope, labels }) => ({ address, scope, labels }));
+        const wanted = from.map(({ address, scope, tags }) => ({ address, scope, tags }));
         held = candidate ? await candidate.putMany(wanted.map(record => ({ ...record, version: null }))) : wanted;
       }
       if (held.length || !candidate) ({ records: held, revision } = await local.write(item.id, held));
@@ -247,7 +247,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
     return serial(async () => {
       const item = entry(id);
       if (!item) throw new Error('That address book is gone.');
-      if (books.length === 1) throw new Error('0xlabel keeps at least one address book.');
+      if (books.length === 1) throw new Error('0xtagger keeps at least one address book.');
       books = books.filter(other => other.id !== id);
       ({ revision } = await local.drop(id));
       await storage.remove([syncKey(id)]);
@@ -267,7 +267,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
       if (unreadable) throw new Error('This address book could not be read, so nothing was added to it.');
       const index = new Map(records.map(item => [recordKey(item.address, item.scope), item]));
       // The receiving book issues its own versions, so a file cannot carry one in.
-      const drafts = wanted.map(({ address, scope, labels }) => ({ address, scope, labels }));
+      const drafts = wanted.map(({ address, scope, tags }) => ({ address, scope, tags }));
       let saved;
       if (remote) {
         saved = await remote.putMany(drafts.map(draft => ({ ...draft,
@@ -291,7 +291,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
     const address = parseAddress(draft.address);
     if (!address) throw new Error('Use a full Ethereum address.');
     const scope = normalizeScope(draft.scope);
-    const labels = normalizeLabels(draft.labels);
+    const tags = normalizeTags(draft.tags);
     const version = draft.version;
     if (!(version === null || typeof version === 'string')) throw new Error('Refresh this record before saving.');
     const started = active;
@@ -315,7 +315,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
         if ((latest?.version || null) !== version) {
           // The book already holds what this draft asks for, so the interrupted
           // write landed. Nothing is in dispute; say so instead of asking.
-          if (sameLabels(latest?.labels || [], labels)) { changed(); return {}; }
+          if (sameTags(latest?.tags || [], tags)) { changed(); return {}; }
           const conflict = new Error('Saved elsewhere while you were editing.');
           conflict.current = latest;
           conflict.status = 409;
@@ -327,10 +327,10 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
       let saved;
       try {
         if (remote) {
-          saved = await remote.put({ address, scope, labels, version });
+          saved = await remote.put({ address, scope, tags, version });
           ({ revision } = await local.write(started, [saved || erase(address, scope)]));
         } else {
-          ({ record: saved, revision } = await local.save(started, { address, scope, labels, version }));
+          ({ record: saved, revision } = await local.save(started, { address, scope, tags, version }));
         }
       } catch (failure) {
         if (failure.status === 409) {
@@ -355,7 +355,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
           // Whoever got there first wrote the very names this draft carries, so
           // the book says what it was asked to say. A refused write that leaves
           // nothing to decide is a save, not a conflict.
-          if (told && sameLabels(current?.labels || [], labels)) return {};
+          if (told && sameTags(current?.tags || [], tags)) return {};
         } else if (failure.status && failure.status < 500) {
           needsRefresh = false;
           if (remote) await saveSync();
