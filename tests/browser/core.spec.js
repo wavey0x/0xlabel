@@ -397,6 +397,35 @@ test('explorer identities come from complete sources, including search suggestio
   await expect(page.locator('#table')).toHaveText('Preset name');
 });
 
+// Who first funded an address is a wallet like any other. Where the explorer
+// has a name for them it prints the name by itself, without the markers its
+// tables carry, so the link naming the address whole is the only evidence the
+// row gives — and it is enough, the same as it is for a fee recipient.
+test('a funder the explorer has a name for is still a wallet to tag', async ({ page }) => {
+  // Both shapes the row takes: a name on its own, and a shortened address.
+  const subject = '0x' + '11'.repeat(20);
+  await start(page, { site: `https://etherscan.io/address/${subject}`, records: [record],
+    html: `<header>Explorer</header><main>
+      <h1><span id="mainaddress" data-highlight-target="${subject}">${subject}</span></h1>
+      <h4>Funded By</h4>
+      <div id="conFundedMainChain"><a id="funder" class="d-flex" href="/address/${address}">
+        <span class="d-block text-truncate" data-bs-toggle="tooltip"
+          style="display:block;max-width:9.3rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+          >Michael Egorov 2</span></a>
+        <a id="funder-bare" class="d-flex" href="/address/${other}">
+        <span><span class="hash-tag text-truncate">${other.slice(0, 10)}…${other.slice(-8)}</span></span></a></div>
+    </main>` });
+  // The explorer's own name gives way to the one that was saved for it.
+  await expect(page.locator('#funder')).toHaveAttribute('data-0xtagger-address', address);
+  await expect(page.locator('#funder span.d-block')).toHaveAttribute('data-0xtagger-tag', 'Treasury');
+  // A shortened address names the wallet by itself, and the explorer marks it,
+  // so that half of the row was always read; it is the named half that was not.
+  await expect(page.locator('#funder-bare .hash-tag')).toHaveAttribute('data-0xtagger-address', other);
+  // And it opens on the wallet the row is about, not on the page's own.
+  await tagFor(page, 'funder').click();
+  await expect(shownAddress(page)).toHaveText(checksumAddress(address));
+});
+
 test("an address page keeps its own address beside the name it is given", async ({ page }) => {
   await start(page, { site: `https://etherscan.io/address/${address}`, html: `<header>Explorer</header><main>
     <h1>Contract <span id="mainaddress" data-highlight-target="${address}">${address}</span></h1>

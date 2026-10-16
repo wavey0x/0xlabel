@@ -23,6 +23,11 @@ const site = ({ rules, watch = [], ...adapter }) => ({
 });
 
 const SEARCH_ROW = '.search-panel-container li[role="option"] > a[href]';
+// The row saying who first funded an address. Where the explorer has a name for
+// them it prints that name alone, in a plain truncating span carrying none of
+// the markers its tables use, so the link is the only thing saying which wallet
+// the row is about — and it says it whole, in the href.
+const FUNDED_BY = '#conFundedMainChain a[href*="/address/"]';
 // The explorer writes the whole of a shortened display into a tooltip, which
 // its own script then takes over: the title is in the markup it serves and
 // gone from the page it runs. The marker it leaves behind is what both say.
@@ -97,7 +102,7 @@ const etherscanAdapter = site({
     attributes: ['data-full-address', 'data-highlight-target', 'data-address', 'title', 'aria-label'],
     identifies: ['data-full-address'],
     anchors: '#mainaddress,[data-highlight-target]',
-    named: `.hash-tag,[data-highlight-value],${SEARCH_ROW}`,
+    named: `.hash-tag,[data-highlight-value],${SEARCH_ROW},${FUNDED_BY}`,
     denied: 'nav',
     // An owners or holders menu is content, not navigation: its rows name real
     // wallets, under whatever the explorer already calls them.
