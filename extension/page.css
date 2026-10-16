@@ -3,21 +3,16 @@
 [data-0xtagger-tag] :not([data-0xtagger-ui]) {
   font-size: 0 !important;
 }
-/* A link or a code span that carries a name is given a box of its own, so the
-   glyph beside it and the row it sits on stay in step. A plain span is left as
-   it was found: it is the shape an explorer nests inside a cell that trims its
-   own overflow, and a box there is one the cell drops whole (see below). */
+/* A link or a code span gets a box, which keeps the glyph beside it on its row.
+   A plain span keeps the display it was found with: that is the shape explorers
+   nest inside a cell which trims its own overflow. */
 a[data-0xtagger-tag], code[data-0xtagger-tag] {
   display: inline-block;
 }
-/* The name itself is ordinary inline text, and that is the whole of why. Given
-   a box of its own — an inline-block with its own width to be cut to — it is
-   atomic, and a site that trims its own overflow cannot trim through one: it
-   drops the box whole and leaves its ellipsis standing alone where the name
-   was, which reads as the name having been taken away rather than shortened.
-   An explorer sets its address cells exactly that way. Flowing as text lets
-   the site cut the name off mid-word, which still reads, and leaves the
-   trimming to the side that knows how much room there is. */
+/* The name is plain inline text. A box of its own would be atomic, and a site
+   that trims its own overflow cannot trim through one: it drops the box whole
+   and leaves its ellipsis standing where the name was. As text the site cuts it
+   off mid-word instead, which still reads. */
 [data-0xtagger-tag]::before {
   content: attr(data-0xtagger-tag);
   /* Fixed units on purpose: rem would resolve against the website's own root
@@ -44,8 +39,8 @@ a[data-0xtagger-tag], code[data-0xtagger-tag] {
 /* A name stands in for the address, so it is set in the type the address was
    set in. Everywhere else that is already 14px; on a page's own heading it is
    not, and a caption-sized name beside a heading reads as an afterthought.
-   The address trailer belongs to the name, so the two never break apart — and
-   being plain text, the two sizes come to rest on one baseline by themselves. */
+   The address trailer belongs to the name, so the two never break apart; being
+   plain text, the two sizes come to one baseline by themselves. */
 [data-0xtagger-short] {
   white-space: nowrap;
 }
