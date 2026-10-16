@@ -22,8 +22,9 @@ const site = ({ rules, watch = [], ...adapter }) => ({
   scan: (root, { url }) => collect(root, url, rules),
 });
 
-// seen: etherscan.io/ — search an ENS name; the result's resolved address is
-//       in a sibling span beside its link — 2026-10-16.
+// seen: etherscan.io/ — search `vitalik.eth`; the last result links
+//       /address/vitalik.eth and its resolved address is in a sibling span
+//       beside the link — 2026-10-16.
 const SEARCH_ROW = '.search-panel-container li[role="option"] > a[href]';
 // The row saying who first funded an address. Where the explorer has a name for
 // them it prints that name alone, in a plain truncating span carrying none of
