@@ -284,7 +284,10 @@ def create_app(database: str | Path, token: str, *, tailscale_login: str | None 
         html = assets.joinpath('book.html').read_text().replace('book-extension.js', 'book-web.js')
         return HTMLResponse(html)
 
-    @app.get('/{asset:path}')
+    # The page above is refused without identity, so its own files are too.
+    # Anything else would let a caller with no business here confirm what is
+    # listening, which is the whole of what an unauthenticated reply tells them.
+    @app.get('/{asset:path}', dependencies=[Depends(authenticated)])
     def read_asset(asset: str):
         if asset not in WEB_ASSETS:
             raise HTTPException(404)

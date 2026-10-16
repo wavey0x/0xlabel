@@ -53,6 +53,13 @@ def test_hosted_ui_ships_its_assets_but_no_private_or_extension_files(tmp_path):
             assert client.get('/' + asset).status_code == 200, asset
         for path in ['tags.sqlite3', 'token.txt', 'server.py', 'manifest.json', 'background.js', 'book-extension.js', '../server.py']:
             assert client.get('/' + path).status_code == 404, path
+    # The checks above carry the key, which is how an unauthenticated asset
+    # went unnoticed: a caller with none could read every file the page needs
+    # and learn from the reply what was listening.
+    with TestClient(create_app(tmp_path / 'closed.sqlite3', TOKEN)) as nobody:
+        assert nobody.get('/').status_code == 401
+        for asset in WEB_ASSETS:
+            assert nobody.get('/' + asset).status_code == 401, asset
 
 
 def test_proxy_mode_requires_a_loopback_bind_and_explicit_browser_url(tmp_path, monkeypatch):
