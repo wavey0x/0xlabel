@@ -19,8 +19,8 @@ a[data-0xtagger-tag], span[data-0xtagger-tag], code[data-0xtagger-tag] {
   text-overflow: ellipsis;
   white-space: nowrap;
   /* Its overflow makes this inline-block's baseline its bottom margin edge, so
-     baseline alignment would hang it off the line. Align the boxes instead and
-     give the trailer below the same line box, which keeps the two in step. */
+     baseline alignment would hang it off the line. Align the boxes instead;
+     where a trailer follows, the rule below brings the two to one baseline. */
   vertical-align: bottom;
   color: var(--0xtagger-accent);
   pointer-events: none;
@@ -48,6 +48,14 @@ a[data-0xtagger-tag], span[data-0xtagger-tag], code[data-0xtagger-tag] {
 [data-0xtagger-short]::before {
   font-size: var(--0xtagger-size, 14px);
 }
+/* Two sizes of type on one line. Trimming each box to its own alphabetic edge
+   makes the bottom of the box the baseline, so boxes aligned at the bottom come
+   to rest on one baseline whatever size each is set in. The padding gives back
+   the descender room the trim took, the same amount to each, so it cannot tilt
+   them again — and the name clips to it, as it did to the line box before. */
+[data-0xtagger-short]::before,
 [data-0xtagger-short]::after {
-  line-height: calc(1.5 * var(--0xtagger-size, 14px));
+  text-box-trim: trim-end;
+  text-box-edge: text alphabetic;
+  padding-bottom: calc(var(--0xtagger-size, 14px) / 4);
 }
