@@ -32,6 +32,10 @@ const FUNDED_BY = '#conFundedMainChain a[href*="/address/"]';
 // its own script then takes over: the title is in the markup it serves and
 // gone from the page it runs. The marker it leaves behind is what both say.
 const TIP = '[data-bs-toggle="tooltip"],[title]';
+// A contract's reader is a frame of its own as well: an accordion of functions
+// in place of rows. A function that answers with an address renders it as the
+// same link the tables use, so nothing but the frame needs recognizing.
+const CONTRACT_READER = '.js-read-contract-function';
 
 // A name cut short to fit is not a name: whatever stands in the field is what
 // Save would store. The whole of it is written in a tooltip, and the explorer's
@@ -68,9 +72,10 @@ const etherscanAdapter = site({
   },
   matches: url => Boolean(explorerNetwork(url.hostname)),
   watch: ['data-highlight-value'],
-  // The heading of an address page is what the page is about. A name alone
-  // would take away the one thing identifying everything below it.
-  subject: '#mainaddress',
+  // The heading of an address page is what the page is about, and so is each
+  // address a view function answers with. A name alone would take away the one
+  // thing identifying everything below it, or the value that was asked for.
+  subject: `#mainaddress,${CONTRACT_READER} a[href*="/address/"]`,
   // Address badges lose their decoration only while a custom tag is visible.
   styles: `.badge:is([data-0xtagger-tag], :has([data-0xtagger-tag])) {
       background: transparent !important;
@@ -83,14 +88,15 @@ const etherscanAdapter = site({
     if (document.querySelector('#challenge-running,#challenge-stage,[name="cf-turnstile-response"]') || /^(Just a moment|Attention Required)/i.test(document.title)) return { status: 'waiting' };
     if (document.readyState === 'loading') return { status: 'waiting' };
     const landmarks = document.querySelector('main') && document.querySelector('header,nav');
-    // An explorer embeds its tables as documents of their own: a frame holding
-    // rows and none of the outer page's landmarks. Which URL those frames load
-    // from is the explorer's business and changes with its pages; that they are
-    // framed tables does not. Their rows carry the same identities.
+    // An explorer embeds its tables and its contract reader as documents of
+    // their own: a frame holding rows or functions, and none of the outer
+    // page's landmarks. Which URL those frames load from is the explorer's
+    // business and changes with its pages; what they hold does not, and what
+    // they hold carries the same identities the page does.
     if (embedded && !landmarks) {
-      return document.querySelector('.table-responsive table tbody')
+      return document.querySelector(`.table-responsive table tbody,${CONTRACT_READER}`)
         ? { status: 'ready', network: scopeOf(explorerNetwork(url.hostname)) }
-        : { status: 'stale', reason: 'transfer-table-missing' };
+        : { status: 'stale', reason: 'embedded-view-unrecognized' };
     }
     if (!landmarks) return { status: 'stale', reason: 'explorer-landmarks-missing' };
     if (/^\/address\//.test(url.pathname) && !document.querySelector('#mainaddress')) return { status: 'stale', reason: 'main-address-missing' };

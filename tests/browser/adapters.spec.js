@@ -152,6 +152,46 @@ test.describe('Etherscan embedded transfers', () => {
   });
 });
 
+// The contract reader is a frame of its own as well. A view function that
+// answers with an address renders it as the link the tables use, filled in by
+// the explorer's own script once the function has been queried.
+test.describe('Etherscan embedded contract reader', () => {
+  const site = `https://etherscan.io/readContract?m=light&a=${other}&n=mainnet&v=${other}`;
+  const fn = (id, href, text) => `<div class="accordion mb-2"><div class="accordion-item">
+    <div class="js-read-contract-function accordion-collapse collapse show">
+      <div class="accordion-body bg-light border-top small rounded-bottom-2">
+        <div class="row gx-1"></div><a id="${id}" class="me-1" href="${href}" target="_parent">${text}</a>
+        <span class="badge">address</span></div></div></div></div>`;
+  // An answer, and a function nobody has queried yet.
+  const reader = fn('answer', `/address/${address}`, address) + fn('pending', '/address/', '');
+
+  test('names the address a view function answers with, and keeps the answer in view', async ({ page }) => {
+    await start(page, { site, html: reader, framed: true });
+    expect(await reported(page)).toMatchObject({ adapter: 'Etherscan', status: 'ready', network: 'eip155:1' });
+    await expect(page.locator('#answer')).toHaveAttribute('data-0xtagger-tag', 'Treasury');
+    await expect(page.locator('#answer')).toHaveAttribute('data-0xtagger-short', '0xABaB…ABaB');
+    // The explorer's own link is left to work as it did: the frame navigates
+    // the page around it, not itself.
+    await expect(page.locator('#answer')).toHaveAttribute('href', `/address/${address}`);
+    await expect(page.locator('#answer')).toHaveAttribute('target', '_parent');
+    await expect(page.locator('#answer')).toHaveText(address);
+    // An empty answer names no wallet.
+    await expect(page.locator('#pending')).not.toHaveAttribute('data-0xtagger-address', /./);
+  });
+
+  test('names an answer that arrives after the frame was read', async ({ page }) => {
+    await start(page, { site, html: reader, framed: true });
+    await expect(page.locator('#pending')).not.toHaveAttribute('data-0xtagger-address', /./);
+    await page.evaluate(wallet => {
+      const link = document.querySelector('#pending');
+      link.setAttribute('href', `/address/${wallet}`);
+      link.textContent = wallet;
+    }, address);
+    await expect(page.locator('#pending')).toHaveAttribute('data-0xtagger-tag', 'Treasury');
+    await expect(page.locator('#pending')).toHaveAttribute('data-0xtagger-short', '0xABaB…ABaB');
+  });
+});
+
 test.describe('Generic address text', () => {
   test('recognizes whole addresses regardless of casing or adjacent text boundaries', async ({ page }) => {
     await start(page, { site: 'https://plain.example/wallets', html: `<main>

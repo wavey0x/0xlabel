@@ -162,7 +162,7 @@ export async function createPageController({
         ? abbreviate(checksumAddress(target.address)) : null;
       // A name stands in for the address, so it is set in the type the address
       // was set in. Read before the attribute below hides the evidence behind
-      // our own font-size: 0, and only once: one element a page wears it.
+      // our own font-size: 0, and once per element for the same reason.
       if (trailer && !shown.style.getPropertyValue('--0xtagger-size')) {
         shown.style.setProperty('--0xtagger-size', win.getComputedStyle(shown).fontSize);
       }
