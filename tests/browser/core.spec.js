@@ -763,3 +763,34 @@ test('a saved name is never labelled with where the record came from', async ({ 
   await expect(page.getByRole('dialog').locator('.row .from')).toHaveCount(0);
   await expect(page.getByRole('dialog')).not.toContainText('from Safe');
 });
+
+// The panel 0xtagger draws lives in the page's own DOM, so a website's scripts
+// can reach its controls. Nothing they press may write to the book: Save has
+// always answered only to a real press, and the conflict panel's own write
+// answers to the same rule.
+test('a website script cannot settle a conflict on the book', async ({ page }) => {
+  await start(page);
+  await edit(page).click();
+  await input(page).fill('My edit');
+  await page.evaluate(({ record }) => { window.saveError = 'Conflict'; window.conflict = { ...record, tags: ['Newer name'], version: 'newer' }; }, { record });
+  await save(page).click();
+  await expect(page.locator('.conflict')).toBeVisible();
+  const asked = await page.evaluate(() => window.saves.length);
+  // What a script on the page can do: find our panel and press the answer that
+  // writes, which would settle the conflict for the draft without being asked.
+  const pressed = await page.evaluate(() => {
+    for (const node of document.querySelectorAll('[data-0xtagger-ui]')) {
+      for (const button of node.shadowRoot?.querySelectorAll('.conflict button') || []) {
+        if (button.textContent === 'Keep mine') { button.click(); return true; }
+      }
+    }
+    return false;
+  });
+  expect(pressed).toBe(true);
+  // Nothing was sent, and the draft is still the one that was typed.
+  expect(await page.evaluate(() => window.saves.length)).toBe(asked);
+  await expect(input(page)).toHaveValue('My edit');
+  // The same press, made by a person, still answers the conflict.
+  await page.getByRole('button', { name: 'Keep mine' }).click();
+  expect(await page.evaluate(() => window.saves.at(-1))).toMatchObject({ tags: ['My edit', 'Operations'], version: 'newer' });
+});

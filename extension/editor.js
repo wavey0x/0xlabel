@@ -287,7 +287,11 @@ export function createEditor(container, { address, scope = 'global', state, save
         const take = element('button', 'Use these', { type: 'button', class: 'quiet' });
         take.onclick = () => { adopt(theirs); box.hidden = true; get('.notice').textContent = ''; renderRows(); };
         const keep = element('button', 'Keep mine', { type: 'button', class: 'quiet' });
-        keep.onclick = () => { draft.version = theirs.version; box.hidden = true; get('.notice').textContent = ''; submit(); };
+        // The other button beside it only changes what the field shows, as every
+        // other control in this panel does. This one writes, so it answers to the
+        // same rule as Save: a website script sharing this page must not be able
+        // to settle a conflict in favour of a draft nobody confirmed.
+        keep.onclick = event => { if (!event.isTrusted) return; draft.version = theirs.version; box.hidden = true; get('.notice').textContent = ''; submit(); };
         box.replaceChildren(element('p', theirs.tags.join(' · ') || 'No tags'), take, keep);
       }
     } finally {
