@@ -56,3 +56,28 @@ test('tagging a creator leaves the site icon on its row', async ({ page }) => {
   expect((await ink(page, clip, true)).bottom).toBe(original.bottom);
 });
 
+// Modelled on the inner-span To cell at
+// etherscan.io/address/0x425d16B0e08a28A3Ff9e4404AE99D78C0a076C5A
+// (2026-10-16). A tag on the plain link misses this bug.
+for (const name of ['Convex Governance Multisig', 'Ops']) {
+  test(`a ${name === 'Ops' ? 'short' : 'long'} tag remains painted in a trimmed cell`, async ({ page }) => {
+    await start(page, { records: [], html: `<style>body{background:#fff}main{margin:80px}</style>
+      <header>Explorer</header><main><div style="width:600px">
+        <a id="cell" class="hash-tag" href="/address/${address}"
+          style="display:block;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+          ><img src="${icon}" width="14" height="14" style="margin-right:4px"><span
+          id="name" class="hash-tag">Curve: CRV Token</span></a></div></main>` });
+    await tag(page, name);
+    await expect(page.locator('#name')).toHaveAttribute('data-0xtagger-tag', name);
+    const cell = page.locator('#cell');
+    const narrowBox = await cell.boundingBox();
+    const narrow = await ink(page, { x: narrowBox.x, y: narrowBox.y - 2,
+      width: narrowBox.width, height: narrowBox.height + 4 });
+    await cell.evaluate(element => { element.style.maxWidth = '600px'; });
+    const wideBox = await cell.boundingBox();
+    const wide = await ink(page, { x: wideBox.x, y: wideBox.y - 2,
+      width: wideBox.width, height: wideBox.height + 4 });
+    expect(wide.width).toBeGreaterThan(0);
+    expect(narrow.width / Math.min(wide.width, narrowBox.width)).toBeGreaterThanOrEqual(0.9);
+  });
+}
