@@ -32,7 +32,9 @@ test('render the README example with the shipped extension and sample data', asy
   const from = await page.locator('th').nth(2).boundingBox();
   const to = await page.locator('th').nth(3).boundingBox();
   const fourthRow = await page.locator('tbody tr').nth(3).boundingBox();
-  await page.screenshot({ path: 'docs/images/editor.png',
+  // Settled, or the shot catches the dialog on its way in: the toggle half
+  // thrown and Save still fading up. Two runs disagreed before this.
+  await page.screenshot({ path: 'docs/images/editor.png', animations: 'disabled',
     clip: { x: from.x, y: from.y, width: to.x + to.width - from.x, height: fourthRow.y + fourthRow.height - from.y } });
   expect(errors).toEqual([]);
 });
@@ -70,6 +72,6 @@ test('capture the address heading, creator row, and narrow To cell for visual re
     await start(page, { records: [{ ...record, tags: [frame.tag] }], html: `${style}<header>Explorer</header><main>${frame.html}</main>` });
     await expect(page.locator('[data-0xtagger-tag]')).toHaveCount(1);
     await page.evaluate(() => document.fonts.ready);
-    await page.locator('.frame').screenshot({ path: `docs/images/${frame.name}.png` });
+    await page.locator('.frame').screenshot({ path: `docs/images/${frame.name}.png`, animations: 'disabled' });
   }
 });
