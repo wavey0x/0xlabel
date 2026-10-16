@@ -15,6 +15,9 @@ import { addressLink, addressText, collect } from './detect.js';
 // no core file needs to know it exists.
 const site = ({ rules, watch = [], ...adapter }) => ({
   ...adapter,
+  // The controller checks this before it paints, so it travels with the
+  // adapter as well as with its rules.
+  allowed: rules.allowed,
   watch: [...new Set([...(rules.attributes || []), ...(rules.identifies || []), ...watch])],
   scan: (root, { url }) => collect(root, url, rules),
 });
@@ -114,6 +117,12 @@ const SAFE_NAME_BOX = `${SAFE_NAME} > :first-child`;
 // The address lives beside the name in the same widget, and an explorer link
 // beside it is what proves which wallet the pair is about.
 const SAFE_ADDRESS_LINK = 'a[href*="/address/"]';
+// In the audit log the line naming a signer is itself the control that copies
+// them, so the only display of who signed sits inside something interactive.
+// It names itself by the address it copies — the whole address, and the only
+// evidence on the row, because the text beside it is an abbreviation.
+const SAFE_COPIES = '[role="button"][aria-label*="0x"]';
+const WHOLE_ADDRESS = /0x[0-9a-fA-F]{40}/;
 const safePair = element => element.closest(`${SAFE_NAME},[class*="addressContainer"]`)?.parentElement || null;
 
 const safeAdapter = site({
@@ -169,11 +178,13 @@ const safeAdapter = site({
       display: none !important;
     }`,
   rules: {
-    targets: `a[href*="/address/"],[data-address],[title],[class*="addressContainer"] span,main span,${SAFE_NAME_BOX},${SAFE_SELECTOR}`,
+    targets: `a[href*="/address/"],[data-address],[title],[class*="addressContainer"] span,main span,${SAFE_NAME_BOX},${SAFE_SELECTOR},${SAFE_COPIES} [class*="actorText"]`,
     attributes: ['data-address', 'title', 'aria-label'],
     identifies: ['data-address'],
-    // A name may stand in for the address only in the box Safe set it in.
-    named: SAFE_NAME_BOX,
+    // A name may stand in for the address only in the box Safe set it in, or
+    // on the audit log line that is about one signer and nothing else.
+    named: `${SAFE_NAME_BOX},${SAFE_COPIES} [class*="actorText"]`,
+    allowed: SAFE_COPIES,
     skip: element => {
       if (element.matches(SAFE_NAME_BOX)) return false;
       if (element.children.length && !element.matches(`${SAFE_ADDRESS_LINK},${SAFE_SELECTOR}`)) return true;
@@ -188,6 +199,9 @@ const safeAdapter = site({
     sources: (element, url) => {
       const widget = element.matches(SAFE_NAME_BOX) ? safePair(element) : element.closest(SAFE_WIDGET);
       const found = widget ? query(widget, SAFE_ADDRESS_LINK).map(link => addressLink(link, url)?.address) : [];
+      // A control that names itself by the address it copies says it whole.
+      const copies = element.closest(SAFE_COPIES)?.getAttribute('aria-label')?.match(WHOLE_ADDRESS);
+      if (copies) found.push(parseAddress(copies[0]));
       if (!element.matches(SAFE_SELECTOR)) return found;
       found.push(parseAddress(url.searchParams.get('safe')?.split(':')[1]));
       const header = element.closest('header');

@@ -175,7 +175,9 @@ export async function createPageController({
   function validate(item) {
     const element = item.element;
     const address = parseAddress(item.address);
-    if (!address || !(element instanceof win.HTMLElement) || !element.isConnected || element.closest(UNSAFE_HOST) ||
+    const host = element.closest(UNSAFE_HOST);
+    if (!address || !(element instanceof win.HTMLElement) || !element.isConnected ||
+        (host && !(adapter.allowed && host.matches(adapter.allowed))) ||
         element.querySelector('input,textarea,select,button,a[href],[role="button"],[contenteditable]:not([contenteditable="false"])')) return null;
     const style = win.getComputedStyle(element);
     if (style.display === 'none' || style.visibility === 'hidden' || !element.getClientRects().length) return null;

@@ -62,9 +62,17 @@ export function addressLink(element, url) {
 //   denied      selector that withholds a name display however good the evidence
 //   keeps       selector for displays whose own name stands: a wallet to know,
 //               never a name to replace
+//   allowed     selector for an interactive host that is nonetheless a display
+//               of one wallet, and nothing else: a control whose whole job is
+//               to present an address. Nothing but a site's own adapter can
+//               say that of a site, so nothing but an adapter may say it.
 //   sources     addresses the adapter resolved for this element by other means
-export function identify(element, url, { attributes = [], identifies = [], anchors, named, denied, keeps, sources = [] } = {}) {
-  if (element.closest(UNSAFE_HOST)) return null;
+export function identify(element, url, { attributes = [], identifies = [], anchors, named, denied, keeps, allowed, sources = [] } = {}) {
+  // The nearest interactive host, and it has to be the allowed one itself:
+  // sitting inside something an adapter vouched for says nothing about the
+  // editable field in between.
+  const host = element.closest(UNSAFE_HOST);
+  if (host && !(allowed && host.matches(allowed))) return null;
   const shown = element.textContent.trim().toLowerCase().replace(/\s/g, '');
   const fullShown = parseAddress(shown);
   const link = addressLink(element, url);

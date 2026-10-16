@@ -306,6 +306,34 @@ test.describe('Safe address widget', () => {
     await expect(page.locator('#badge')).toBeHidden();
   });
 
+  // In the audit log the line naming a signer is the control that copies them,
+  // so the only display of who signed sits inside something interactive. It
+  // names itself by the whole address; the text beside it is an abbreviation,
+  // which on its own proves nothing.
+  test('names a signer on an audit line that is a copy control', async ({ page }) => {
+    const row = at => `<div class="AuditLog_auditRow__h">
+      <p class="AuditLog_label__h">Signed (1/3)</p>
+      <div class="AuditLog_actorRow__h">
+        <div id="actor" role="button" tabindex="0" aria-label="Copy address ${at}">
+          <p class="AuditLog_actorText__h">By 0xabab…abab</p>
+        </div>
+      </div></div>`;
+    await open(page, row(address));
+    const text = page.locator('#actor p');
+    await expect(text).toHaveAttribute('data-0xtagger-address', address);
+    await expect(text).toHaveAttribute('data-0xtagger-tag', 'Treasury');
+    // The control keeps the name it copies by, and what it copies.
+    await expect(page.locator('#actor')).toHaveAttribute('aria-label', `Copy address ${address}`);
+    await expect(text).toHaveText('By 0xabab…abab');
+
+    // Interactive is still interactive: only a control an adapter vouched for
+    // is read, and only where it says which wallet it is about.
+    await open(page, row(address).replace(`aria-label="Copy address ${address}"`, 'aria-label="Copy"'));
+    await expect(page.locator('[data-0xtagger-address]')).toHaveCount(0);
+    await open(page, `<div role="button" aria-label="Copy address ${address}"><input id="field" value="x"></div>`);
+    await expect(page.locator('[data-0xtagger-address]')).toHaveCount(0);
+  });
+
   // A widget Safe renders without a name is still an address to tag.
   test('a widget with no name tags its address', async ({ page }) => {
     await open(page, widget({ name: '' }));
