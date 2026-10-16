@@ -334,6 +334,17 @@ test.describe('Safe address widget', () => {
     await expect(page.locator('[data-0xtagger-address]')).toHaveCount(0);
   });
 
+  // A control says what it copies, and not everything copied is an address: a
+  // transaction hash begins the same way and runs longer, so reading the first
+  // forty characters of one would name a wallet nobody mentioned — and an
+  // abbreviation that then disagreed with it would pause the whole page.
+  test('a control that copies a transaction hash names nobody', async ({ page }) => {
+    const hash = '0xdead' + 'ab'.repeat(29) + 'beef';
+    await open(page, `<div role="button" aria-label="Copy transaction hash ${hash}"><span id="hash">0xdead…beef</span></div>`);
+    await expect(page.locator('[data-0xtagger-address]')).toHaveCount(0);
+    expect(await page.evaluate(() => window.controller.health.status)).toBe('ready');
+  });
+
   // A widget Safe renders without a name is still an address to tag.
   test('a widget with no name tags its address', async ({ page }) => {
     await open(page, widget({ name: '' }));

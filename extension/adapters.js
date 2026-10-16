@@ -130,7 +130,9 @@ const SAFE_ADDRESS_LINK = 'a[href*="/address/"]';
 // It names itself by the address it copies — the whole address, and the only
 // evidence on the row, because the text beside it is an abbreviation.
 const SAFE_COPIES = '[role="button"][aria-label*="0x"]';
-const WHOLE_ADDRESS = /0x[0-9a-fA-F]{40}/;
+// Exactly forty characters and no more: a transaction hash starts the same way
+// and runs longer, and its first forty would name a wallet nobody mentioned.
+const WHOLE_ADDRESS = /0x[0-9a-fA-F]{40}(?![0-9a-fA-F])/;
 const safePair = element => element.closest(`${SAFE_NAME},[class*="addressContainer"]`)?.parentElement || null;
 
 const safeAdapter = site({

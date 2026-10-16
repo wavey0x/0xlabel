@@ -33,7 +33,11 @@ try {
     watchBook: (_held, render) => { announce = render; },
   });
 } catch (error) {
-  unavailable = true;
+  // Recovery is for a server that was not there. Anything else that stops this
+  // page opening would still be stopping it after a reload, so a page that
+  // failed for its own reasons waits for the button rather than reloading
+  // itself every minute for as long as the tab is open.
+  unavailable = Boolean(store.state().error);
   // A refused or unreachable server is not an empty address book.
   const main = document.querySelector('main');
   const message = document.querySelector('#message');
