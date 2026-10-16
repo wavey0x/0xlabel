@@ -421,9 +421,35 @@ test('a funder the explorer has a name for is still a wallet to tag', async ({ p
   // A shortened address names the wallet by itself, and the explorer marks it,
   // so that half of the row was always read; it is the named half that was not.
   await expect(page.locator('#funder-bare .hash-tag')).toHaveAttribute('data-0xtagger-address', other);
+  // Our button is never left inside the link: one thing that answers a press
+  // inside another is a shape no page should be given, and a press meant for
+  // the glyph would be a press on the link.
+  await expect(page.locator('#funder [data-0xtagger-edit]')).toHaveCount(0);
+  await expect(page.locator('#funder + [data-0xtagger-edit]')).toHaveCount(1);
   // And it opens on the wallet the row is about, not on the page's own.
   await tagFor(page, 'funder').click();
   await expect(shownAddress(page)).toHaveText(checksumAddress(address));
+});
+
+// An explorer sets an icon of its own beside the name in a row. Standing in
+// for the whole row would hide that icon along with the name it replaces, so
+// the name is painted on the text and the icon is left as the site drew it.
+test('a name beside a site\'s own icon leaves the icon alone', async ({ page }) => {
+  const subject = '0x' + '22'.repeat(20);
+  await start(page, { site: `https://etherscan.io/address/${subject}`, records: [record],
+    html: `<header>Explorer</header><main>
+      <h1><span id="mainaddress" data-highlight-target="${subject}">${subject}</span></h1>
+      <table><tbody><tr><td><div style="display:flex;align-items:center;gap:4px">
+        <a id="cell" class="hash-tag" href="/address/${address}"
+          style="display:block;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+          ><i id="icon" style="display:inline-block;width:14px;height:12px"></i><span
+          id="name" class="ms-1">Curve: CRV Token</span></a></div></td></tr></tbody></table>
+    </main>` });
+  await expect(page.locator('#name')).toHaveAttribute('data-0xtagger-tag', 'Treasury');
+  // The row is still the site's: its icon keeps the type it was drawn in.
+  expect(await page.locator('#icon').evaluate(element =>
+    getComputedStyle(element).fontSize)).not.toBe('0px');
+  await expect(page.locator('#cell [data-0xtagger-edit]')).toHaveCount(0);
 });
 
 test("an address page keeps its own address beside the name it is given", async ({ page }) => {

@@ -47,8 +47,10 @@ const whole = element => (/[.…]$/.test(element.textContent.trim()) ? null : el
 // each under a tooltip of its own. A token the explorer has no name for leads
 // with its symbol, which is short enough to be shown whole.
 const tokenName = element => {
-  const named = element.matches('a[href*="/token/"]')
-    ? query(element, TIP).find(node => node !== element && node.textContent.trim()) : null;
+  // Read from the row rather than from whatever part of it was annotated: the
+  // name may be painted on the text beside the token's own logo.
+  const row = element.closest('a[href*="/token/"]');
+  const named = row ? query(row, TIP).find(node => node !== row && node.textContent.trim()) : null;
   return named ? whole(named) : null;
 };
 // A block's fee recipient is named by the link itself, with no name tag in it

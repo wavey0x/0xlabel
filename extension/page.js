@@ -10,6 +10,8 @@ const ADDRESS = 'data-0xtagger-address';
 const TAG = 'data-0xtagger-tag';
 // The address kept beside a name on the one display a page is about.
 const SHORT = 'data-0xtagger-short';
+// What our own button may never be put inside, whatever is being annotated.
+const INTERACTIVE = 'a[href],button,[role="button"]';
 const abbreviate = address => `${address.slice(0, 6)}…${address.slice(-4)}`;
 
 export async function createPageController({
@@ -80,7 +82,12 @@ export async function createPageController({
       // An inline child shares the line it was given, so the annotation is
       // already on the right one. Only a block-level child takes a line of its
       // own, and that is the line the name and the glyph have to follow it onto.
-      if (!next || win.getComputedStyle(next).display.startsWith('inline')) return box;
+      // A box holding the name beside something that is not text — an icon a
+      // site draws from a pseudo-element of its own — is not all name. Standing
+      // in for the whole box would take that icon down with the text it hides,
+      // so the name is followed into the child that holds it even there.
+      const decorated = box.children.length > inside.length;
+      if (!next || (!decorated && win.getComputedStyle(next).display.startsWith('inline'))) return box;
       box = next;
     }
   }
@@ -113,20 +120,31 @@ export async function createPageController({
     const anchor = shown === target.element ? (target.element.closest('a[href]') || target.element) : shown;
     // A control an adapter vouched for is still a control: putting our own
     // button inside it would nest one button in another, and hand its presses
-    // to whatever the control does. It goes after the control instead. Nothing
-    // else is ever painted inside something interactive, so nothing else can
-    // arrive here.
+    // to whatever the control does. It goes after the control, wherever that
+    // leaves it.
     const vouched = adapter.allowed ? anchor.closest(adapter.allowed) : null;
     if (vouched) {
       vouched.after(slot);
       target.editButton = slot;
       return;
     }
-    const style = win.getComputedStyle(anchor);
     // A box that clips what overflows it — a truncating cell — would swallow the
     // glyph, so there it goes beside the box rather than inside it.
-    const beside = style.display.startsWith('inline') || style.overflow !== 'visible' || row(anchor.parentElement);
-    if (beside) anchor.after(slot); else anchor.append(slot);
+    const carries = box => {
+      const style = win.getComputedStyle(box);
+      return style.display.startsWith('inline') || style.overflow !== 'visible' || row(box.parentElement);
+    };
+    // Annotating a name inside a link leaves the glyph inside the link, which
+    // is a button nested in one more thing that answers a press. Where the row
+    // can carry it beside the link, that is where it goes. Where it cannot, a
+    // glyph on a line of its own is the worse of the two, so it stays put.
+    const link = anchor.closest('a[href]');
+    if (link && link !== anchor && carries(link)) {
+      link.after(slot);
+      target.editButton = slot;
+      return;
+    }
+    if (carries(anchor)) anchor.after(slot); else anchor.append(slot);
     target.editButton = slot;
   }
   function remove(element) {
