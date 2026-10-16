@@ -374,7 +374,9 @@ test.describe('Safe address widget', () => {
 
     // Interactive is still interactive: only a control an adapter vouched for
     // is read, and only where it says which wallet it is about.
-    await open(page, row(address).replace(`aria-label="Copy address ${address}"`, 'aria-label="Copy"'));
+    // The current public audit row has the same abbreviated text and no
+    // full-address label. It cannot establish which signer to annotate.
+    await open(page, row(address).replace(`aria-label="Copy address ${address}"`, ''));
     await expect(page.locator('[data-0xtagger-address]')).toHaveCount(0);
     await open(page, `<div role="button" aria-label="Copy address ${address}"><input id="field" value="x"></div>`);
     await expect(page.locator('[data-0xtagger-address]')).toHaveCount(0);

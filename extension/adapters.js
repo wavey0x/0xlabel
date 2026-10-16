@@ -22,11 +22,15 @@ const site = ({ rules, watch = [], ...adapter }) => ({
   scan: (root, { url }) => collect(root, url, rules),
 });
 
+// seen: etherscan.io/ — search an ENS name; the result's resolved address is
+//       in a sibling span beside its link — 2026-10-16.
 const SEARCH_ROW = '.search-panel-container li[role="option"] > a[href]';
 // The row saying who first funded an address. Where the explorer has a name for
 // them it prints that name alone, in a plain truncating span carrying none of
 // the markers its tables use, so the link is the only thing saying which wallet
 // the row is about — and it says it whole, in the href.
+// seen: etherscan.io/address/0x7a16ff8270133f063aab6c9977183d9e72835428
+//       — Funded By names Michael Egorov 2 — 2026-10-16.
 const FUNDED_BY = '#conFundedMainChain a[href*="/address/"]';
 // The explorer writes the whole of a shortened display into a tooltip, which
 // its own script then takes over: the title is in the markup it serves and
@@ -35,6 +39,8 @@ const TIP = '[data-bs-toggle="tooltip"],[title]';
 // A contract's reader is a frame of its own as well: an accordion of functions
 // in place of rows. A function that answers with an address renders it as the
 // same link the tables use, so nothing but the frame needs recognizing.
+// seen: etherscan.io/address/0xa354F35829Ae975e850e23e9615b11Da1B3dC4DE#readContract
+//       — expand any function returning an address — 2026-10-16.
 const CONTRACT_READER = '.js-read-contract-function';
 
 // A name cut short to fit is not a name: whatever stands in the field is what
@@ -72,6 +78,8 @@ const etherscanAdapter = site({
     const tagged = element.matches('.hash-tag') ? element : element.querySelector('.hash-tag');
     return tagged ? whole(tagged) : tokenName(element) || linkName(element);
   },
+  // The seen: pages above are Etherscan observations, not proof that every
+  // explorerNetwork host serves the same markup.
   matches: url => Boolean(explorerNetwork(url.hostname)),
   watch: ['data-highlight-value'],
   // The heading of an address page is what the page is about, and so is each
@@ -138,10 +146,13 @@ const SAFE_NAME_BOX = `${SAFE_NAME} > :first-child`;
 // The address lives beside the name in the same widget, and an explorer link
 // beside it is what proves which wallet the pair is about.
 const SAFE_ADDRESS_LINK = 'a[href*="/address/"]';
-// In the audit log the line naming a signer is itself the control that copies
-// them, so the only display of who signed sits inside something interactive.
-// It names itself by the address it copies — the whole address, and the only
-// evidence on the row, because the text beside it is an abbreviation.
+// In the audit log the line naming a signer is itself a copy control. Its
+// abbreviated text proves no identity; only a control label with the whole
+// address can make that interactive display safe to annotate.
+// seen: app.safe.global/transactions/history?safe=matic:0xa1F0FC535Ad0EBcae0ef81b2990fcD75465AD7Ae
+//       — open the first burn transaction's audit log — 2026-10-16. Its copy
+//       buttons now lack a full-address aria-label, so this rule leaves them
+//       untagged. Only a control that does expose the whole address qualifies.
 const SAFE_COPIES = '[role="button"][aria-label*="0x"]';
 // Exactly forty characters and no more: a transaction hash starts the same way
 // and runs longer, and its first forty would name a wallet nobody mentioned.
@@ -186,10 +197,6 @@ const safeAdapter = site({
     const network = safeNetwork(url.searchParams.get('safe')?.split(':')[0]);
     return { status: 'ready', ...(network ? { network: scopeOf(network) } : {}) };
   },
-  // While a tag stands in for Safe's name, the badge beside it would still be
-  // claiming the name came from one of Safe's own books. It goes for exactly as
-  // long as the substitution lasts, and comes back with it, because the rule
-  // rests on an attribute the controller already adds and removes.
   // The badge beside Safe's name says which of its books that name came from.
   // While a tag stands in its place the claim is false, so it goes — and only
   // it. Safe gives that slot to one icon or to a notice of its own, never to
