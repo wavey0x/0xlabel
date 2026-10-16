@@ -212,13 +212,30 @@ test('failed and conflicting saves retain the draft; a refusal offers both answe
   await start(page);
   await edit(page).click();
   await input(page).fill('My edit');
+  // A failure that only writes a line of small print is easy to miss, so the
+  // button it was pressed on wears the refusal for a moment. Recorded as it is
+  // asked for, because it is over long before an assertion could look for it.
+  await page.evaluate(() => {
+    window.refusals = [];
+    const animate = Element.prototype.animate;
+    Element.prototype.animate = function (frames, options) {
+      const running = animate.call(this, frames, options);
+      if (JSON.stringify(frames).includes('warning-pulse')) window.refusals.push(this.className);
+      return running;
+    };
+  });
   await page.evaluate(() => { window.saveError='Offline'; });
   await save(page).click();
   await expect(input(page)).toBeEnabled();
   await expect(input(page)).toHaveValue('My edit');
+  await expect.poll(() => page.evaluate(() => window.refusals)).toEqual(['primary save']);
   await page.evaluate(({ record }) => { window.saveError='Conflict'; window.conflict={ ...record, tags:['Newer name'], version:'newer' }; }, { record });
   await save(page).click();
   await expect(input(page)).toHaveValue('My edit');
+  // A book answering with something else shows its own panel, which says it
+  // plainly enough without the button saying it too.
+  await expect(page.locator('.conflict')).toBeVisible();
+  expect(await page.evaluate(() => window.refusals)).toEqual(['primary save']);
   // What the book now says, with both answers to it one click away.
   await expect(page.locator('.conflict')).toContainText('Newer name');
   await page.getByRole('button', { name: 'Keep mine' }).click();

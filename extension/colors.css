@@ -16,6 +16,7 @@
   --0xtagger-accent-canvas: color-mix(in srgb, #5b21b6 4%, transparent);
   --0xtagger-accent-glow: color-mix(in srgb, #5b21b6 50%, transparent);
   --0xtagger-accent-pulse: color-mix(in srgb, #5b21b6 20%, transparent);
+  --0xtagger-warning-pulse: color-mix(in srgb, #b5760d 25%, transparent);
   --0xtagger-sheen: color-mix(in srgb, #ffffff 6%, transparent);
   --0xtagger-inset: color-mix(in srgb, #ffffff 12.5%, transparent);
   --0xtagger-backdrop: color-mix(in srgb, #000000 19%, transparent);

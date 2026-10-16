@@ -179,7 +179,7 @@ test('hosted book: reconnecting preserves an offline draft and protects a newer 
     await input.fill('My offline draft');
     await page.route(base + '/tags**', route => route.abort());
     await input.press('Enter');
-    await expect(page.getByRole('dialog')).toContainText('server did not answer');
+    await expect(page.getByRole('dialog')).toContainText('could not be reached');
     await expect(input).toHaveValue('My offline draft');
     const before = (await (await api.get(base + '/tags')).json()).records.find(item => item.address === at);
     expect(before.tags).toEqual(['Saved before disconnect']);

@@ -456,7 +456,7 @@ test('an import whose answer was lost is reconciled, not repeated', async () => 
     throw new TypeError('Failed to fetch');
   });
   await assert.rejects(store.merge([{ address, scope: 'global', tags: ['Treasury'] }]),
-    /did not answer. Whether this landed is checked/);
+    /could not be reached/);
   // Asked again, the book sees what landed instead of writing over it.
   await assert.rejects(store.merge([{ address, scope: 'global', tags: ['Treasury'] }]),
     /Some names changed/);

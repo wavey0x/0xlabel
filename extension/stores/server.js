@@ -8,34 +8,36 @@ import { sameTags, validateRecord, validateSnapshot } from '../shared.js';
 // half a book land and call it done. Anything larger is refused before it is
 // sent, which the view enforces before anyone confirms.
 const BATCH = 5000;
+// Long enough for a server on the other end of a private network, short enough
+// that nobody watches a button say "Saving…" wondering whether to press it
+// again. A file carried in is the one write that can honestly take longer: it
+// is thousands of records in one transaction, and giving up on one that is
+// still being applied only buys an uncertain write to reconcile afterwards.
+const TIMEOUT = 5000;
+const BATCH_TIMEOUT = 20000;
 
 export function createServerBook({ url, token, fetch: fetcher = globalThis.fetch }) {
-  async function request(path, { headers = {}, ...options } = {}) {
+  async function request(path, { headers = {}, timeout = TIMEOUT, ...options } = {}) {
     let response;
     try {
       response = await fetcher(url + path, {
         ...options, redirect: 'error', cache: 'no-store', credentials: 'omit',
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(timeout),
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...headers },
       });
     } catch {
-      // A read that never arrived changed nothing, and can say so. A write
-      // that never answered may well have landed: claiming otherwise is a
-      // guess dressed as a fact, and the store reconciles before retrying.
-      throw new Error(options.method
-        ? 'That server did not answer. Whether this landed is checked before anything is tried again.'
-        : 'That server could not be reached. Your saved book is unchanged.');
+      // One line, whichever way it failed. A write that never answered may
+      // well have landed, so nothing here says it did not: what the book now
+      // holds is checked before anything is sent again, and that is the
+      // store's business rather than something to read in a popover.
+      throw new Error('That server could not be reached.');
     }
     const mark = response.headers?.get?.('ETag') || null;
     // The book has not changed since the copy we hold, so there is no body.
     if (response.status === 304) return { unchanged: true, mark };
     let body;
     try { body = await response.json(); }
-    catch {
-      throw new Error(options.method
-        ? 'That server returned an unreadable reply. Whether this landed is checked before anything is tried again.'
-        : 'That server returned an unreadable reply. Your saved book is unchanged.');
-    }
+    catch { throw new Error('That server returned an unreadable reply.'); }
     if (!response.ok) {
       const error = new Error(response.status === 401 ? (token
         ? 'That server rejected the access key. Paste its link again.'
@@ -87,7 +89,7 @@ export function createServerBook({ url, token, fetch: fetcher = globalThis.fetch
         throw new Error(`A single write carries at most ${BATCH.toLocaleString()} addresses.`);
       }
       const changes = wanted.map(({ source, ...change }) => ({ ...change, source: source ?? null }));
-      const { body } = await request('/tags', { method: 'PUT', body: JSON.stringify({ changes }) });
+      const { body } = await request('/tags', { method: 'PUT', body: JSON.stringify({ changes }), timeout: BATCH_TIMEOUT });
       if (!Array.isArray(body.records) || body.records.length !== changes.length) {
         throw new Error('That server confirmed a different number of records. Refresh before trying again.');
       }

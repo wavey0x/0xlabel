@@ -17,6 +17,24 @@ export async function editorStyles(root) {
   root.adoptedStyleSheets = [sheet];
 }
 
+// The confirmation's opposite number, in the same vocabulary: a nudge and a
+// ring in the colour the notice is written in, with no overshoot and nothing
+// to celebrate. A line of small print in the corner of a panel is easy to miss
+// after ten seconds of waiting; the button that was pressed is not.
+const RING = '0 0 0 3px var(--0xtagger-warning-pulse)';
+const REFUSED = [
+  { transform: 'translateX(0)', boxShadow: '0 0 0 0 transparent' },
+  { transform: 'translateX(-3px)', boxShadow: RING, offset: .22 },
+  { transform: 'translateX(3px)', offset: .52 },
+  { transform: 'translateX(-1px)', offset: .78 },
+  { transform: 'translateX(0)', boxShadow: '0 0 0 0 transparent' },
+];
+// Where movement is unwelcome the ring alone says it, and says it where the
+// eye already is.
+const REFUSED_STILL = [
+  { boxShadow: '0 0 0 0 transparent' }, { boxShadow: RING, offset: .3 }, { boxShadow: '0 0 0 0 transparent' },
+];
+
 // Shared by the page popover and book. The draft never follows a recycled row.
 export function createEditor(container, { address, scope = 'global', state, save, close, onLayout = () => {}, visibility, toggleVisibility, suggestion = null, modal = false }) {
   const book = state.activeBook;
@@ -253,6 +271,13 @@ export function createEditor(container, { address, scope = 'global', state, save
     } catch (error) {
       if (closed) return;
       get('.notice').textContent = error.message;
+      // A book that answered with something else puts its own panel on screen,
+      // which is answer enough; everything else leaves only the notice, so the
+      // button says it too.
+      if (error.status !== 409) {
+        get('.save').animate(matchMedia('(prefers-reduced-motion: reduce)').matches ? REFUSED_STILL : REFUSED,
+          { duration: 300, easing: 'ease-out' });
+      }
       // A refusal only ever means the book now says something else. Show what
       // it says and offer the two answers, each of them one click.
       if (error.status === 409) {

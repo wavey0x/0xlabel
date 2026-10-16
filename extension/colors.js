@@ -21,6 +21,9 @@ const accentFillDark = '#6d28d9';
 // 2.41:1 on a light toolbar; this sits between them at 3.29:1 and 3.76:1, the
 // same compromise iconIdle already makes.
 const iconAccent = '#8b5cf6';
+// The ink a refusal is written in, and the ring a failed save wears for a
+// moment: one colour saying one thing in two places.
+const warning = '#b5760d';
 
 export const COLORS = Object.freeze({
   accent,
@@ -29,7 +32,7 @@ export const COLORS = Object.freeze({
   iconAccent,
   iconIdle: '#7e8794',
   error: '#b91c1c',
-  warning: '#b5760d',
+  warning,
   warningBadge: '#c88315',
   switchOff: '#777777',
   // The tick confirming a write, drawn on the filled accent rather than on a
@@ -42,6 +45,7 @@ export const COLORS = Object.freeze({
   accentCanvas: tint(accent, 4),
   accentGlow: tint(accent, 50),
   accentPulse: tint(accent, 20),
+  warningPulse: tint(warning, 25),
   sheen: tint(white, 6),
   inset: tint(white, 12.5),
   backdrop: tint(black, 19),
