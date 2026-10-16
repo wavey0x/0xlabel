@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { IDBFactory, IDBKeyRange as FakeKeyRange } from 'fake-indexeddb';
 import { createStore } from '../extension/store.js';
-import { applyChange, normalizeAPI, parseConnectLink, readBookFile, reviewImport } from '../extension/shared.js';
+import { applyChange, normalizeAPI, parseConnectLink, readBookFile, reviewImport, sourceName } from '../extension/shared.js';
 
 const address = '0x' + 'ab'.repeat(20);
 const other = '0x' + 'cd'.repeat(20);
@@ -788,6 +788,16 @@ test('a source survives an export and the import that reads it back', async () =
   await second.store.init();
   await second.store.merge(readBookFile(exported).records);
   assert.equal(second.store.state().records[0].source, 'safe:page');
+});
+
+test('Arkham provenance survives a book import and is named in the UI', async () => {
+  const { store } = harness();
+  await store.init();
+  await store.merge(readBookFile(JSON.stringify({ records: [
+    { address, scope: 'eip155:1', tags: ['Gate Hot Wallet'], source: 'arkham:api' },
+  ] })).records);
+  assert.equal(store.state().records[0].source, 'arkham:api');
+  assert.equal(sourceName(store.state().records[0].source), 'Arkham');
 });
 
 // An import that adds nothing is not a change, so nothing downstream should be

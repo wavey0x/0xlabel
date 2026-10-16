@@ -241,6 +241,14 @@ def test_a_source_a_record_cannot_carry_is_refused(book):
     assert put(book, ['Treasury'], source='evil.example').status_code == 422
 
 
+def test_arkham_source_survives_a_batch_write(book):
+    answer = batch(book, [{'address': ADDRESS, 'scope': 'eip155:1',
+                           'tags': ['Gate Hot Wallet'], 'version': None,
+                           'only_if_unnamed': True, 'source': 'arkham:api'}])
+    assert answer.status_code == 200
+    assert book.get('/tags').json()['records'][0]['source'] == 'arkham:api'
+
+
 def test_a_batch_carrying_nothing_moves_no_revision(book):
     put(book, ['Treasury'])
     mark = book.get('/tags').headers['etag']
