@@ -602,62 +602,94 @@ test.describe('a name the website already shows', () => {
     await expect(fromSite(page)).toHaveCount(0);
   });
 
-  // A long name tag is cut short in the row and kept whole in the tooltip,
-  // which the explorer writes above the address it belongs to.
-  const titled = (id, at, shown, title) =>
-    `<p><a id="${id}" href="/address/${at}"><span class="hash-tag" title="${title}">${shown}</span></a></p>`;
+  // Every row below is the explorer's markup as the page runs it, not as it is
+  // served: what a shortened display holds whole was in a title, and the
+  // explorer's own script takes that title away into a tooltip of its own
+  // before anyone can open a row. Only what is still written can be read.
+  const titled = (id, at, shown) =>
+    `<p><a id="${id}" href="/address/${at}">` +
+    `<span class="hash-tag text-truncate" data-bs-toggle="tooltip">${shown}</span></a></p>`;
 
-  test('fills a name tag the row was cut short to show', async ({ page }) => {
-    await open(page, titled('row', other, 'Uniswap V3: Univers...', `Uniswap V3: Universal Router\n(${other})`), [record]);
+  test('fills a name tag with the name its row shows', async ({ page }) => {
+    await open(page, titled('row', other, 'Yearn: yvWETH-1 Token'), [record]);
     await tagFor(page, 'row').click();
-    await expect(input(page)).toHaveValue('Uniswap V3: Universal Router');
+    await expect(input(page)).toHaveValue('Yearn: yvWETH-1 Token');
     await expect(fromSite(page)).toHaveText('(from Etherscan)');
   });
 
   // Half a name is worse than none: it would be saved as the whole of one.
-  test('offers nothing where a name cut short is all the row has', async ({ page }) => {
-    await open(page, titled('row', other, 'Uniswap V3: Univers...', other), [record]);
+  test('offers nothing where the row was cut short to show a name', async ({ page }) => {
+    await open(page, titled('row', other, 'Uniswap V3: Univers...'), [record]);
     await tagFor(page, 'row').click();
     await expect(input(page)).toHaveValue('');
     await expect(fromSite(page)).toHaveCount(0);
   });
 
   // A transferred token is named in its own row, with no name tag anywhere in
-  // it: the row leads with the token's name, cut short to fit, and puts its
-  // symbol beside it in muted text. The whole name is kept in the tooltip.
-  const tokenRow = (id, at, name, shown, symbol) =>
+  // it: the row leads with the token's name and sets its symbol beside it in
+  // muted text, each under a tooltip of its own.
+  const tokenRow = (id, at, name, symbol) =>
     `<p><a id="${id}" data-highlight-value data-highlight-target="${at}" href="/token/${at}">` +
     `<img src="/token/images/t.svg" width="16">` +
-    `<span><span><span class="text-truncate" title="${name} (${at})">${shown}</span></span>` +
-    `<span class="text-muted"> (<span class="text-truncate" title=" (${at})">${symbol}</span>)</span>` +
+    `<span><span><span class="text-wrap text-truncate" data-bs-toggle="tooltip">${name}</span></span>` +
+    `<span class="text-muted"> (<span class="text-wrap text-truncate" data-bs-toggle="tooltip">${symbol}</span>)</span>` +
     `</span></a></p>`;
 
-  test('fills a token with the name the row was cut short to show', async ({ page }) => {
-    await open(page, tokenRow('row', other, 'Wrapped Ether', 'Wrapped Ethe...', 'WETH'), [record]);
+  test('names a token by the name its row leads with, not the symbol beside it', async ({ page }) => {
+    await open(page, tokenRow('row', other, 'Mog Coin', 'MOG'), [record]);
     await tagFor(page, 'row').click();
-    await expect(input(page)).toHaveValue('Wrapped Ether');
+    await expect(input(page)).toHaveValue('Mog Coin');
     await expect(fromSite(page)).toHaveText('(from Etherscan)');
     await save(page).click();
     await expect.poll(() => page.evaluate(() => window.saves.at(-1)))
-      .toMatchObject({ address: other, scope: 'eip155:1', tags: ['Wrapped Ether'], source: 'etherscan:page' });
+      .toMatchObject({ address: other, scope: 'eip155:1', tags: ['Mog Coin'], source: 'etherscan:page' });
   });
 
-  // A token the explorer has no name for leaves that half of the tooltip
-  // empty and leads with its symbol, which is shown whole.
+  test('offers nothing for a token the row was cut short to name', async ({ page }) => {
+    await open(page, tokenRow('row', other, 'Wrapped Ethe...', 'WETH'), [record]);
+    await tagFor(page, 'row').click();
+    await expect(input(page)).toHaveValue('');
+    await expect(fromSite(page)).toHaveCount(0);
+  });
+
+  // A token the explorer has no name of its own for leads with its symbol,
+  // which is short enough to be shown whole.
   test('fills a token the explorer has no name for with its symbol', async ({ page }) => {
-    await open(page, tokenRow('row', other, '', 'stETH', 'stETH'), [record]);
+    await open(page, tokenRow('row', other, 'stETH', 'stETH'), [record]);
     await tagFor(page, 'row').click();
     await expect(input(page)).toHaveValue('stETH');
     await expect(fromSite(page)).toHaveText('(from Etherscan)');
   });
 
-  // A tooltip names the address it ends with, and a row holds more than one of
-  // them. A name about some other wallet is passed over for one about this.
-  test('takes only the name a tooltip about this address carries', async ({ page }) => {
-    await open(page, tokenRow('row', other, 'Wrapped Ether', 'Wrapped Ethe...', 'WETH')
-      .replace(`title="Wrapped Ether (${other})"`, `title="Wrapped Ether (${address})"`), [record]);
+  // A block's fee recipient is named by the link itself, with no name tag in
+  // it and the address kept in the tooltip rather than shown. Once that
+  // tooltip is the site's own, the name is all the row has left.
+  const recipient = (id, at, shown) =>
+    `<p><a id="${id}" data-highlight-value class="text-truncate d-block" style="max-width: 8rem;" ` +
+    `href="/address/${at}"> <span data-bs-toggle="tooltip">${shown}</span></a></p>`;
+
+  test('fills a link whose text is the name and whose address is out of sight', async ({ page }) => {
+    await open(page, recipient('row', other, 'quasarbuilder'), [record]);
     await tagFor(page, 'row').click();
-    await expect(input(page)).toHaveValue('WETH');
+    await expect(input(page)).toHaveValue('quasarbuilder');
+    await expect(fromSite(page)).toHaveText('(from Etherscan)');
+  });
+
+  // A row set too narrow for its name is cut short by the browser, which
+  // leaves the whole of it in the row to be read.
+  test('fills it with the whole name a narrow row paints cut short', async ({ page }) => {
+    await open(page, recipient('row', other, 'Lido: Execution Layer Rewards Vault'), [record]);
+    await tagFor(page, 'row').click();
+    await expect(input(page)).toHaveValue('Lido: Execution Layer Rewards Vault');
+  });
+
+  // Anywhere the address is written out, it is the address being shown, and a
+  // name standing beside it is not what the row is calling the wallet.
+  test('offers nothing from a row that writes out any of the address', async ({ page }) => {
+    await open(page, `<p><a id="row" data-highlight-value href="/address/${other}">vitalik.eth 0xcdcd…cdcd</a></p>`, [record]);
+    await tagFor(page, 'row').click();
+    await expect(input(page)).toHaveValue('');
+    await expect(fromSite(page)).toHaveCount(0);
   });
 });
 

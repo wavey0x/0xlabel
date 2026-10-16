@@ -23,35 +23,43 @@ const site = ({ rules, watch = [], ...adapter }) => ({
 });
 
 const SEARCH_ROW = '.search-panel-container li[role="option"] > a[href]';
+// The explorer writes the whole of a shortened display into a tooltip, which
+// its own script then takes over: the title is in the markup it serves and
+// gone from the page it runs. The marker it leaves behind is what both say.
+const TIP = '[data-bs-toggle="tooltip"],[title]';
 
-// The explorer keeps a name's own tooltip ahead of the address it belongs to:
-// "Wrapped Ether (0xc02a…)". Where a row has the room, the two say the same
-// thing; where it has not, the shown one is cut short to fit.
-const TOOLTIP = /^(.*?)\s*\(0x[0-9a-f]{40}\)$/is;
-// A name cut short to fit is not a name. The tooltip is the only place the
-// whole of it is kept, and a row with neither is offering nothing.
-const whole = element => /[.…]$/.test(element.textContent.trim())
-  ? element.getAttribute('title')?.match(TOOLTIP)?.[1] || null
-  : element.textContent;
-// A token is named in its own row rather than by a public name tag. A token
-// with no name of its own leaves that half of the tooltip empty and leads with
-// its symbol, which is short enough to be shown whole.
+// A name cut short to fit is not a name: whatever stands in the field is what
+// Save would store. The whole of it is written in a tooltip, and the explorer's
+// own script takes that tooltip over and the title out of the markup before
+// anyone can click a row, so a row showing half a name is offering nothing.
+const whole = element => (/[.…]$/.test(element.textContent.trim()) ? null : element.textContent);
+// A token is named in its own row rather than by a public name tag: the row
+// leads with the token's name and sets its symbol beside it in muted text,
+// each under a tooltip of its own. A token the explorer has no name for leads
+// with its symbol, which is short enough to be shown whole.
 const tokenName = element => {
-  const at = element.matches('a[href*="/token/"]') ? parseAddress(element.getAttribute('data-highlight-target')) : null;
-  const tooltip = at && query(element, '[title]').find(node => node.title.toLowerCase().endsWith(`(${at})`));
-  if (!tooltip) return null;
-  return tooltip.title.slice(0, -at.length - 2).trim() || whole(tooltip);
+  const named = element.matches('a[href*="/token/"]')
+    ? query(element, TIP).find(node => node !== element && node.textContent.trim()) : null;
+  return named ? whole(named) : null;
 };
+// A block's fee recipient is named by the link itself, with no name tag in it
+// and the address kept in the tooltip rather than shown. Once the tooltip is
+// the site's own, the name is all that is left in the row — and a row with any
+// of an address in it is showing the address, not a name.
+const linkName = element => addressLink(element, element.baseURI) &&
+  !/0x[0-9a-f]/i.test(element.textContent) ? whole(element) : null;
 
 const etherscanAdapter = site({
   id: 'Etherscan',
   source: 'etherscan:page',
   // What the explorer calls this address: its public name tag, which is the
-  // same element a tag is allowed to stand in for. A token row has no name tag
-  // and names the token itself, so that is what the explorer is calling it.
+  // same element a tag is allowed to stand in for. Two of its displays carry
+  // no name tag and name the thing themselves — a token row, and a link whose
+  // text is the name with the address kept out of sight — so that is what the
+  // explorer is calling them.
   names: element => {
     const tagged = element.matches('.hash-tag') ? element : element.querySelector('.hash-tag');
-    return tagged ? whole(tagged) : tokenName(element);
+    return tagged ? whole(tagged) : tokenName(element) || linkName(element);
   },
   matches: url => Boolean(explorerNetwork(url.hostname)),
   watch: ['data-highlight-value'],
