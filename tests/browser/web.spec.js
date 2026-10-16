@@ -99,13 +99,71 @@ test('hosted book: cross-origin writes fail and a forged remote identity has no 
   } finally { await api.dispose(); }
 });
 
-test('hosted book: a failed first read never opens a writable empty device book', async ({ page }) => {
-  await page.setExtraHTTPHeaders({ 'Tailscale-User-Login': 'test@example.com' });
-  await page.route(base + '/tags', route => route.abort());
-  await page.goto(base + '/');
-  await expect(page.getByRole('button', { name: 'Try again', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: '+ Add address', exact: true })).not.toBeVisible();
-  await expect(page.locator('#message')).toContainText('could not be reached');
+for (const trigger of ['reconnect', 'periodic check']) {
+  test(`hosted book: a failed first read stays unavailable until ${trigger} recovers it`, async ({ page }) => {
+    const api = await request.newContext({ extraHTTPHeaders: key });
+    const at = '0x' + (trigger === 'reconnect' ? '94' : '95').repeat(20);
+    const name = `Recovered after ${trigger}`;
+    try {
+      expect((await api.put(`${base}/tags/global/${at}`, { data: { tags: [name], version: null } })).ok()).toBe(true);
+      await page.clock.install();
+      await page.setExtraHTTPHeaders({ 'Tailscale-User-Login': 'test@example.com' });
+      let reads = 0;
+      await page.route(base + '/tags', route => { reads += 1; return route.abort(); });
+      const navigations = [];
+      page.on('framenavigated', frame => { if (frame === page.mainFrame()) navigations.push(frame.url()); });
+      await page.goto(base + '/');
+      const retry = page.getByRole('button', { name: 'Try again', exact: true });
+      await expect(retry).toBeVisible();
+      await expect(page.getByRole('button', { name: '+ Add address', exact: true })).not.toBeVisible();
+      await expect(page.locator('#message')).toContainText('could not be reached');
+      expect(reads).toBe(1);
+
+      const failedRead = page.waitForEvent('requestfailed', request => request.url() === base + '/tags');
+      await page.clock.fastForward(60000);
+      await failedRead;
+      expect(reads).toBe(2, 'the unavailable screen retries the API');
+      expect(navigations).toHaveLength(1, 'a failed read never triggers a reload');
+      await expect(retry).toBeVisible();
+
+      await page.unroute(base + '/tags');
+      if (trigger === 'reconnect') await page.evaluate(() => window.dispatchEvent(new Event('online')));
+      else await page.clock.fastForward(60000);
+      await expect(page.locator('.record', { hasText: name })).toHaveCount(1);
+      await expect(page.locator('#sync')).toContainText('Synced');
+      await expect(retry).not.toBeVisible();
+      expect(navigations).toHaveLength(2, 'a successful read reloads through normal startup');
+    } finally { await api.dispose(); }
+  });
+}
+
+test('hosted book: reload during an outage opens the saved copy and reconnect refreshes it', async ({ page }) => {
+  const api = await request.newContext({ extraHTTPHeaders: key });
+  const at = '0x' + '93'.repeat(20);
+  const path = `${base}/tags/eip155:8453/${at}`;
+  try {
+    const first = await api.put(path, { data: { tags: ['Cached before reload'], version: null, source: 'safe:address-book' } });
+    expect(first.ok()).toBe(true);
+    const held = (await first.json()).record;
+    await page.setExtraHTTPHeaders({ 'Tailscale-User-Login': 'test@example.com' });
+    await page.goto(base + '/');
+    await expect(page.locator('.record', { hasText: 'Cached before reload' })).toHaveCount(1);
+    await page.route(base + '/tags', route => route.abort());
+    await page.reload();
+    await expect(page.locator('.record', { hasText: 'Cached before reload' })).toHaveCount(1);
+    await expect(page.locator('#sync')).toHaveText('Using your saved copy');
+    await expect(page.getByRole('button', { name: 'Try again', exact: true })).not.toBeVisible();
+    expect((await api.put(path, { data: { tags: ['Refreshed after reload'], version: held.version } })).ok()).toBe(true);
+    const writes = [];
+    page.on('request', request => { if (request.method() === 'PUT') writes.push(request.url()); });
+    await page.unroute(base + '/tags');
+    await page.evaluate(() => window.dispatchEvent(new Event('online')));
+    await expect(page.locator('.record', { hasText: 'Refreshed after reload' })).toHaveCount(1);
+    await expect(page.locator('#sync')).toContainText('Synced');
+    expect(writes).toEqual([], 'recovery reads the server without uploading edits');
+    expect((await (await api.get(base + '/tags')).json()).records.find(item => item.address === at))
+      .toMatchObject({ scope: 'eip155:8453', tags: ['Refreshed after reload'], source: 'safe:address-book' });
+  } finally { await api.dispose(); }
 });
 
 test('hosted book: reconnecting preserves an offline draft and protects a newer save', async ({ page }) => {

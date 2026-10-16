@@ -6,6 +6,7 @@ const url = new URL('./', location.href).href.replace(/\/$/, '');
 if (location.hash) history.replaceState(null, '', location.pathname + location.search);
 const settings = { books: [{ id: url, name: 'Address book', storage: { kind: 'server', url } }], activeBook: url };
 let announce = () => {};
+let unavailable = false;
 const store = createStore({
   storage: {
     async get(keys) {
@@ -20,7 +21,7 @@ const store = createStore({
 try {
   await store.init();
   await store.refresh();
-  if (store.state().error) throw new Error(store.state().error);
+  if (store.state().error && !store.state().records.length) throw new Error(store.state().error);
   await startBook({
     async rpc(message) {
       if (message.type === 'State') return { state: store.state() };
@@ -31,16 +32,8 @@ try {
     },
     watchBook: (_held, render) => { announce = render; },
   });
-  const sync = () => {
-    if (!document.hidden) store.sync().catch(() => {});
-  };
-  document.addEventListener('visibilitychange', sync);
-  window.addEventListener('online', () => {
-    if (!document.hidden) store.refresh().catch(() => {});
-  });
-  // A server or Tailscale can return without the browser reporting "online".
-  setInterval(sync, 60000);
 } catch (error) {
+  unavailable = true;
   // A refused or unreachable server is not an empty address book.
   const main = document.querySelector('main');
   const message = document.querySelector('#message');
@@ -51,3 +44,16 @@ try {
   document.querySelector('.connection-line').hidden = true;
   main.hidden = false;
 }
+
+const sync = async (refresh = false) => {
+  if (document.hidden) return;
+  try {
+    await (refresh || unavailable ? store.refresh() : store.sync());
+    // Prove the server is back before navigating away from the recovery loop.
+    if (unavailable && !store.state().error) location.reload();
+  } catch {}
+};
+document.addEventListener('visibilitychange', () => sync());
+window.addEventListener('online', () => sync(true));
+// A server or Tailscale can return without the browser reporting "online".
+setInterval(sync, 60000);

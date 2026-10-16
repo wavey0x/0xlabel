@@ -138,6 +138,7 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
     if (pull && pull.book === started) return pull.promise;
     const promise = serial(async () => {
       if (active !== started) return { syncedAt };
+      const held = records;
       try {
         const answer = remote ? await remote.load(mark) : await local.load(started);
         if (active !== started) return { syncedAt };
@@ -159,6 +160,9 @@ export function createStore({ storage, fetch: fetcher, notify = () => {}, now = 
         unreadable = false;
         if (!changes.length && !healed) return { syncedAt };
       } catch (failure) {
+        // A repeated failure is quiet unless records changed before a later
+        // step failed, such as recording the sync metadata.
+        if (error === failure.message && records === held) return { syncedAt };
         error = failure.message;
       }
       changed();

@@ -16,7 +16,7 @@ const response = (value, status = 200, mark = null) => ({
   json: async () => structuredClone(value),
 });
 
-function harness({ remote = [] } = {}) {
+function harness({ remote = [], notify = () => {} } = {}) {
   const saved = {};
   const calls = [];
   let book = remote;
@@ -70,7 +70,7 @@ function harness({ remote = [] } = {}) {
   // different test never sees them.
   const indexedDB = new IDBFactory();
   const make = () => createStore({ storage, fetch, indexedDB, keyRange: FakeKeyRange,
-    now: () => ++clock, uuid: () => `id-${++counter}` });
+    now: () => ++clock, uuid: () => `id-${++counter}`, notify });
   const corrupt = async (id, row) => {
     const database = await new Promise((resolve, reject) => {
       const request = indexedDB.open('0xtagger', 1);
@@ -348,15 +348,27 @@ test('saving the names a book already holds is a save, not a conflict', async ()
 });
 
 test('an interrupted write that landed is answered by what the server now says', async () => {
-  const { store, storage, make, remote } = harness();
+  const { store, make, remote, intercept, calls } = harness();
   await store.init();
   await store.add({ name: 'Team', storage: onServer });
-  await write(store, ['Treasury']);
-  await storage.set({ needsRefresh: true });
+  intercept((url, options) => {
+    if (options.method !== 'PUT') return null;
+    assert.equal(url, `${host}/tags/global/${address}`);
+    const { tags } = JSON.parse(options.body);
+    remote().push({ address, scope: 'global', tags, version: 'landed' });
+    intercept(null);
+    throw new TypeError('Failed to fetch');
+  });
+  await assert.rejects(write(store, ['Treasury']), /server/);
+  assert.deepEqual(store.state().records, [], 'the unheard answer never entered the cache');
+  assert.deepEqual(remote().map(entry => entry.tags), [['Treasury']], 'the server accepted the write');
   const resumed = make();
   await resumed.init();
+  assert.deepEqual(resumed.state().records, [], 'a restart still holds the old cache');
   await write(resumed, ['Treasury']);
-  assert.deepEqual(remote().map(entry => entry.tags), [['Treasury']], 'the write is neither repeated nor disputed');
+  assert.deepEqual(resumed.state().records, remote(), 'retry reads and adopts the confirmed record');
+  assert.equal(calls.filter(call => call.method === 'PUT').length, 1, 'the write was sent only once');
+  assert.equal(remote()[0].version, 'landed', 'retry did not replace the accepted write');
 });
 
 test('a save is one write, and a file carried in is one write however many it holds', async () => {
@@ -523,6 +535,63 @@ test('a book that did change is sent once, and every view hears about it', async
   await store.refresh();
   assert.deepEqual(store.state().records.map(entry => entry.tags[0]), ['Renamed elsewhere']);
   assert.ok(store.state().stateRevision > settled);
+});
+
+test('repeated read failures stay quiet, and an unchanged response announces recovery', async () => {
+  const notices = [];
+  const { store, intercept } = harness({ notify: state => notices.push(state),
+    remote: [{ address, scope: 'global', tags: ['Shared'], version: 'one' }] });
+  await store.init();
+  await store.add({ name: 'Team', storage: onServer });
+  const settled = store.state().stateRevision;
+  notices.length = 0;
+  intercept(() => { throw new TypeError('Failed to fetch'); });
+  await store.refresh();
+  assert.equal(notices.length, 1, 'the first failure reaches the views');
+  assert.ok(notices[0].error);
+  await store.refresh();
+  await store.refresh();
+  assert.equal(notices.length, 1, 'the same failure and records are not broadcast again');
+
+  intercept(() => response({ detail: 'Server is restarting.' }, 503));
+  await store.refresh();
+  assert.equal(notices.length, 2, 'a different failure still reaches the views');
+  assert.equal(notices[1].error, 'Server is restarting.');
+  intercept((_url, options) => {
+    assert.equal(options.headers['If-None-Match'], '"0"');
+    return response(null, 304, '"0"');
+  });
+  await store.refresh();
+  assert.equal(notices.length, 3, 'even a 304 announces recovery');
+  assert.equal(notices[2].error, null);
+  assert.deepEqual(notices[2].records.map(entry => entry.tags), [['Shared']]);
+  assert.equal(store.state().stateRevision, settled, 'no records were rewritten');
+  await store.refresh();
+  assert.equal(notices.length, 3, 'an ordinary unchanged read remains quiet');
+});
+
+test('new records are announced even when recording sync metadata fails with the same error', async () => {
+  const notices = [];
+  const { store, storage, intercept, make } = harness({ notify: state => notices.push(state),
+    remote: [{ address, scope: 'global', tags: ['Shared'], version: 'one' }] });
+  await store.init();
+  await store.add({ name: 'Team', storage: onServer });
+  notices.length = 0;
+  storage.set = async () => { throw new Error('Sync metadata could not be saved.'); };
+  let next = { address, scope: 'global', tags: ['First change'], version: 'two' };
+  intercept(() => response({ records: [next] }, 200, '"9"'));
+  await store.refresh();
+  assert.equal(notices.length, 1);
+  next = { ...next, tags: ['Second change'], version: 'three' };
+  await store.refresh();
+  assert.equal(notices.length, 2, 'equal errors must not hide different records');
+  assert.equal(notices[1].error, notices[0].error);
+  assert.deepEqual(notices[1].records, [next]);
+  await store.refresh();
+  assert.equal(notices.length, 2, 'once both records and error agree, it is quiet');
+  const resumed = make();
+  await resumed.init();
+  assert.deepEqual(resumed.state().records, [next], 'the announcement matches the persisted cache');
 });
 
 test('a file carried into a book on a server travels in one request', async () => {
