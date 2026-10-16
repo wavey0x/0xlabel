@@ -325,6 +325,12 @@ test.describe('Safe address widget', () => {
     // The control keeps the name it copies by, and what it copies.
     await expect(page.locator('#actor')).toHaveAttribute('aria-label', `Copy address ${address}`);
     await expect(text).toHaveText('By 0xabab…abab');
+    // Our own button goes beside the control rather than inside it: a button
+    // within a button answers to the wrong press.
+    await expect(page.locator('#actor [data-0xtagger-edit]')).toHaveCount(0);
+    await page.locator('#actor + [data-0xtagger-edit]').getByRole('button').click();
+    await expect(page.getByRole('textbox', { name: 'Tag 1', exact: true })).toHaveValue('Treasury');
+    await page.keyboard.press('Escape');
 
     // Interactive is still interactive: only a control an adapter vouched for
     // is read, and only where it says which wallet it is about.

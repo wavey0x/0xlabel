@@ -111,6 +111,17 @@ export async function createPageController({
     // root and so contributes no text to the site's own copy sources.
     const shown = shownOn(target);
     const anchor = shown === target.element ? (target.element.closest('a[href]') || target.element) : shown;
+    // A control an adapter vouched for is still a control: putting our own
+    // button inside it would nest one button in another, and hand its presses
+    // to whatever the control does. It goes after the control instead. Nothing
+    // else is ever painted inside something interactive, so nothing else can
+    // arrive here.
+    const vouched = adapter.allowed ? anchor.closest(adapter.allowed) : null;
+    if (vouched) {
+      vouched.after(slot);
+      target.editButton = slot;
+      return;
+    }
     const style = win.getComputedStyle(anchor);
     // A box that clips what overflows it — a truncating cell — would swallow the
     // glyph, so there it goes beside the box rather than inside it.
