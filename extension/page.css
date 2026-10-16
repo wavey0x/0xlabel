@@ -3,9 +3,21 @@
 [data-0xtagger-tag] :not([data-0xtagger-ui]) {
   font-size: 0 !important;
 }
-a[data-0xtagger-tag], span[data-0xtagger-tag], code[data-0xtagger-tag] {
+/* A link or a code span that carries a name is given a box of its own, so the
+   glyph beside it and the row it sits on stay in step. A plain span is left as
+   it was found: it is the shape an explorer nests inside a cell that trims its
+   own overflow, and a box there is one the cell drops whole (see below). */
+a[data-0xtagger-tag], code[data-0xtagger-tag] {
   display: inline-block;
 }
+/* The name itself is ordinary inline text, and that is the whole of why. Given
+   a box of its own — an inline-block with its own width to be cut to — it is
+   atomic, and a site that trims its own overflow cannot trim through one: it
+   drops the box whole and leaves its ellipsis standing alone where the name
+   was, which reads as the name having been taken away rather than shortened.
+   An explorer sets its address cells exactly that way. Flowing as text lets
+   the site cut the name off mid-word, which still reads, and leaves the
+   trimming to the side that knows how much room there is. */
 [data-0xtagger-tag]::before {
   content: attr(data-0xtagger-tag);
   /* Fixed units on purpose: rem would resolve against the website's own root
@@ -13,15 +25,8 @@ a[data-0xtagger-tag], span[data-0xtagger-tag], code[data-0xtagger-tag] {
   font: 700 14px/1.5 system-ui, sans-serif;
   letter-spacing: normal;
   text-transform: none;
-  display: inline-block;
-  max-width: min(12em, 25vw);
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* A name belongs on one line wherever the site would have wrapped it. */
   white-space: nowrap;
-  /* Its overflow makes this inline-block's baseline its bottom margin edge, so
-     baseline alignment would hang it off the line. Align the boxes instead;
-     where a trailer follows, the rule below brings the two to one baseline. */
-  vertical-align: bottom;
   color: var(--0xtagger-accent);
   pointer-events: none;
 }
@@ -32,9 +37,7 @@ a[data-0xtagger-tag], span[data-0xtagger-tag], code[data-0xtagger-tag] {
   font: 400 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
   letter-spacing: normal;
   text-transform: none;
-  display: inline-block;
   margin-inline-start: .4em;
-  vertical-align: bottom;
   color: var(--0xtagger-muted);
   pointer-events: none;
 }
@@ -48,14 +51,6 @@ a[data-0xtagger-tag], span[data-0xtagger-tag], code[data-0xtagger-tag] {
 [data-0xtagger-short]::before {
   font-size: var(--0xtagger-size, 14px);
 }
-/* Two sizes of type on one line. Trimming each box to its own alphabetic edge
-   makes the bottom of the box the baseline, so boxes aligned at the bottom come
-   to rest on one baseline whatever size each is set in. The padding gives back
-   the descender room the trim took, the same amount to each, so it cannot tilt
-   them again — and the name clips to it, as it did to the line box before. */
-[data-0xtagger-short]::before,
 [data-0xtagger-short]::after {
-  text-box-trim: trim-end;
-  text-box-edge: text alphabetic;
-  padding-bottom: calc(var(--0xtagger-size, 14px) / 4);
+  line-height: calc(1.5 * var(--0xtagger-size, 14px));
 }

@@ -499,6 +499,44 @@ test('tags, tag buttons and editor controls stay legible on light and dark websi
   }
 });
 
+// An explorer sets its address cells to trim their own overflow, and a box
+// cannot be trimmed through: handed one, the site drops it whole and leaves its
+// own ellipsis standing where the name was, which reads as the name having been
+// taken away rather than shortened. The name flows as text so that a cell with
+// too little room for it cuts it short instead.
+test('a name a narrow cell cannot fit is cut short, not dropped', async ({ page }) => {
+  // Etherscan's To cell, as the live page serves it: a block link that trims
+  // its own overflow, holding an icon and the name the explorer has.
+  const cell = `<header>Explorer</header><main><table><tbody><tr><td>
+    <div style="display:flex;align-items:center;gap:4px"><a id="to" class="hash-tag"
+      style="display:block;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+      href="/address/${address}"><i class="far fa-memo"></i><span class="ms-1">Curve: CRV Token</span></a>
+    </div></td></tr></tbody></table></main>`;
+  await start(page, { html: cell, site: 'https://etherscan.io/txs',
+    records: [{ ...record, tags: ['Convex Governance Multisig'] }] });
+  await expect(page.locator('#to')).toHaveAttribute('data-0xtagger-tag', 'Convex Governance Multisig');
+  // Text rather than a box of its own: a box is what the cell would drop whole,
+  // and text is what it can cut off halfway through and still leave readable.
+  expect(await page.locator('#to').evaluate(element =>
+    getComputedStyle(element, '::before').display)).toBe('inline');
+
+  // The same cell where the explorer has its own name for the address: the name
+  // sits in a span of its own beside an icon, and that span is what carries the
+  // tag. Neither it nor the name inside it may become a box the cell can drop.
+  const named = `<header>Explorer</header><main><table><tbody><tr><td>
+    <div style="display:flex;align-items:center;gap:4px"><a id="link" class="hash-tag"
+      style="display:block;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+      href="/address/${address}"><i class="far fa-memo" style="display:inline-block;width:14px"></i><span
+      id="name" class="hash-tag">Curve: CRV Token</span></a></div></td></tr></tbody></table></main>`;
+  await start(page, { html: named, site: 'https://etherscan.io/txs',
+    records: [{ ...record, tags: ['Convex Governance Multisig'] }] });
+  await expect(page.locator('#name')).toHaveAttribute('data-0xtagger-tag', 'Convex Governance Multisig');
+  expect(await page.locator('#name').evaluate(element => ({
+    host: getComputedStyle(element).display,
+    name: getComputedStyle(element, '::before').display,
+  }))).toEqual({ host: 'inline', name: 'inline' });
+});
+
 test('a website surface is read from what the browser actually paints', async ({ page }) => {
   const shapes = [
     ['a background painted on the document element', '<style>html{background:#101113}</style>', 'dark'],
