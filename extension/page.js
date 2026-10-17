@@ -527,7 +527,14 @@ export async function createPageController({
 
 export async function startPage() {
   const rpc = async message => {
-    const response = await chrome.runtime.sendMessage(message);
+    let response;
+    try { response = await chrome.runtime.sendMessage(message); }
+    catch (error) {
+      if (error?.message === 'Extension context invalidated.') {
+        throw new Error('0xtagger was reloaded. Copy any unsaved edits, then refresh this page.');
+      }
+      throw error;
+    }
     if (!response?.ok) { const error = new Error(response?.error || 'The extension could not respond. Try reopening this page.'); Object.assign(error, { status: response?.status, current: response?.current }); throw error; }
     return response.result;
   };
